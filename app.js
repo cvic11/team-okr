@@ -8,7 +8,8 @@ const PALETTE=['#6241F5','#30AB62','#F59E0B','#EC4899','#0EA5E9','#8B5CF6','#14B
 const CONF_LABELS={high:'상',mid:'중',low:'하'};
 const STATUS_LABELS={todo:'할 일',doing:'진행',done:'완료',blocked:'막힘'};
 let sb=null;
-let state={teams:[],currentTeamId:null,members:[],objectives:[],standups:{},routines:[],routineLogs:{},reviews:[]};
+let state={teams:[],currentTeamId:null,members:[],objectives:[],standups:{},routines:[],routineLogs:{},reviews:[],initiativeDailyLogs:{}};
+const SUPPORT_TYPES=['자료 검토','브레인스토밍','의사결정','예산 지원','일정 조율','외부 협의','기타'];
 let currentView='today',viewingDate=todayKey(),presentMode=false;
 let expanded=new Set(),krExpanded=new Set(),realityOpen=new Set();
 let connStatus='connecting',initialized=false,dateLoading=false;
@@ -99,22 +100,59 @@ async function loadTeamData(tid){
   await Promise.all([loadStandup(viewingDate),loadRoutineLogs(viewingDate)]);
 }
 async function loadStandup(date){
-  if(state.standups[date])return;const tid=state.currentTeamId;
-  const[sr,er]=await Promise.all([sb.from('standups').select('*').eq('team_id',tid).eq('date',date),sb.from('standup_entries').select('*').eq('team_id',tid).eq('date',date)]);
+  if(state.standups[date]&&state.initiativeDailyLogs[date])return;const tid=state.currentTeamId;
+  const[sr,er,idl]=await Promise.all([
+    sb.from('standups').select('*').eq('team_id',tid).eq('date',date),
+    sb.from('standup_entries').select('*').eq('team_id',tid).eq('date',date),
+    sb.from('initiative_daily_logs').select('*').eq('date',date)
+  ]);
   state.standups[date]={headline:sr.data?.[0]?.headline||'',entries:{}};
-  (er.data||[]).forEach(en=>{state.standups[date].entries[en.member_id]={yesterday:en.yesterday||'',today:en.today||'',blockers:en.blockers||''};});
+  (er.data||[]).forEach(en=>{state.standups[date].entries[en.member_id]={yesterday:en.yesterday||'',today:en.today||'',blockers:en.blockers||'',helper_member_id:en.helper_member_id||'',helper_name:en.helper_name||'',support_type:en.support_type||'',support_detail:en.support_detail||''};});
+  state.initiativeDailyLogs[date]={};
+  (idl.data||[]).forEach(l=>{if(!state.initiativeDailyLogs[date][l.member_id])state.initiativeDailyLogs[date][l.member_id]={};state.initiativeDailyLogs[date][l.member_id][l.initiative_id]={checked:!!l.checked,note:l.note||''};});
 }
+function getMemberInitiatives(mid){
+  const list=[];
+  state.objectives.forEach(o=>o.keyResults.forEach(k=>k.initiatives.forEach(i=>{
+    if(i.ownerId===mid && i.status!=='done') list.push({...i,krId:k.id,krTitle:k.title});
+  })));
+  return list;
+}
+function getIDLForMemberDate(mid,date){return state.initiativeDailyLogs[date]?.[mid]||{};}
+async function saveInitiativeDailyLog(initiativeId,memberId,date,checked,note){
+  if(!state.initiativeDailyLogs[date])state.initiativeDailyLogs[date]={};
+  if(!state.initiativeDailyLogs[date][memberId])state.initiativeDailyLogs[date][memberId]={};
+  state.initiativeDailyLogs[date][memberId][initiativeId]={checked,note:note!=null?note:(state.initiativeDailyLogs[date][memberId][initiativeId]?.note||'')};
+  debouncedSave(`idl-${initiativeId}-${memberId}-${date}`,async()=>{
+    const log=state.initiativeDailyLogs[date][memberId][initiativeId];
+    const{error}=await sb.from('initiative_daily_logs').upsert({initiative_id:initiativeId,member_id:memberId,date,checked:!!log.checked,note:log.note||'',done_at:new Date().toISOString()},{onConflict:'initiative_id,member_id,date'});
+    if(error)showToast('일일 체크 실패',true);
+    else{
+      const init=findInitiative(initiativeId);
+      logChange('initiative',initiativeId,'update','daily_check', checked?'미체크':'체크', checked?'체크':'미체크', init?.title||'');
+    }
+  });
+}
+function findInitiative(iid){let f=null;state.objectives.forEach(o=>o.keyResults.forEach(k=>k.initiatives.forEach(i=>{if(i.id===iid)f=i;})));return f;}
 async function loadRoutineLogs(date){
   if(state.routineLogs[date])return;state.routineLogs[date]={};
   const ids=state.routines.map(r=>r.id);if(ids.length===0)return;
   const{data}=await sb.from('routine_logs').select('*').in('routine_id',ids).eq('date',date);
   (data||[]).forEach(l=>{state.routineLogs[date][l.routine_id]={completed:!!l.completed,note:l.note||''};});
 }
-async function loadStandupRange(days){
-  const tid=state.currentTeamId;const end=todayKey();const sd=new Date();sd.setDate(sd.getDate()-days);const start=`${sd.getFullYear()}-${String(sd.getMonth()+1).padStart(2,'0')}-${String(sd.getDate()).padStart(2,'0')}`;
+async function loadStandupRange(startOrDays,end){
+  const tid=state.currentTeamId;
+  let start;
+  if(typeof startOrDays==='number'){const ed=end||todayKey();const sd=new Date(ed);sd.setDate(sd.getDate()-startOrDays);start=`${sd.getFullYear()}-${String(sd.getMonth()+1).padStart(2,'0')}-${String(sd.getDate()).padStart(2,'0')}`;end=ed;}
+  else{start=startOrDays;end=end||todayKey();}
   const{data}=await sb.from('standup_entries').select('*').eq('team_id',tid).gte('date',start).lte('date',end);
   return data||[];
 }
+async function loadIDLRange(start,end){
+  const{data}=await sb.from('initiative_daily_logs').select('*').gte('date',start).lte('date',end);
+  return data||[];
+}
+function rangeBack(days){const e=todayKey();const sd=new Date(e);sd.setDate(sd.getDate()-days);const s=`${sd.getFullYear()}-${String(sd.getMonth()+1).padStart(2,'0')}-${String(sd.getDate()).padStart(2,'0')}`;return{start:s,end:e};}
 
 function setupRealtime(){
   sb.channel('okr-app-v2')
@@ -128,15 +166,17 @@ function setupRealtime(){
     .on('postgres_changes',{event:'*',schema:'public',table:'routines'},onRoutineChange)
     .on('postgres_changes',{event:'*',schema:'public',table:'routine_logs'},onRoutineLogChange)
     .on('postgres_changes',{event:'*',schema:'public',table:'reviews'},onReviewChange)
+    .on('postgres_changes',{event:'*',schema:'public',table:'initiative_daily_logs'},onIDLChange)
     .subscribe(s=>{if(s==='SUBSCRIBED'){connStatus='online';updateConnDot();}else if(['CHANNEL_ERROR','TIMED_OUT','CLOSED'].includes(s)){connStatus='offline';updateConnDot();}});
 }
+function onIDLChange(p){const r=p.new||p.old;if(!r)return;if(!state.initiativeDailyLogs[r.date])state.initiativeDailyLogs[r.date]={};if(!state.initiativeDailyLogs[r.date][r.member_id])state.initiativeDailyLogs[r.date][r.member_id]={};if(p.eventType==='DELETE'){delete state.initiativeDailyLogs[r.date][r.member_id][r.initiative_id];}else{state.initiativeDailyLogs[r.date][r.member_id][r.initiative_id]={checked:!!r.checked,note:r.note||''};}if(currentView==='today'&&r.date===viewingDate)render();}
 function onTeamsChange(p){const r=p.new||p.old;if(!r)return;if(p.eventType==='DELETE'){state.teams=state.teams.filter(t=>t.id!==r.id);}else{const i=state.teams.findIndex(t=>t.id===r.id);if(i>=0)state.teams[i]={...r};else state.teams.push({...r});state.teams.sort((a,b)=>(a.sort_order||0)-(b.sort_order||0));}render();}
 function onMembersChange(p){const r=p.new||p.old;if(r.team_id&&r.team_id!==state.currentTeamId)return;if(p.eventType==='DELETE'){state.members=state.members.filter(m=>m.id!==r.id);}else{const i=state.members.findIndex(m=>m.id===r.id);if(i>=0)state.members[i]={...r};else state.members.push({...r});state.members.sort((a,b)=>(a.sort_order||0)-(b.sort_order||0));}if(['today','manage','eval'].includes(currentView))render();}
 function onObjectivesChange(p){const r=p.new||p.old;if(r.team_id&&r.team_id!==state.currentTeamId)return;if(p.eventType==='DELETE'){state.objectives=state.objectives.filter(o=>o.id!==r.id);}else{const i=state.objectives.findIndex(o=>o.id===r.id);if(i>=0){Object.assign(state.objectives[i],{title:r.title,description:r.description,ownerId:r.owner_id,confidence:r.confidence||'mid',realityBlocker:r.reality_blocker||'',realityHelp:r.reality_help||''});}else{state.objectives.push({id:r.id,title:r.title,description:r.description||'',ownerId:r.owner_id,confidence:r.confidence||'mid',realityBlocker:r.reality_blocker||'',realityHelp:r.reality_help||'',keyResults:[]});expanded.add(r.id);}}render();}
 function onKRChange(p){const r=p.new||p.old;const o=state.objectives.find(x=>x.id===r.objective_id);if(!o&&p.eventType!=='DELETE')return;if(p.eventType==='DELETE'){if(o)o.keyResults=o.keyResults.filter(k=>k.id!==r.id);}else{if(!o)return;const idx=o.keyResults.findIndex(k=>k.id===r.id);const exist=idx>=0?o.keyResults[idx].initiatives:[];const kr={id:r.id,title:r.title,target:Number(r.target||0),current:Number(r.current||0),unit:r.unit||'',ownerId:r.owner_id,dueDate:r.due_date,confidence:r.confidence||'mid',realityBlocker:r.reality_blocker||'',realityHelp:r.reality_help||'',initiatives:exist};if(idx>=0)o.keyResults[idx]=kr;else o.keyResults.push(kr);}render();}
 function onInitChange(p){const r=p.new||p.old;let kr=null;state.objectives.forEach(o=>o.keyResults.forEach(k=>{if(k.id===r.kr_id)kr=k;}));if(!kr){state.objectives.forEach(o=>o.keyResults.forEach(k=>{k.initiatives=k.initiatives.filter(i=>i.id!==r.id);}));render();return;}if(p.eventType==='DELETE'){kr.initiatives=kr.initiatives.filter(i=>i.id!==r.id);}else{const init={id:r.id,title:r.title,ownerId:r.owner_id,status:r.status||'todo',dueDate:r.due_date,confidence:r.confidence||'mid',realityBlocker:r.reality_blocker||'',realityHelp:r.reality_help||''};const i=kr.initiatives.findIndex(x=>x.id===r.id);if(i>=0)kr.initiatives[i]=init;else kr.initiatives.push(init);}render();}
 function onStandupChange(p){const r=p.new||p.old;if(!r)return;if(r.team_id&&r.team_id!==state.currentTeamId)return;ensureStandup(r.date);if(p.eventType!=='DELETE')state.standups[r.date].headline=r.headline||'';if(currentView==='today'&&r.date===viewingDate){const ta=document.querySelector(`textarea[data-field="headline"][data-date="${viewingDate}"]`);if(ta&&document.activeElement!==ta)ta.value=r.headline||'';}}
-function onEntryChange(p){const r=p.new||p.old;if(!r)return;if(r.team_id&&r.team_id!==state.currentTeamId)return;ensureStandup(r.date);if(p.eventType==='DELETE'){delete state.standups[r.date].entries[r.member_id];}else{state.standups[r.date].entries[r.member_id]={yesterday:r.yesterday||'',today:r.today||'',blockers:r.blockers||''};}if(currentView==='today'&&r.date===viewingDate){['yesterday','today','blockers'].forEach(f=>{const ta=document.querySelector(`textarea[data-field="standup"][data-mid="${r.member_id}"][data-fieldname="${f}"][data-date="${viewingDate}"]`);if(ta&&document.activeElement!==ta)ta.value=(state.standups[r.date].entries[r.member_id]||{})[f]||'';});const c=document.querySelector(`[data-member-card="${r.member_id}"]`);if(c){c.classList.remove('remote-edit');void c.offsetWidth;c.classList.add('remote-edit');setTimeout(()=>c.classList.remove('remote-edit'),1500);}updateBlockerUI(r.date,r.member_id);}}
+function onEntryChange(p){const r=p.new||p.old;if(!r)return;if(r.team_id&&r.team_id!==state.currentTeamId)return;ensureStandup(r.date);if(p.eventType==='DELETE'){delete state.standups[r.date].entries[r.member_id];}else{state.standups[r.date].entries[r.member_id]={yesterday:r.yesterday||'',today:r.today||'',blockers:r.blockers||'',helper_member_id:r.helper_member_id||'',helper_name:r.helper_name||'',support_type:r.support_type||'',support_detail:r.support_detail||''};}if(currentView==='today'&&r.date===viewingDate){['yesterday','today','blockers'].forEach(f=>{const ta=document.querySelector(`textarea[data-field="standup"][data-mid="${r.member_id}"][data-fieldname="${f}"][data-date="${viewingDate}"]`);if(ta&&document.activeElement!==ta)ta.value=(state.standups[r.date].entries[r.member_id]||{})[f]||'';});const c=document.querySelector(`[data-member-card="${r.member_id}"]`);if(c){c.classList.remove('remote-edit');void c.offsetWidth;c.classList.add('remote-edit');setTimeout(()=>c.classList.remove('remote-edit'),1500);}updateBlockerUI(r.date,r.member_id);}}
 function onRoutineChange(p){const r=p.new||p.old;if(r.team_id&&r.team_id!==state.currentTeamId)return;if(p.eventType==='DELETE'){state.routines=state.routines.filter(x=>x.id!==r.id);}else{const i=state.routines.findIndex(x=>x.id===r.id);if(i>=0)state.routines[i]={...r};else state.routines.push({...r});}render();}
 function onRoutineLogChange(p){const r=p.new||p.old;ensureRoutineLog(r.date);if(p.eventType==='DELETE'){delete state.routineLogs[r.date][r.routine_id];}else{state.routineLogs[r.date][r.routine_id]={completed:!!r.completed,note:r.note||''};}if(['today','routines'].includes(currentView)&&r.date===viewingDate)render();}
 function onReviewChange(p){const r=p.new||p.old;if(r.team_id&&r.team_id!==state.currentTeamId)return;if(p.eventType==='DELETE'){state.reviews=state.reviews.filter(x=>x.id!==r.id);}else{const i=state.reviews.findIndex(x=>x.id===r.id);if(i>=0)state.reviews[i]={...r};else state.reviews.unshift({...r});}if(currentView==='eval')render();}
@@ -151,7 +191,7 @@ async function saveObjective(o){debouncedSave(`obj-${o.id}`,async()=>{const{erro
 async function saveKR(oid,kr){debouncedSave(`kr-${kr.id}`,async()=>{const o=state.objectives.find(x=>x.id===oid);const si=o?o.keyResults.findIndex(x=>x.id===kr.id):0;const{error}=await sb.from('key_results').upsert({id:kr.id,objective_id:oid,title:kr.title,target:kr.target,current:kr.current,unit:kr.unit||'',owner_id:kr.ownerId||null,due_date:kr.dueDate||null,confidence:kr.confidence||'mid',reality_blocker:kr.realityBlocker||'',reality_help:kr.realityHelp||'',sort_order:si});if(error)showToast('KR 저장 실패',true);});}
 async function saveInitiative(krId,init){debouncedSave(`init-${init.id}`,async()=>{let kr=null;state.objectives.forEach(o=>o.keyResults.forEach(k=>{if(k.id===krId)kr=k;}));const si=kr?kr.initiatives.findIndex(i=>i.id===init.id):0;const{error}=await sb.from('initiatives').upsert({id:init.id,kr_id:krId,title:init.title,owner_id:init.ownerId||null,status:init.status||'todo',due_date:init.dueDate||null,confidence:init.confidence||'mid',reality_blocker:init.realityBlocker||'',reality_help:init.realityHelp||'',sort_order:si});if(error)showToast('이니셔티브 저장 실패',true);});}
 async function saveHeadline(date,h){ensureStandup(date);state.standups[date].headline=h;debouncedSave(`hl-${date}`,async()=>{const{error}=await sb.from('standups').upsert({team_id:state.currentTeamId,date,headline:h,updated_at:new Date().toISOString()},{onConflict:'team_id,date'});if(error)showToast('헤드라인 저장 실패',true);});}
-async function saveEntry(date,mid,f,v){ensureStandup(date);if(!state.standups[date].entries[mid])state.standups[date].entries[mid]={yesterday:'',today:'',blockers:''};state.standups[date].entries[mid][f]=v;debouncedSave(`en-${date}-${mid}`,async()=>{const e=state.standups[date].entries[mid];const{error}=await sb.from('standup_entries').upsert({team_id:state.currentTeamId,date,member_id:mid,yesterday:e.yesterday||'',today:e.today||'',blockers:e.blockers||'',updated_at:new Date().toISOString()},{onConflict:'team_id,date,member_id'});if(error)showToast('스탠드업 저장 실패',true);});}
+async function saveEntry(date,mid,f,v){ensureStandup(date);if(!state.standups[date].entries[mid])state.standups[date].entries[mid]={yesterday:'',today:'',blockers:'',helper_member_id:'',helper_name:'',support_type:'',support_detail:''};state.standups[date].entries[mid][f]=v;debouncedSave(`en-${date}-${mid}`,async()=>{const e=state.standups[date].entries[mid];const{error}=await sb.from('standup_entries').upsert({team_id:state.currentTeamId,date,member_id:mid,yesterday:e.yesterday||'',today:e.today||'',blockers:e.blockers||'',helper_member_id:e.helper_member_id||null,helper_name:e.helper_name||'',support_type:e.support_type||'',support_detail:e.support_detail||'',updated_at:new Date().toISOString()},{onConflict:'team_id,date,member_id'});if(error)showToast('스탠드업 저장 실패',true);});}
 async function saveRoutine(r){debouncedSave(`rt-${r.id}`,async()=>{const{error}=await sb.from('routines').upsert({id:r.id,team_id:state.currentTeamId,title:r.title,description:r.description||'',owner_id:r.owner_id||null,frequency:r.frequency||'weekdays',days_of_week:r.days_of_week||[1,2,3,4,5],day_of_month:r.day_of_month||null,active:r.active!==false,sort_order:state.routines.findIndex(x=>x.id===r.id)});if(error)showToast('루틴 저장 실패',true);});}
 async function saveRoutineLog(rid,date,c,n){ensureRoutineLog(date);state.routineLogs[date][rid]={completed:c,note:n!=null?n:(state.routineLogs[date][rid]?.note||'')};debouncedSave(`rtl-${rid}-${date}`,async()=>{const l=state.routineLogs[date][rid];const{error}=await sb.from('routine_logs').upsert({routine_id:rid,date,completed:!!l.completed,note:l.note||'',done_at:new Date().toISOString()},{onConflict:'routine_id,date'});if(error)showToast('루틴 기록 실패',true);});}
 async function saveReview(r){const{error}=await sb.from('reviews').upsert({id:r.id,team_id:state.currentTeamId,member_id:r.member_id,period:r.period,quarter:r.quarter,score:r.score,summary:r.summary||'',achievements:r.achievements||'',growth_notes:r.growth_notes||'',next_focus:r.next_focus||'',reviewer:r.reviewer||'',updated_at:new Date().toISOString()});if(error){showToast('평가 저장 실패',true);return false;}return true;}
@@ -198,7 +238,59 @@ function renderToday(){
   <div class="card-section"><div class="section-head"><span style="color:var(--primary);">${I.msg}</span><span class="section-title">${isToday?'오늘의 스탠드업':`${date} 스탠드업`}</span><span class="section-meta">· 어제 / 오늘 / 막힘</span></div>${state.members.length===0?'<div class="empty">팀원을 먼저 등록해주세요. <strong>관리</strong> 탭에서 추가할 수 있습니다.</div>':`<div class="member-grid">${state.members.map(m=>renderMemberCard(m,standup.entries?.[m.id]||{})).join('')}</div>`}</div>`;
 }
 function renderKRStrip(allKR){if(allKR.length===0)return '<div style="font-size:13px;color:var(--text-soft);">아직 등록된 KR이 없습니다.</div>';return allKR.map(kr=>{const p=pct(kr.current,kr.target);const o=state.members.find(m=>m.id===kr.ownerId);return `<div class="kr-strip-row"><div class="kr-strip-head"><div style="display:flex;align-items:center;gap:8px;min-width:0;"><span class="kr-strip-title">${esc(kr.title)}</span>${o?`<span class="kr-strip-owner">${esc(o.name)}</span>`:''}<span class="conf-chip ${kr.confidence||'mid'}" style="cursor:default;">${CONF_LABELS[kr.confidence||'mid']}</span></div><div class="kr-strip-meta">${kr.dueDate?`<span class="kr-strip-num" style="color:${isOverdue(kr.dueDate)?C.warning:C.textSoft};">${dueShort(kr.dueDate)}</span>`:''}<span class="kr-strip-num">${kr.current} / ${kr.target} ${esc(kr.unit||'')}</span><span class="kr-strip-pct" style="color:${progressColor(p)};">${p}%</span></div></div><div class="progress-track"><div class="progress-fill" style="width:${p}%;background:${progressColor(p)};"></div></div></div>`;}).join('');}
-function renderMemberCard(m,e){const has=!!(e.blockers&&e.blockers.trim());return `<div class="member-card ${has?'has-blocker':''}" data-member-card="${m.id}"><div class="member-head"><div class="avatar" style="background:${m.color};">${esc(m.name.slice(0,1).toUpperCase())}</div><div><div class="member-name">${esc(m.name)}</div><div class="member-role">${esc(m.role||'')}</div></div>${has?`<span class="blocker-badge">${I.alert} 막힘</span>`:''}</div>${renderField('어제 한 일','yesterday',m.id,e.yesterday,'어제 마무리한 일')}${renderField('오늘 할 일','today',m.id,e.today,'오늘의 목표 1–2개','primary')}${renderField('막힘','blockers',m.id,e.blockers,'없으면 비워두기',has?'warning':'')}</div>`;}
+function renderMemberCard(m,e){
+  const has=!!(e.blockers&&e.blockers.trim());
+  const date=viewingDate;
+  const yesterday=shiftDate(date,-1);
+  const myInits=getMemberInitiatives(m.id);
+  const todayChecks=getIDLForMemberDate(m.id,date);
+  const yChecks=getIDLForMemberDate(m.id,yesterday);
+  // 어제 체크된 Initiative 자동 요약
+  const yDoneInits=Object.entries(yChecks).filter(([_,v])=>v.checked).map(([iid,v])=>{const i=findInitiative(iid);return i?{title:i.title,note:v.note}:null;}).filter(Boolean);
+  return `<div class="member-card ${has?'has-blocker':''}" data-member-card="${m.id}">
+    <div class="member-head"><div class="avatar" style="background:${m.color};">${esc(m.name.slice(0,1).toUpperCase())}</div><div><div class="member-name">${esc(m.name)}</div><div class="member-role">${esc(m.role||'')}</div></div>${has?`<span class="blocker-badge">${I.alert} 도움 필요</span>`:''}</div>
+    ${renderYesterdaySection(m.id,e.yesterday,yDoneInits)}
+    ${renderTodaySection(m.id,e.today,myInits,todayChecks)}
+    ${renderBlockerSection(m.id,e)}
+  </div>`;
+}
+function renderYesterdaySection(mid,memo,yDone){
+  const summaryHtml=yDone.length>0
+    ? `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px;">${yDone.map(i=>`<span style="font-size:10.5px;padding:2px 7px;background:var(--growth-soft);color:var(--growth);border-radius:999px;font-weight:600;">${esc(i.title.slice(0,18))}${i.title.length>18?'…':''}</span>`).join('')}</div>`
+    : '<div style="font-size:11px;color:var(--text-soft);margin-bottom:6px;">어제 체크된 Initiative 없음</div>';
+  return `<div class="field"><div class="field-label"><span class="field-dot"></span><span class="field-name">어제 한 일</span></div>${summaryHtml}<textarea class="field-input" rows="1" placeholder="추가 메모 (선택)" data-field="standup" data-fieldname="yesterday" data-mid="${mid}" data-date="${viewingDate}">${esc(memo||'')}</textarea></div>`;
+}
+function renderTodaySection(mid,memo,myInits,checks){
+  const checklistHtml=myInits.length===0
+    ? '<div style="font-size:11px;color:var(--text-soft);padding:4px 0;">담당 Initiative가 없습니다. OKR 탭에서 배정하세요.</div>'
+    : myInits.map(i=>{const c=!!checks[i.id]?.checked;return `<div style="display:flex;align-items:center;gap:6px;padding:3px 0;font-size:12px;"><button class="rt-check ${c?'checked':''}" style="width:16px;height:16px;border-width:1.5px;border-radius:4px;" data-act="toggle-init-check" data-iid="${i.id}" data-mid="${mid}">${c?I.check:''}</button><span style="${c?'text-decoration:line-through;color:var(--text-soft);':''}flex:1;cursor:pointer;" data-act="toggle-init-check" data-iid="${i.id}" data-mid="${mid}">${esc(i.title)}</span><span style="font-size:10px;color:var(--text-soft);">${esc(i.krTitle.slice(0,12))}${i.krTitle.length>12?'…':''}</span></div>`;}).join('');
+  return `<div class="field"><div class="field-label"><span class="field-dot accent-primary"></span><span class="field-name accent-primary">오늘 할 일</span><span style="font-size:10px;color:var(--text-soft);margin-left:auto;">담당 Initiative ${myInits.length}건</span></div><div style="background:#FAFAFA;border-radius:6px;padding:6px 8px;margin-bottom:6px;">${checklistHtml}</div><textarea class="field-input" rows="1" placeholder="추가 메모 — Initiative 외 오늘의 목표" data-field="standup" data-fieldname="today" data-mid="${mid}" data-date="${viewingDate}">${esc(memo||'')}</textarea></div>`;
+}
+function renderBlockerSection(mid,e){
+  const has=!!(e.blockers&&e.blockers.trim());
+  const helperKey=`helper:${mid}`;
+  const helpOpen=realityOpen.has(helperKey) || !!(e.helper_member_id||e.helper_name||e.support_type||e.support_detail);
+  const accent=has?'accent-warning':'';
+  const helper=state.members.find(x=>x.id===e.helper_member_id);
+  const helperLabel=helper?helper.name:(e.helper_name||'');
+  return `<div class="field"><div class="field-label"><span class="field-dot ${accent}"></span><span class="field-name ${accent}">막힘 / 도움 필요</span><button class="reality-toggle ${(e.helper_member_id||e.helper_name||e.support_type||e.support_detail)?'has-content':''}" style="margin-left:auto;" data-act="toggle-reality" data-key="${helperKey}">${helpOpen?'도움요청 ▴':'도움요청 ▾'}</button></div>
+    <textarea class="field-input" rows="2" placeholder="없으면 비워두기 — 무엇이 막혔나" data-field="standup" data-fieldname="blockers" data-mid="${mid}" data-date="${viewingDate}">${esc(e.blockers||'')}</textarea>
+    ${helpOpen?`<div class="reality-box" style="margin-top:6px;padding:8px 10px;">
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:6px;">
+        <span style="font-size:10.5px;font-weight:700;color:var(--text-soft);">누구에게:</span>
+        <select class="rt-input" style="font-size:11.5px;padding:3px 7px;" data-field="helper-member" data-mid="${mid}">
+          <option value="">팀원 선택…</option>
+          ${state.members.filter(x=>x.id!==mid).map(x=>`<option value="${x.id}" ${e.helper_member_id===x.id?'selected':''}>${esc(x.name)}</option>`).join('')}
+        </select>
+        <input class="rt-input" style="font-size:11.5px;padding:3px 7px;flex:1;min-width:100px;" placeholder="또는 자유 입력 (예: 본부장님, 외부 자문)" data-field="helper-name" data-mid="${mid}" value="${esc(e.helper_name||'')}" />
+      </div>
+      <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;margin-bottom:6px;">
+        <span style="font-size:10.5px;font-weight:700;color:var(--text-soft);">유형:</span>
+        ${SUPPORT_TYPES.map(t=>`<button class="btn-mode" style="${e.support_type===t?'background:var(--primary-soft);color:var(--primary);font-weight:600;':''}padding:2px 8px;font-size:11px;" data-act="set-support-type" data-mid="${mid}" data-type="${esc(t)}">${esc(t)}</button>`).join('')}
+      </div>
+      <textarea class="reality-input" rows="2" placeholder="구체적으로 어떤 도움이 필요한가요?" data-field="support-detail" data-mid="${mid}">${esc(e.support_detail||'')}</textarea>
+    </div>`:''}</div>`;
+}
 function renderField(l,f,mid,v,ph,acc){const cls=acc?`accent-${acc}`:'';return `<div class="field"><div class="field-label"><span class="field-dot ${cls}"></span><span class="field-name ${cls}">${esc(l)}</span></div><textarea class="field-input" rows="2" placeholder="${esc(ph)}" data-field="standup" data-fieldname="${f}" data-mid="${mid}" data-date="${viewingDate}">${esc(v||'')}</textarea></div>`;}
 function activeRoutinesForDate(date){const dt=new Date(date+'T00:00:00');const dow=dt.getDay()===0?7:dt.getDay();const dom=dt.getDate();return state.routines.filter(r=>{if(r.active===false)return false;if(r.frequency==='daily')return true;if(r.frequency==='weekdays')return dow>=1&&dow<=5;if(r.frequency==='weekly'||r.frequency==='custom'){return(r.days_of_week||[]).includes(dow);}if(r.frequency==='monthly')return r.day_of_month===dom;return false;});}
 function renderRoutineCheck(r,log){const o=state.members.find(m=>m.id===r.owner_id);const c=!!log.completed;return `<div class="rt-item ${c?'done':''}"><button class="rt-check ${c?'checked':''}" data-act="toggle-routine" data-rid="${r.id}">${c?I.check:''}</button><div class="rt-info"><div class="rt-title">${esc(r.title)}</div><div class="rt-meta">${o?esc(o.name)+' · ':''}${freqText(r)}</div></div><input class="rt-note-input" placeholder="메모 (선택)" data-field="rt-note" data-rid="${r.id}" value="${esc(log.note||'')}" /></div>`;}
@@ -274,29 +366,50 @@ function formatTs(ts){if(!ts)return '';const d=new Date(ts);return `${d.getMonth
 function showModal(h){const b=document.getElementById('modal-back');document.getElementById('modal').innerHTML=h;b.classList.add('show');}
 function closeModal(){document.getElementById('modal-back').classList.remove('show');}
 
-async function openReview(mid,period){
+async function openReview(mid,period,opts){
   const m=state.members.find(x=>x.id===mid);if(!m)return;
   let r=lastReviewFor(mid,period);
   if(!r){r={id:uid(),member_id:mid,team_id:state.currentTeamId,period,quarter:currentTeam()?.quarter||'',score:3,summary:'',achievements:'',growth_notes:'',next_focus:'',reviewer:'',_new:true};}
+  // 기간 결정
+  const o=opts||{};
+  const today=todayKey();
+  let preset=o.preset||'14';
+  let start=o.start, end=o.end||today;
+  if(!start){const days=parseInt(preset)||14;const sd=new Date(end);sd.setDate(sd.getDate()-days);start=`${sd.getFullYear()}-${String(sd.getMonth()+1).padStart(2,'0')}-${String(sd.getDate()).padStart(2,'0')}`;}
+  const days=Math.max(1,Math.round((new Date(end)-new Date(start))/86400000));
+  // 데이터 집계
   const a=memberAnalytics(mid);
-  const recent=await loadStandupRange(14);
+  const recent=await loadStandupRange(start,end);
   const myRecent=recent.filter(e=>e.member_id===mid);
   const activeDays=new Set(myRecent.map(e=>e.date)).size;
   const blockerCnt=myRecent.filter(e=>(e.blockers||'').trim()).length;
   const blockers=myRecent.filter(e=>(e.blockers||'').trim()).slice(0,3).map(e=>`<div style="font-size:12px;color:var(--text-soft);padding:4px 0;">${e.date}: ${esc((e.blockers||'').slice(0,80))}</div>`).join('');
+  const idl=await loadIDLRange(start,end);
+  const myIDL=idl.filter(l=>l.member_id===mid && l.checked);
+  const idlByInit={};myIDL.forEach(l=>{idlByInit[l.initiative_id]=(idlByInit[l.initiative_id]||0)+1;});
+  const topInits=Object.entries(idlByInit).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([iid,cnt])=>{const i=findInitiative(iid);return i?`<div style="font-size:12px;padding:4px 0;display:flex;justify-content:space-between;border-bottom:1px solid #F4F4F5;"><span>${esc(i.title)}</span><span style="color:var(--primary);font-weight:700;">${cnt}일</span></div>`:'';}).join('');
+  const supportNeeds=myRecent.filter(e=>(e.support_type||'').trim()||(e.support_detail||'').trim()).slice(0,3).map(e=>{const helper=state.members.find(x=>x.id===e.helper_member_id);const h=helper?helper.name:(e.helper_name||'');return `<div style="font-size:11.5px;color:var(--text-soft);padding:4px 0;">${e.date}: ${esc(e.support_type||'-')}${h?` → ${esc(h)}`:''}${e.support_detail?` · ${esc(e.support_detail.slice(0,40))}`:''}</div>`;}).join('');
   showModal(`
     <div class="modal-head"><div class="modal-title">${period==='mid'?'중간 점검':'최종 평가'} · ${esc(m.name)}</div><button class="btn-icon" data-act="close-modal">${I.x}</button></div>
     <div class="modal-body">
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:12px;padding-bottom:10px;border-bottom:1px dashed var(--line);">
+        <span style="font-size:11.5px;font-weight:700;color:var(--text-soft);">기간:</span>
+        ${[['7','최근 7일'],['14','최근 14일'],['30','최근 30일'],['90','최근 90일'],['custom','직접 선택']].map(([v,l])=>`<button class="btn-mode" style="${preset===v?'background:var(--primary-soft);color:var(--primary);font-weight:600;':''}padding:3px 9px;font-size:11.5px;" data-act="review-period" data-mid="${mid}" data-period="${period}" data-preset="${v}">${l}</button>`).join('')}
+        ${preset==='custom'?`<input type="date" class="rt-input" style="font-size:11px;padding:3px 6px;" data-act="review-custom" data-mid="${mid}" data-period="${period}" data-which="start" value="${start}"/><span style="font-size:11px;">~</span><input type="date" class="rt-input" style="font-size:11px;padding:3px 6px;" data-act="review-custom" data-mid="${mid}" data-period="${period}" data-which="end" value="${end}"/>`:''}
+        <span style="font-size:11px;color:var(--text-soft);margin-left:auto;">${start} ~ ${end} (${days}일)</span>
+      </div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;margin-bottom:14px;">
         <div class="perf-stat"><div class="perf-stat-label">KR 진척</div><div class="perf-stat-value" style="color:${progressColor(a.krAvg)};">${a.krAvg}%</div></div>
         <div class="perf-stat"><div class="perf-stat-label">Init 완료</div><div class="perf-stat-value">${a.initsDone}/${a.inits}</div></div>
-        <div class="perf-stat"><div class="perf-stat-label">스탠드업</div><div class="perf-stat-value">${activeDays}<span style="font-size:11px;color:var(--text-soft);">/14일</span></div></div>
+        <div class="perf-stat"><div class="perf-stat-label">스탠드업 활동</div><div class="perf-stat-value">${activeDays}<span style="font-size:11px;color:var(--text-soft);">/${days}일</span></div></div>
         <div class="perf-stat"><div class="perf-stat-label">막힘 보고</div><div class="perf-stat-value" style="color:${blockerCnt>3?C.warning:'#262626'};">${blockerCnt}</div></div>
       </div>
-      ${blockers?`<div style="margin-bottom:14px;padding:10px;background:#FAFAFA;border-radius:8px;"><div style="font-size:11px;font-weight:700;color:var(--text-soft);margin-bottom:4px;">최근 막힘 (참고)</div>${blockers}</div>`:''}
+      ${topInits?`<div style="margin-bottom:14px;padding:10px 12px;background:#FAFAFA;border-radius:8px;"><div style="font-size:11px;font-weight:700;color:var(--text-soft);margin-bottom:4px;">기간 내 일일 체크 TOP Initiative</div>${topInits}</div>`:''}
+      ${blockers?`<div style="margin-bottom:14px;padding:10px;background:#FAFAFA;border-radius:8px;"><div style="font-size:11px;font-weight:700;color:var(--text-soft);margin-bottom:4px;">최근 막힘</div>${blockers}</div>`:''}
+      ${supportNeeds?`<div style="margin-bottom:14px;padding:10px;background:#FAFAFA;border-radius:8px;"><div style="font-size:11px;font-weight:700;color:var(--text-soft);margin-bottom:4px;">최근 도움 요청</div>${supportNeeds}</div>`:''}
       <div class="eval-section"><div class="eval-section-label">종합 점수 (1=미흡, 5=탁월)</div><div class="eval-score">${[1,2,3,4,5].map(s=>`<button class="eval-score-btn ${r.score===s?'active':''}" data-act="set-score" data-score="${s}">${s}</button>`).join('')}</div></div>
-      <div class="eval-section"><div class="eval-section-label">한 줄 총평</div><textarea class="eval-input" data-field="r-summary" rows="2" placeholder="결론부터: 이 팀원의 분기 성과를 한 문장으로">${esc(r.summary||'')}</textarea></div>
-      <div class="eval-section"><div class="eval-section-label">핵심 성과 (Achievements)</div><textarea class="eval-input" data-field="r-achievements" rows="3" placeholder="이번 분기 가장 임팩트 있던 결과 2~3가지">${esc(r.achievements||'')}</textarea></div>
+      <div class="eval-section"><div class="eval-section-label">한 줄 총평</div><textarea class="eval-input" data-field="r-summary" rows="2" placeholder="결론부터: 이 팀원의 성과를 한 문장으로">${esc(r.summary||'')}</textarea></div>
+      <div class="eval-section"><div class="eval-section-label">핵심 성과 (Achievements)</div><textarea class="eval-input" data-field="r-achievements" rows="3" placeholder="가장 임팩트 있던 결과 2~3가지">${esc(r.achievements||'')}</textarea></div>
       <div class="eval-section"><div class="eval-section-label">성장 / 개선 노트</div><textarea class="eval-input" data-field="r-growth" rows="3" placeholder="성장한 영역, 더 보완해야 할 영역">${esc(r.growth_notes||'')}</textarea></div>
       <div class="eval-section"><div class="eval-section-label">다음 분기 포커스</div><textarea class="eval-input" data-field="r-next" rows="2" placeholder="다음 분기에 집중해야 할 1~2가지">${esc(r.next_focus||'')}</textarea></div>
       <div class="eval-section"><div class="eval-section-label">평가자</div><input class="eval-input" data-field="r-reviewer" style="min-height:auto;" value="${esc(r.reviewer||'')}" placeholder="이름 또는 직책"/></div>
@@ -304,6 +417,7 @@ async function openReview(mid,period){
     <div class="modal-foot"><button class="btn btn-ghost" data-act="close-modal">취소</button><button class="btn btn-primary" data-act="save-review">평가 저장</button></div>
   `);
   window._editingReview=r;
+  window._reviewOpts={preset,start,end};
 }
 
 function memberName(id){return id?(state.members.find(m=>m.id===id)?.name||'-'):'-';}
@@ -416,7 +530,11 @@ document.addEventListener('click',async e=>{
   if(a==='del-routine'){if(!confirm('이 루틴과 모든 수행 기록을 삭제할까요?'))return;const rid=btn.dataset.rid;const r=state.routines.find(x=>x.id===rid);state.routines=state.routines.filter(x=>x.id!==rid);render();await sb.from('routines').delete().eq('id',rid);logChange('routine',rid,'delete','',r?.title||'','',r?.title||'');return;}
   if(a==='toggle-day'){const rid=btn.dataset.rid;const day=parseInt(btn.dataset.day);const r=state.routines.find(x=>x.id===rid);if(!r)return;const arr=r.days_of_week||[];const i=arr.indexOf(day);if(i>=0)arr.splice(i,1);else arr.push(day);r.days_of_week=arr.sort((a,b)=>a-b);saveRoutine(r);render();return;}
   if(a==='toggle-routine'){const rid=btn.dataset.rid;ensureRoutineLog(viewingDate);const cur=state.routineLogs[viewingDate][rid]?.completed||false;saveRoutineLog(rid,viewingDate,!cur);render();return;}
+  if(a==='toggle-init-check'){const iid=btn.dataset.iid;const mid=btn.dataset.mid;const cur=getIDLForMemberDate(mid,viewingDate)[iid]?.checked||false;saveInitiativeDailyLog(iid,mid,viewingDate,!cur);render();return;}
+  if(a==='set-support-type'){const mid=btn.dataset.mid;const type=btn.dataset.type;const e=ensureStandup(viewingDate);if(!e.entries[mid])e.entries[mid]={yesterday:'',today:'',blockers:'',helper_member_id:'',helper_name:'',support_type:'',support_detail:''};const old=e.entries[mid].support_type;e.entries[mid].support_type=(old===type)?'':type;saveEntry(viewingDate,mid,'support_type',e.entries[mid].support_type);render();return;}
   if(a==='open-review'){openReview(btn.dataset.mid,btn.dataset.period);return;}
+  if(a==='review-period'){const preset=btn.dataset.preset;openReview(btn.dataset.mid,btn.dataset.period,{preset});return;}
+  if(a==='review-custom'){const which=btn.dataset.which;const v=btn.value;const cur=window._reviewOpts||{preset:'14',start:null,end:todayKey()};const opts={preset:'custom',start:which==='start'?v:cur.start,end:which==='end'?v:cur.end};if(!opts.start){const sd=new Date(opts.end);sd.setDate(sd.getDate()-14);opts.start=`${sd.getFullYear()}-${String(sd.getMonth()+1).padStart(2,'0')}-${String(sd.getDate()).padStart(2,'0')}`;}openReview(btn.dataset.mid,btn.dataset.period,opts);return;}
   if(a==='set-score'){if(window._editingReview){window._editingReview.score=parseInt(btn.dataset.score);document.querySelectorAll('.eval-score-btn').forEach(b=>b.classList.toggle('active',parseInt(b.dataset.score)===window._editingReview.score));}return;}
   if(a==='save-review'){const r=window._editingReview;if(!r)return;const ok=await saveReview(r);if(ok){if(r._new){delete r._new;state.reviews.unshift(r);}else{const i=state.reviews.findIndex(x=>x.id===r.id);if(i>=0)state.reviews[i]={...r};}closeModal();showToast('평가 저장됨');render();}return;}
   if(a==='export-excel'){exportExcel();return;}
@@ -446,10 +564,15 @@ document.addEventListener('input',e=>{
   else if(f==='r-growth'){if(window._editingReview)window._editingReview.growth_notes=el.value;}
   else if(f==='r-next'){if(window._editingReview)window._editingReview.next_focus=el.value;}
   else if(f==='r-reviewer'){if(window._editingReview)window._editingReview.reviewer=el.value;}
+  else if(f==='helper-name'){saveEntry(viewingDate,el.dataset.mid,'helper_name',el.value);}
+  else if(f==='support-detail'){saveEntry(viewingDate,el.dataset.mid,'support_detail',el.value);}
 });
 
 document.addEventListener('change',e=>{
-  const el=e.target;const f=el.dataset.field;if(!f)return;
+  const el=e.target;
+  // review custom date inputs (use change event)
+  if(el.dataset.act==='review-custom'){const which=el.dataset.which;const v=el.value;const cur=window._reviewOpts||{preset:'14',start:null,end:todayKey()};const opts={preset:'custom',start:which==='start'?v:cur.start,end:which==='end'?v:cur.end};openReview(el.dataset.mid,el.dataset.period,opts);return;}
+  const f=el.dataset.field;if(!f)return;
   if(f==='kr-owner'){const oid=el.dataset.oid;const kr=state.objectives.find(x=>x.id===oid)?.keyResults.find(k=>k.id===el.dataset.krid);if(kr){kr.ownerId=el.value||null;saveKR(oid,kr);}}
   else if(f==='obj-owner'){const o=state.objectives.find(x=>x.id===el.dataset.oid);if(o){o.ownerId=el.value||null;saveObjective(o);}}
   else if(f==='init-status'){const krid=el.dataset.krid;let init=null;state.objectives.forEach(o=>o.keyResults.forEach(k=>{if(k.id===krid)init=k.initiatives.find(i=>i.id===el.dataset.iid);}));if(init){const old=init.status;init.status=el.value;saveInitiative(krid,init);logChange('initiative',init.id,'update','status',old,el.value,init.title);render();}}
@@ -457,6 +580,7 @@ document.addEventListener('change',e=>{
   else if(f==='rt-frequency'){const r=state.routines.find(x=>x.id===el.dataset.rid);if(r){r.frequency=el.value;if(r.frequency==='weekdays'&&(!r.days_of_week||r.days_of_week.length===0))r.days_of_week=[1,2,3,4,5];saveRoutine(r);render();}}
   else if(f==='rt-owner'){const r=state.routines.find(x=>x.id===el.dataset.rid);if(r){r.owner_id=el.value||null;saveRoutine(r);}}
   else if(f==='member-color'){const m=state.members.find(x=>x.id===el.dataset.mid);if(m){m.color=el.value;saveMember(m);}}
+  else if(f==='helper-member'){saveEntry(viewingDate,el.dataset.mid,'helper_member_id',el.value);}
 });
 
 function updateKRRowDom(oid,krid){const o=state.objectives.find(x=>x.id===oid);const kr=o?.keyResults.find(k=>k.id===krid);if(!kr)return;const p=pct(kr.current,kr.target);const col=progressColor(p);const row=document.querySelector(`[data-kr-id="${krid}"]`);if(!row)return;const pe=row.querySelector('[data-kr-pct]');if(pe){pe.textContent=p+'%';pe.style.color=col;}const bar=row.querySelector('[data-kr-bar]');if(bar){bar.style.width=p+'%';bar.style.background=col;}if(o){const avg=o.keyResults.length?Math.round(o.keyResults.reduce((s,k)=>s+pct(k.current,k.target),0)/o.keyResults.length):0;const oe=document.querySelector(`[data-obj-id="${oid}"]`);if(oe){const av=oe.querySelector('[data-obj-avg]');if(av){av.textContent=avg+'%';av.style.color=progressColor(avg);}}}}
