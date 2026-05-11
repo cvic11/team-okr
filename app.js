@@ -142,7 +142,7 @@ mark{background:#FFF59D;color:var(--text);padding:0 2px;border-radius:3px}
     column-gap:18px;
     row-gap:14px;
     padding:18px 22px;
-    align-items:start;
+    align-items:stretch;
   }
   .member-card .member-head{
     grid-column:1/-1;
@@ -159,6 +159,9 @@ mark{background:#FFF59D;color:var(--text);padding:0 2px;border-radius:3px}
   .member-card .field{margin-bottom:0;min-width:0;display:flex;flex-direction:column}
   .member-card .field-label{margin-bottom:6px}
   .member-card .field-input{min-height:100px;font-size:13.5px;width:100%}
+  .member-card .field > textarea.blocker-input{flex:1;min-height:160px;resize:vertical}
+  .member-card .field > .krl-block{flex:1;display:flex;flex-direction:column;min-height:160px}
+  .member-card .field > .krl-block > .krl-tasks{flex:1}
   .member-card .reality-box{margin-top:8px}
   /* KR-Link task row — 좁은 컬럼에서 wrap 자연스럽게 */
   .member-card .krl-block{padding:10px 12px}
@@ -885,7 +888,7 @@ function renderBlockerSection(mid,e){
   const hasAnyContent=has||!!(e.helper_member_id||e.helper_name||e.support_type||e.support_detail);
   const clearBtn=hasAnyContent?`<button data-act="clear-blocker" data-mid="${mid}" style="background:transparent;border:none;cursor:pointer;color:var(--text-soft);font-size:10.5px;padding:2px 6px;border-radius:5px;font-weight:600;text-decoration:underline;text-underline-offset:2px;" title="막힘과 도움 요청 모두 지우기">지우기</button>`:'';
   return `<div class="field"><div class="field-label"><span class="field-dot ${accent}"></span><span class="field-name ${accent}">막힘 / 도움 필요</span>${clearBtn}<button class="reality-toggle ${(e.helper_member_id||e.helper_name||e.support_type||e.support_detail)?'has-content':''}" style="margin-left:auto;" data-act="toggle-reality" data-key="${helperKey}">${helpOpen?'도움요청 ▴':'도움요청 ▾'}</button></div>
-    <textarea class="field-input" rows="3" placeholder="없으면 비워두기 — 무엇이 막혔나 (구체적으로)" data-field="standup" data-fieldname="blockers" data-mid="${mid}" data-date="${viewingDate}">${esc(e.blockers||'')}</textarea>
+    <textarea class="field-input blocker-input" rows="5" placeholder="현실적인 어려움과 도움이 필요한게 있나요?" data-field="standup" data-fieldname="blockers" data-mid="${mid}" data-date="${viewingDate}">${esc(e.blockers||'')}</textarea>
     ${helpOpen?`<div class="reality-box" style="margin-top:6px;padding:8px 10px;">
       <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:6px;">
         <span style="font-size:10.5px;font-weight:700;color:var(--text-soft);">누구에게:</span>
@@ -1676,10 +1679,10 @@ init();
   function renderTaskListBlock(mid,kind,label){
     const data=getMemberTasks(mid,kind);
     const legacy=data.legacy,tasks=data.tasks;
-    const addLabel=(kind==='today'?'할일':'작업')+' 추가';
+    const addLabel=(kind==='today'?'할일 추가':'기록 남기기');
     return '<div class="krl-block" data-krl-block="'+mid+':'+kind+'" style="background:white;border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin-top:8px;">'+
       '<div class="krl-block-head" data-krl-head="'+mid+':'+kind+'" style="font-size:12px;color:var(--text-soft);font-weight:600;margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">'+
-        '<span style="display:inline-flex;align-items:center;gap:6px;">'+escapeHtml(label)+' — KR 직접 연결<span class="krl-count" style="font-size:11px;color:var(--text-soft);font-weight:600;">'+tasks.length+'건</span></span>'+
+        '<span style="display:inline-flex;align-items:center;gap:6px;">'+escapeHtml(label)+'<span class="krl-count" style="font-size:11px;color:var(--text-soft);font-weight:600;">'+tasks.length+'건</span></span>'+
         '<span class="krl-right" style="display:inline-flex;align-items:center;gap:6px;">'+
           '<button data-act="krl-add-task" data-mid="'+mid+'" data-kind="'+kind+'" style="padding:4px 10px;font-size:11px;color:#6241F5;background:#EEEAFE;border:1px dashed #D9CFFB;border-radius:5px;cursor:pointer;font-weight:700;font-family:inherit;line-height:1.4;">＋ '+addLabel+'</button>'+
         '</span>'+
