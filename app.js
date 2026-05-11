@@ -1481,3 +1481,299 @@ async function init(){
   }catch(e){console.error(e);renderSetup('초기 로드 실패: '+(e.message||e));}
 }
 init();
+// ============================================================
+// KR-Link Addon v2 · 일일 스탠드업의 "오늘 할 일 / 최근 한 일"을 KR과 직접 연결
+// app.js 끝에 붙여 넣어 기존 함수를 덮어쓰는 방식 (monkey-patch)
+// 기존 DB 스키마 변경 없음. 문제 발생 시 이 블록만 제거하면 원상복구.
+// v2 개선:
+//  - "어제 한 일" → "최근 한 일" 라벨 변경
+//  - 입력칸을 자동 확장 textarea로 (긴 내용도 한 눈에 보임)
+//  - 폰트/여백을 .field-input(14.5px) 톤과 일치
+//  - 저장 표시(✓ 저장됨) 인라인 자동 페이드
+// ============================================================
+(function(){
+  'use strict';
+
+  // ----- 데이터 직렬화 -----
+  function parseTasksField(text){
+    if(!text)return{legacy:'',tasks:[]};
+    const trimmed=String(text).trim();
+    if(trimmed.startsWith('{')&&trimmed.indexOf('"_krlv":1')>0){
+      try{
+        const p=JSON.parse(trimmed);
+        return{legacy:p.legacy||'',tasks:Array.isArray(p.tasks)?p.tasks:[]};
+      }catch(e){}
+    }
+    return{legacy:text,tasks:[]};
+  }
+  function serializeTasks(legacy,tasks){
+    const hasTasks=tasks&&tasks.length>0;
+    if(!hasTasks&&!legacy)return'';
+    if(!hasTasks)return legacy;
+    return JSON.stringify({_krlv:1,legacy:legacy||'',tasks});
+  }
+  function newTaskId(){return't_'+Math.random().toString(36).slice(2,9)+Date.now().toString(36).slice(-3);}
+  function escapeHtml(s){if(s==null)return'';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
+
+  function collectAllKR(){
+    const list=[];
+    if(!window.state||!state.objectives)return list;
+    state.objectives.forEach(o=>o.keyResults.forEach(k=>list.push({id:k.id,title:k.title,objTitle:o.title})));
+    return list;
+  }
+  function getMemberTasks(mid,kind){
+    if(!state.standups||!state.standups[viewingDate])return{legacy:'',tasks:[]};
+    const e=state.standups[viewingDate].entries[mid]||{};
+    return parseTasksField(e[kind]||'');
+  }
+  function updateMemberTasks(mid,kind,legacy,tasks){
+    if(!state.standups[viewingDate])state.standups[viewingDate]={headline:'',entries:{}};
+    if(!state.standups[viewingDate].entries[mid]){
+      state.standups[viewingDate].entries[mid]={yesterday:'',today:'',blockers:'',helper_member_id:'',helper_name:'',support_type:'',support_detail:''};
+    }
+    const text=serializeTasks(legacy,tasks);
+    state.standups[viewingDate].entries[mid][kind]=text;
+    saveEntry(viewingDate,mid,kind,text);
+    markSaved(mid,kind);
+  }
+
+  // ----- 저장 표시 (인라인, 자동 페이드) -----
+  const lastSavedTs=new Map();
+  function markSaved(mid,kind){
+    const key=mid+':'+kind;
+    lastSavedTs.set(key,Date.now());
+    setTimeout(()=>{
+      const ts=lastSavedTs.get(key)||0;
+      if(Date.now()-ts>=2400){
+        if(typeof render==='function'&&currentView==='today')render();
+      }
+    },2600);
+  }
+  function justSavedRecently(mid,kind){
+    const ts=lastSavedTs.get(mid+':'+kind);
+    return ts&&(Date.now()-ts<2500);
+  }
+
+  // ----- 자동 확장 textarea -----
+  function autoGrow(el){
+    if(!el)return;
+    el.style.height='auto';
+    el.style.height=(el.scrollHeight+2)+'px';
+  }
+  function autoGrowAll(){
+    document.querySelectorAll('textarea[data-krl-autogrow]').forEach(autoGrow);
+  }
+
+  // ----- 작업 행 렌더링 (textarea + KR 선택 + 삭제) -----
+  function renderKRTaskRow(task,mid,kind,allKR){
+    const krInfo=task.k?allKR.find(k=>k.id===task.k):null;
+    const tagBg=krInfo?'#EEEAFE':'#F4F4F5';
+    const tagFg=krInfo?'#6241F5':'#737373';
+    const textStyle='flex:1;min-width:80px;padding:9px 11px;border:1px solid var(--line);border-radius:6px;background:#FAFAFA;outline:none;font-size:14.5px;line-height:1.55;font-family:inherit;color:var(--text);resize:none;overflow:hidden;min-height:40px;transition:border-color .15s,background .15s;'+(task.d?'text-decoration:line-through;color:var(--text-soft);':'');
+    return '<div style="display:flex;align-items:flex-start;gap:8px;padding:6px 0;">'
+      +'<button class="rt-check '+(task.d?'checked':'')+'" style="width:20px;height:20px;border-width:2px;border-radius:5px;flex-shrink:0;margin-top:10px;" data-act="krl-toggle-task" data-mid="'+mid+'" data-kind="'+kind+'" data-tid="'+task.id+'" title="완료 체크">'+(task.d?'✓':'')+'</button>'
+      +'<textarea data-krl-field="task-text" data-krl-autogrow data-mid="'+mid+'" data-kind="'+kind+'" data-tid="'+task.id+'" rows="1" placeholder="할일 내용을 적어주세요" style="'+textStyle+'">'+escapeHtml(task.t||'')+'</textarea>'
+      +'<select data-krl-field="task-kr" data-mid="'+mid+'" data-kind="'+kind+'" data-tid="'+task.id+'" style="font-size:12px;padding:8px 10px;background:'+tagBg+';color:'+tagFg+';font-weight:700;border:1px solid '+(krInfo?'#D9CFFB':'var(--line)')+';border-radius:6px;outline:none;max-width:170px;margin-top:6px;flex-shrink:0;cursor:pointer;font-family:inherit;">'
+      +'<option value="">운영 (KR 무관)</option>'
+      +allKR.map(k=>'<option value="'+k.id+'" '+(task.k===k.id?'selected':'')+'>'+escapeHtml(k.title.length>22?k.title.slice(0,22)+'…':k.title)+'</option>').join('')
+      +'</select>'
+      +'<button data-act="krl-del-task" data-mid="'+mid+'" data-kind="'+kind+'" data-tid="'+task.id+'" style="padding:6px 8px;margin-top:6px;background:none;border:1px solid transparent;border-radius:6px;cursor:pointer;color:var(--text-soft);font-size:14px;flex-shrink:0;line-height:1;" onmouseover="this.style.background=\'#F4F4F5\';this.style.color=\'var(--warning)\'" onmouseout="this.style.background=\'none\';this.style.color=\'var(--text-soft)\'" title="삭제">✕</button>'
+      +'</div>';
+  }
+
+  // ----- 작업 목록 블록 (헤더 + 행들 + 추가 버튼) -----
+  function renderTaskListBlock(mid,kind,label){
+    const allKR=collectAllKR();
+    const data=getMemberTasks(mid,kind);
+    const legacy=data.legacy,tasks=data.tasks;
+    const saved=justSavedRecently(mid,kind);
+    const savedBadge=saved
+      ?'<span style="font-size:11px;color:#30AB62;font-weight:700;background:#E6F6EE;padding:2px 9px;border-radius:999px;transition:opacity .3s;">✓ 저장됨</span>'
+      :'';
+    const countText='<span style="font-size:11px;color:var(--text-soft);font-weight:600;">'+tasks.length+'건</span>';
+    return '<div style="background:white;border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin-top:8px;">'
+      +'<div style="font-size:12px;color:var(--text-soft);font-weight:600;margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;gap:8px;">'
+      +'<span>'+label+' — KR 직접 연결</span>'
+      +'<span style="display:inline-flex;align-items:center;gap:8px;">'+savedBadge+countText+'</span>'
+      +'</div>'
+      +(tasks.map(t=>renderKRTaskRow(t,mid,kind,allKR)).join('')||'')
+      +(legacy?'<div style="font-size:12.5px;color:var(--text);background:#FFF8E1;border:1px dashed #E5B340;border-radius:6px;padding:8px 10px;margin-top:6px;line-height:1.55;"><div style="font-size:10.5px;font-weight:700;color:#946800;margin-bottom:3px;">기존 평문 메모</div>'+escapeHtml(legacy)+'<br><button data-act="krl-clear-legacy" data-mid="'+mid+'" data-kind="'+kind+'" style="margin-top:5px;font-size:11px;color:#6241F5;background:none;border:none;cursor:pointer;padding:0;font-weight:700;">이 메모 정리 →</button></div>':'')
+      +'<button data-act="krl-add-task" data-mid="'+mid+'" data-kind="'+kind+'" style="margin-top:8px;padding:7px 12px;font-size:12.5px;color:#6241F5;background:#EEEAFE;border:1px dashed #D9CFFB;border-radius:6px;cursor:pointer;font-weight:700;font-family:inherit;">＋ '+(kind==='today'?'할일':'작업')+' 추가</button>'
+      +'</div>';
+  }
+
+  // ----- KR 분포 요약 (오늘 화면 하단) -----
+  function renderKRDistribution(){
+    if(!state.standups||!state.standups[viewingDate])return'';
+    const standup=state.standups[viewingDate];
+    const allKR=collectAllKR();
+    if(allKR.length===0)return'';
+    const counts={};allKR.forEach(k=>{counts[k.id]=0;});
+    let opsCount=0;
+    state.members.forEach(m=>{
+      const idl=(state.initiativeDailyLogs&&state.initiativeDailyLogs[viewingDate]&&state.initiativeDailyLogs[viewingDate][m.id])||{};
+      Object.entries(idl).forEach(function(entry){
+        const iid=entry[0],v=entry[1];
+        if(!v||!v.checked)return;
+        state.objectives.forEach(o=>o.keyResults.forEach(k=>{
+          if(k.initiatives.some(i=>i.id===iid))counts[k.id]=(counts[k.id]||0)+1;
+        }));
+      });
+    });
+    state.members.forEach(m=>{
+      const e=standup.entries[m.id]||{};
+      ['today','yesterday'].forEach(kind=>{
+        const data=parseTasksField(e[kind]||'');
+        data.tasks.forEach(t=>{
+          if(t.k&&counts[t.k]!==undefined)counts[t.k]++;
+          else if(!t.k)opsCount++;
+        });
+      });
+    });
+    const total=Object.values(counts).reduce((s,n)=>s+n,0)+opsCount;
+    if(total===0)return'';
+    const neglected=allKR.filter(k=>counts[k.id]===0);
+    let html='<section class="card card-section"><div class="section-head"><span style="color:#6241F5;">📊</span><span class="section-title">오늘 KR 분포</span><span class="section-meta">· Initiative 체크 + KR 연결 할일</span></div>';
+    html+='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;">';
+    allKR.forEach(k=>{
+      const c=counts[k.id];
+      const active=c>0;
+      html+='<div style="background:'+(active?'#EEEAFE':'#FAFAFA')+';border-radius:8px;padding:10px 12px;border:1px solid '+(active?'#D9CFFB':'var(--line)')+';">'
+        +'<div style="font-size:11px;color:'+(active?'#6241F5':'var(--text-soft)')+';font-weight:700;margin-bottom:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+escapeHtml(k.title)+'">'+escapeHtml(k.title.length>22?k.title.slice(0,22)+'…':k.title)+'</div>'
+        +'<div style="font-size:20px;font-weight:800;color:'+(active?'#26215C':'var(--text-soft)')+';">'+c+'건</div>'
+        +'</div>';
+    });
+    if(opsCount>0){
+      html+='<div style="background:#FAFAFA;border-radius:8px;padding:10px 12px;border:1px solid var(--line);">'
+        +'<div style="font-size:11px;color:var(--text-soft);font-weight:700;margin-bottom:3px;">운영 (KR 무관)</div>'
+        +'<div style="font-size:20px;font-weight:800;color:var(--text);">'+opsCount+'건</div>'
+        +'</div>';
+    }
+    html+='</div>';
+    if(neglected.length>0){
+      html+='<div style="font-size:12px;color:#E5484D;margin-top:10px;line-height:1.55;background:#FCE8E9;padding:9px 12px;border-radius:6px;"><b>⚠ 오늘 활동 0건:</b> '
+        +neglected.map(k=>escapeHtml(k.title.length>20?k.title.slice(0,20)+'…':k.title)).join(' · ')
+        +' — 방치 신호</div>';
+    }
+    html+='</section>';
+    return html;
+  }
+
+  // ----- 기존 함수 덮어쓰기 -----
+  function applyPatches(){
+    if(typeof renderTodaySection!=='function'||typeof renderYesterdaySection!=='function'||typeof renderToday!=='function'){
+      setTimeout(applyPatches,100);return;
+    }
+
+    // 오늘 할 일 섹션
+    window.renderTodaySection=function(mid,memo,myInits,checks){
+      const checklistHtml=myInits.length===0
+        ?'<div style="font-size:12px;color:var(--text-soft);padding:6px 0;">담당 Initiative가 없습니다. OKR 탭에서 배정하세요.</div>'
+        :myInits.map(i=>{
+          const c=!!(checks[i.id]&&checks[i.id].checked);
+          return '<div style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:13px;"><button class="rt-check '+(c?'checked':'')+'" style="width:18px;height:18px;border-width:1.5px;border-radius:4px;flex-shrink:0;" data-act="toggle-init-check" data-iid="'+i.id+'" data-mid="'+mid+'">'+(c?I.check:'')+'</button><span style="'+(c?'text-decoration:line-through;color:var(--text-soft);':'')+'flex:1;cursor:pointer;line-height:1.5;" data-act="toggle-init-check" data-iid="'+i.id+'" data-mid="'+mid+'">'+esc(i.title)+'</span><span style="font-size:11px;color:var(--text-soft);flex-shrink:0;">'+esc(i.krTitle.slice(0,14))+(i.krTitle.length>14?'…':'')+'</span></div>';
+        }).join('');
+      return '<div class="field"><div class="field-label"><span class="field-dot accent-primary"></span><span class="field-name accent-primary">오늘 할 일</span><span style="font-size:10.5px;color:var(--text-soft);margin-left:auto;font-weight:600;">담당 Initiative '+myInits.length+'건</span></div>'
+        +'<div style="background:#FAFAFA;border-radius:8px;padding:10px 12px;margin-bottom:6px;">'+checklistHtml+'</div>'
+        +renderTaskListBlock(mid,'today','추가 할일')
+        +'</div>';
+    };
+
+    // 최근 한 일 섹션 (구 "어제 한 일")
+    window.renderYesterdaySection=function(mid,memo,yDone){
+      const summaryHtml=yDone.length>0
+        ?'<div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:6px;">'+yDone.map(i=>'<span style="font-size:11.5px;padding:3px 9px;background:var(--growth-soft);color:var(--growth);border-radius:999px;font-weight:600;">'+esc(i.title.slice(0,20))+(i.title.length>20?'…':'')+'</span>').join('')+'</div>'
+        :'<div style="font-size:12px;color:var(--text-soft);margin-bottom:6px;">어제 체크된 Initiative 없음</div>';
+      return '<div class="field"><div class="field-label"><span class="field-dot"></span><span class="field-name">최근 한 일</span><span style="font-size:10.5px;color:var(--text-soft);margin-left:auto;font-weight:600;">최근 완료 작업</span></div>'
+        +summaryHtml
+        +renderTaskListBlock(mid,'yesterday','추가 작업')
+        +'</div>';
+    };
+
+    // renderToday 끝에 KR 분포 추가
+    const _origRenderToday=window.renderToday;
+    window.renderToday=function(){
+      const html=_origRenderToday.apply(this,arguments);
+      return html+renderKRDistribution();
+    };
+
+    // render() 후 textarea 자동 확장
+    const _origRender=window.render;
+    window.render=function(){
+      _origRender.apply(this,arguments);
+      if(window.currentView==='today'){
+        setTimeout(autoGrowAll,0);
+      }
+    };
+
+    if(typeof render==='function'&&currentView==='today')render();
+    console.log('[KR-Link v2] 일일 할일 KR 연결 패치 적용 완료');
+  }
+  applyPatches();
+
+  // ----- 이벤트 핸들러 -----
+  document.addEventListener('click',function(e){
+    const btn=e.target.closest('[data-act]');
+    if(!btn)return;
+    const a=btn.dataset.act;
+    if(a!=='krl-add-task'&&a!=='krl-toggle-task'&&a!=='krl-del-task'&&a!=='krl-clear-legacy')return;
+    const mid=btn.dataset.mid,kind=btn.dataset.kind,tid=btn.dataset.tid;
+    const data=getMemberTasks(mid,kind);
+
+    if(a==='krl-add-task'){
+      data.tasks.push({id:newTaskId(),t:'',k:'',d:false});
+      updateMemberTasks(mid,kind,data.legacy,data.tasks);
+      render();
+      setTimeout(()=>{
+        const inputs=document.querySelectorAll('textarea[data-krl-field="task-text"][data-mid="'+mid+'"][data-kind="'+kind+'"]');
+        if(inputs.length>0){const last=inputs[inputs.length-1];last.focus();autoGrow(last);}
+      },80);
+    }
+    else if(a==='krl-toggle-task'){
+      const t=data.tasks.find(x=>x.id===tid);
+      if(t){t.d=!t.d;updateMemberTasks(mid,kind,data.legacy,data.tasks);render();}
+    }
+    else if(a==='krl-del-task'){
+      const next=data.tasks.filter(x=>x.id!==tid);
+      updateMemberTasks(mid,kind,data.legacy,next);render();
+    }
+    else if(a==='krl-clear-legacy'){
+      if(!confirm('기존 평문 메모를 비울까요? (구조화된 할일 목록만 남깁니다)'))return;
+      updateMemberTasks(mid,kind,'',data.tasks);render();
+    }
+  });
+
+  document.addEventListener('input',function(e){
+    const el=e.target;
+    if(el.dataset.krlField!=='task-text')return;
+    autoGrow(el);
+    const mid=el.dataset.mid,kind=el.dataset.kind,tid=el.dataset.tid;
+    const data=getMemberTasks(mid,kind);
+    const t=data.tasks.find(x=>x.id===tid);
+    if(t){t.t=el.value;updateMemberTasks(mid,kind,data.legacy,data.tasks);}
+  });
+
+  document.addEventListener('change',function(e){
+    const el=e.target;
+    if(el.dataset.krlField!=='task-kr')return;
+    const mid=el.dataset.mid,kind=el.dataset.kind,tid=el.dataset.tid;
+    const data=getMemberTasks(mid,kind);
+    const t=data.tasks.find(x=>x.id===tid);
+    if(t){t.k=el.value||'';updateMemberTasks(mid,kind,data.legacy,data.tasks);render();}
+  });
+
+  // 포커스 시 입력칸 강조 (기존 .field-input과 동일 톤)
+  document.addEventListener('focusin',function(e){
+    const el=e.target;
+    if(el.tagName==='TEXTAREA'&&el.dataset.krlField==='task-text'){
+      el.style.background='white';el.style.borderColor='#6241F5';
+    }
+  });
+  document.addEventListener('focusout',function(e){
+    const el=e.target;
+    if(el.tagName==='TEXTAREA'&&el.dataset.krlField==='task-text'){
+      el.style.background='#FAFAFA';el.style.borderColor='var(--line)';
+    }
+  });
+
+})();
