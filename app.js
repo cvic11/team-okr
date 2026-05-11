@@ -173,6 +173,7 @@ mark{background:#FFF59D;color:var(--text);padding:0 2px;border-radius:3px}
 }
 @media (max-width:879px){
   .today-twocol{grid-template-columns:1fr !important}
+  .objectives-pair-row{grid-template-columns:1fr !important}
 }
 .drag-handle.member-handle{display:inline-block;padding:6px 4px;color:var(--text-soft);cursor:grab;font-size:14px;line-height:1;margin-right:2px}
 .drag-handle.member-handle:hover{color:var(--primary)}
@@ -787,10 +788,8 @@ function renderToday(){
   const self=selfMember();
   return `<div class="date-bar"><button class="date-nav-btn" data-act="date-shift" data-delta="-1">${I.chevLeft}</button><input type="date" class="date-input" value="${date}" data-act="date-set"><button class="date-nav-btn" data-act="date-shift" data-delta="1">${I.chevRight}</button>${isToday?'<span class="today-tag">오늘</span>':`<span class="past-tag">${date<todayKey()?'지난 회의':'미래 날짜'}</span><button class="btn btn-soft" data-act="date-today">오늘로</button>`}</div>
   ${isToday?renderBriefingMerged(self,date,standup):''}
-  <div class="today-twocol" style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px;">
-    <section class="card" style="margin:0;display:flex;flex-direction:column;"><div class="headline-meta">${I.cal} ${formatDateLong(date)} · <span style="font-weight:700;color:var(--primary);">오늘의 한 줄</span> ${guideHelp('headline')} <span style="color:var(--text-soft);">— 회의의 초점·결론을 한 문장으로</span></div><textarea class="headline-input" rows="3" placeholder="결론·의사결정·합의 사항 (예: 가맹문의 KR 50% 돌파를 위해 인터뷰 결과 합의가 필요)" data-field="headline" data-date="${date}">${esc(standup.headline||'')}</textarea><div class="stat-row" style="margin-top:auto;"><div><div class="stat-label">OKR 평균 진척</div><div class="stat-value" style="color:${progressColor(overall)};">${overall}%</div></div><div class="stat-divider"></div><div><div class="stat-label">진행 중 KR</div><div class="stat-value">${allKR.length}개</div></div><div class="stat-divider"></div><div><div class="stat-label">${isToday?'오늘 막힘':'그날 막힘'}</div><div class="stat-value" data-blocker-stat style="color:${blockers>0?C.warning:C.growth};">${blockers>0?`${blockers}건`:'없음'}</div></div>${isToday&&todayRoutines.length>0?`<div class="stat-divider"></div><div><div class="stat-label">오늘 루틴</div><div class="stat-value" style="color:${doneCnt===todayRoutines.length?C.growth:C.amber};">${doneCnt}/${todayRoutines.length}</div></div>`:''}</div></section>
-    <section class="card" style="margin:0;"><div class="section-head"><span style="color:var(--primary);">${I.trend}</span><span class="section-title">이번 분기 KR 한판 보기</span><span class="section-meta" style="margin-left:auto;">${esc(currentTeam()?.quarter||'')}</span></div>${renderKRStrip(allKR)}</section>
-  </div>
+  <section class="card" style="margin-top:14px;display:flex;flex-direction:column;"><div class="headline-meta">${I.cal} ${formatDateLong(date)} · <span style="font-weight:700;color:var(--primary);">오늘의 한 줄</span> ${guideHelp('headline')} <span style="color:var(--text-soft);">— 회의의 초점·결론을 한 문장으로</span></div><textarea class="headline-input" rows="3" placeholder="결론·의사결정·합의 사항 (예: 가맹문의 KR 50% 돌파를 위해 인터뷰 결과 합의가 필요)" data-field="headline" data-date="${date}">${esc(standup.headline||'')}</textarea><div class="stat-row" style="margin-top:12px;"><div><div class="stat-label">OKR 평균 진척</div><div class="stat-value" style="color:${progressColor(overall)};">${overall}%</div></div><div class="stat-divider"></div><div><div class="stat-label">진행 중 KR</div><div class="stat-value">${allKR.length}개</div></div><div class="stat-divider"></div><div><div class="stat-label">${isToday?'오늘 막힘':'그날 막힘'}</div><div class="stat-value" data-blocker-stat style="color:${blockers>0?C.warning:C.growth};">${blockers>0?`${blockers}건`:'없음'}</div></div>${isToday&&todayRoutines.length>0?`<div class="stat-divider"></div><div><div class="stat-label">오늘 루틴</div><div class="stat-value" style="color:${doneCnt===todayRoutines.length?C.growth:C.amber};">${doneCnt}/${todayRoutines.length}</div></div>`:''}</div></section>
+  ${renderObjectivePairRow()}
   ${dueItems.length>0?`<section class="card card-section"><div class="section-head"><span style="color:var(--amber);">${I.flag}</span><span class="section-title">이번 주 마감 (${dueItems.length}건)</span></div>${dueItems.map(d=>`<div style="padding:8px 0;display:flex;align-items:center;gap:10px;border-bottom:1px solid #F4F4F5;font-size:13px;"><span style="font-size:11px;padding:2px 8px;border-radius:999px;background:${d.type==='kr'?'#EEEAFE':'#F4F4F5'};color:${d.type==='kr'?C.primary:C.textSoft};font-weight:700;">${d.type==='kr'?'KR':'Init'}</span><span style="flex:1;">${esc(d.title)}</span><span style="font-size:11.5px;color:${isOverdue(d.dueDate,d.status)?C.warning:C.textSoft};font-weight:600;">${dueShort(d.dueDate)}${isOverdue(d.dueDate,d.status)?' · 지연':''}</span></div>`).join('')}</section>`:''}
   <div class="card-section"><div class="section-head"><span style="color:var(--primary);">${I.msg}</span><span class="section-title">${isToday?'오늘의 스탠드업':`${date} 스탠드업`}</span><span class="section-meta">· 어제 / 오늘 / 막힘</span></div>${state.members.length===0?'<div class="empty">팀원을 먼저 등록해주세요. <strong>관리</strong> 탭에서 추가할 수 있습니다.</div>':`<div class="member-grid">${state.members.map(m=>renderMemberCard(m,standup.entries?.[m.id]||{})).join('')}</div>`}</div>
   ${self?renderMyInitiatives(self):''}
@@ -849,6 +848,60 @@ function renderMyInitItem(i){
   </div>`;
 }
 function renderKRStrip(allKR){if(allKR.length===0)return '<div style="font-size:13px;color:var(--text-soft);">아직 등록된 KR이 없습니다.</div>';return allKR.map(kr=>{const p=pct(kr.current,kr.target);const o=state.members.find(m=>m.id===kr.ownerId);return `<div class="kr-strip-row"><div class="kr-strip-head"><div style="display:flex;align-items:center;gap:8px;min-width:0;"><span class="kr-strip-title">${esc(kr.title)}</span>${o?`<span class="kr-strip-owner">${esc(o.name)}</span>`:''}<span class="conf-chip ${kr.confidence||'mid'}" style="cursor:default;">${CONF_LABELS[kr.confidence||'mid']}</span></div><div class="kr-strip-meta">${kr.dueDate?`<span class="kr-strip-num" style="color:${isOverdue(kr.dueDate)?C.warning:C.textSoft};">${dueShort(kr.dueDate)}</span>`:''}<span class="kr-strip-num">${kr.current} / ${kr.target} ${esc(kr.unit||'')}</span><span class="kr-strip-pct" style="color:${progressColor(p)};">${p}%</span></div></div><div class="progress-track"><div class="progress-fill" style="width:${p}%;background:${progressColor(p)};"></div></div></div>`;}).join('');}
+
+// v11 — 오늘 화면: 1번/2번 OKR 좌우 배치 + 각 KR 진척도 인라인 입력
+function renderInlineKRRow(kr,oid){
+  const p=pct(kr.current,kr.target);
+  const o=state.members.find(m=>m.id===kr.ownerId);
+  const overdue=isOverdue(kr.dueDate);
+  return `<div class="kr-inline-row" data-kr-id="${kr.id}" style="padding:10px 0;border-bottom:1px solid #F4F4F5;">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap;">
+      <span style="font-size:13.5px;font-weight:700;color:var(--text);flex:1;min-width:120px;line-height:1.4;">${esc(kr.title||'(제목 없음)')}</span>
+      ${o?`<span class="kr-strip-owner" style="font-size:11px;">${esc(o.name)}</span>`:''}
+      <span class="conf-chip ${kr.confidence||'mid'}" style="cursor:default;font-size:10.5px;padding:1px 7px;">${CONF_LABELS[kr.confidence||'mid']}</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+      <input type="number" class="kr-num-input" data-field="kr-current" data-oid="${oid}" data-krid="${kr.id}" value="${kr.current}" title="현재값 입력" style="width:74px;font-size:14px;padding:6px 9px;font-weight:700;" />
+      <span style="color:var(--text-soft);font-size:12px;">/</span>
+      <span style="font-size:13px;color:var(--text-soft);font-weight:600;">${kr.target}${kr.unit?' '+esc(kr.unit):''}</span>
+      <span class="kr-strip-pct" data-kr-pct style="color:${progressColor(p)};font-weight:800;font-size:14px;margin-left:4px;">${p}%</span>
+      ${kr.dueDate?`<span style="font-size:11px;color:${overdue?'var(--warning)':'var(--text-soft)'};font-weight:600;margin-left:auto;">${dueShort(kr.dueDate)}${overdue?' · 지연':''}</span>`:'<span style="margin-left:auto;"></span>'}
+    </div>
+    <div class="progress-track" data-kr-bar-wrap style="margin-top:7px;height:6px;border-radius:3px;background:#F0F0F2;overflow:hidden;"><div class="progress-fill" data-kr-bar style="width:${p}%;height:100%;background:${progressColor(p)};transition:width .2s;"></div></div>
+  </div>`;
+}
+function renderObjectivePanel(o,slotIdx){
+  if(!o){
+    return `<section class="card" style="margin:0;min-height:200px;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--text-soft);font-size:13px;border:1px dashed var(--line);background:#FAFAFB;">
+      <div style="font-size:24px;margin-bottom:6px;opacity:.5;">○</div>
+      <div style="font-weight:700;margin-bottom:4px;">${slotIdx===0?'1번':'2번'} Objective 자리</div>
+      <div style="font-size:12px;">OKR 탭에서 Objective를 추가하세요.</div>
+    </section>`;
+  }
+  const krs=o.keyResults||[];
+  const owner=state.members.find(m=>m.id===o.ownerId);
+  const objAvg=krs.length?Math.round(krs.reduce((s,k)=>s+pct(k.current,k.target),0)/krs.length):0;
+  return `<section class="card" style="margin:0;display:flex;flex-direction:column;">
+    <div class="section-head" style="align-items:flex-start;gap:8px;">
+      <span style="color:var(--primary);flex-shrink:0;margin-top:2px;">${I.target}</span>
+      <span class="section-title" style="line-height:1.45;flex:1;min-width:0;font-size:15px;">${esc(o.title||'(Objective 미작성)')}</span>
+      <span style="font-size:11.5px;color:var(--text-soft);font-weight:600;flex-shrink:0;">평균 <strong style="color:${progressColor(objAvg)};font-size:13px;">${objAvg}%</strong></span>
+    </div>
+    ${owner?`<div style="font-size:11px;color:var(--text-soft);margin-bottom:4px;">담당 ${esc(owner.name)} · KR ${krs.length}개</div>`:`<div style="font-size:11px;color:var(--text-soft);margin-bottom:4px;">KR ${krs.length}개</div>`}
+    <div style="flex:1;">
+      ${krs.length===0?'<div style="font-size:13px;color:var(--text-soft);padding:14px 0;text-align:center;">KR을 추가하세요.</div>':krs.map(k=>renderInlineKRRow(k,o.id)).join('')}
+    </div>
+  </section>`;
+}
+function renderObjectivePairRow(){
+  const first=state.objectives[0]||null;
+  const second=state.objectives[1]||null;
+  const extra=state.objectives.length>2;
+  return `<div class="objectives-pair-row" style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px;">
+    ${renderObjectivePanel(first,0)}
+    ${renderObjectivePanel(second,1)}
+  </div>${extra?`<div style="font-size:11.5px;color:var(--text-soft);margin-top:6px;text-align:right;">+ ${state.objectives.length-2}개 Objective는 OKR 탭에서 확인 → <button class="btn-mode" data-act="view" data-view="okr" style="font-size:11px;padding:3px 9px;">OKR 탭으로</button></div>`:''}`;
+}
 function renderMemberCard(m,e){
   const has=!!(e.blockers&&e.blockers.trim());
   const date=viewingDate;
