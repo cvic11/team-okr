@@ -37,10 +37,10 @@
 }
 /* v6.1 — 폰트·패딩 시인성 개선 */
 body{font-size:15.5px}
-.field-input{font-size:15px;padding:12px 14px;line-height:1.65;min-height:110px;font-family:inherit;border-radius:8px;background:#FAFAFA;border:1px solid transparent;transition:all .15s}
+.field-input{font-size:13.5px;padding:11px 13px;line-height:1.6;min-height:100px;font-family:inherit;border-radius:8px;background:#FAFAFA;border:1px solid transparent;transition:all .15s}
 .field-input:hover{background:#F4F4F5}
 .field-input:focus{background:white;border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-soft)}
-body.present .field-input{font-size:16.5px;min-height:140px}
+body.present .field-input{font-size:15px;min-height:130px}
 .kr-title-input{font-size:15px;padding:6px 4px}
 .obj-title-input{font-size:18px;padding:5px 0}
 body.present .obj-title-input{font-size:22px}
@@ -158,7 +158,7 @@ mark{background:#FFF59D;color:var(--text);padding:0 2px;border-radius:3px}
   .member-card .member-head .member-role{font-size:12px;color:var(--text-soft)}
   .member-card .field{margin-bottom:0;min-width:0;display:flex;flex-direction:column}
   .member-card .field-label{margin-bottom:6px}
-  .member-card .field-input{min-height:110px;font-size:14.5px;width:100%}
+  .member-card .field-input{min-height:100px;font-size:13.5px;width:100%}
   .member-card .reality-box{margin-top:8px}
   /* KR-Link task row — 좁은 컬럼에서 wrap 자연스럽게 */
   .member-card .krl-block{padding:10px 12px}
@@ -790,8 +790,8 @@ function renderToday(){
   </div>
   ${dueItems.length>0?`<section class="card card-section"><div class="section-head"><span style="color:var(--amber);">${I.flag}</span><span class="section-title">이번 주 마감 (${dueItems.length}건)</span></div>${dueItems.map(d=>`<div style="padding:8px 0;display:flex;align-items:center;gap:10px;border-bottom:1px solid #F4F4F5;font-size:13px;"><span style="font-size:11px;padding:2px 8px;border-radius:999px;background:${d.type==='kr'?'#EEEAFE':'#F4F4F5'};color:${d.type==='kr'?C.primary:C.textSoft};font-weight:700;">${d.type==='kr'?'KR':'Init'}</span><span style="flex:1;">${esc(d.title)}</span><span style="font-size:11.5px;color:${isOverdue(d.dueDate,d.status)?C.warning:C.textSoft};font-weight:600;">${dueShort(d.dueDate)}${isOverdue(d.dueDate,d.status)?' · 지연':''}</span></div>`).join('')}</section>`:''}
   <div class="card-section"><div class="section-head"><span style="color:var(--primary);">${I.msg}</span><span class="section-title">${isToday?'오늘의 스탠드업':`${date} 스탠드업`}</span><span class="section-meta">· 어제 / 오늘 / 막힘</span></div>${state.members.length===0?'<div class="empty">팀원을 먼저 등록해주세요. <strong>관리</strong> 탭에서 추가할 수 있습니다.</div>':`<div class="member-grid">${state.members.map(m=>renderMemberCard(m,standup.entries?.[m.id]||{})).join('')}</div>`}</div>
-  ${isToday&&todayRoutines.length>0?`<section class="card card-section"><div class="section-head"><span style="color:var(--primary);">${I.loop}</span><span class="section-title">오늘의 루틴</span><span class="section-meta">· 매일 챙겨야 할 일</span></div>${todayRoutines.map(r=>renderRoutineCheck(r,rl[r.id]||{})).join('')}</section>`:''}
-  ${self?renderMyInitiatives(self):''}`;
+  ${self?renderMyInitiatives(self):''}
+  ${isToday&&todayRoutines.length>0?`<section class="card card-section"><div class="section-head"><span style="color:var(--primary);">${I.loop}</span><span class="section-title">오늘의 루틴</span><span class="section-meta">· 매일 챙겨야 할 일</span></div>${todayRoutines.map(r=>renderRoutineCheck(r,rl[r.id]||{})).join('')}</section>`:''}`;
 }
 // ============================================================
 // Initiative My Items — 오늘 화면 하단 본인 담당 Initiative 통합 뷰
@@ -881,7 +881,9 @@ function renderBlockerSection(mid,e){
   const accent=has?'accent-warning':'';
   const helper=state.members.find(x=>x.id===e.helper_member_id);
   const helperLabel=helper?helper.name:(e.helper_name||'');
-  return `<div class="field"><div class="field-label"><span class="field-dot ${accent}"></span><span class="field-name ${accent}">막힘 / 도움 필요</span><button class="reality-toggle ${(e.helper_member_id||e.helper_name||e.support_type||e.support_detail)?'has-content':''}" style="margin-left:auto;" data-act="toggle-reality" data-key="${helperKey}">${helpOpen?'도움요청 ▴':'도움요청 ▾'}</button></div>
+  const hasAnyContent=has||!!(e.helper_member_id||e.helper_name||e.support_type||e.support_detail);
+  const clearBtn=hasAnyContent?`<button data-act="clear-blocker" data-mid="${mid}" style="background:transparent;border:none;cursor:pointer;color:var(--text-soft);font-size:10.5px;padding:2px 6px;border-radius:5px;font-weight:600;text-decoration:underline;text-underline-offset:2px;" title="막힘과 도움 요청 모두 지우기">지우기</button>`:'';
+  return `<div class="field"><div class="field-label"><span class="field-dot ${accent}"></span><span class="field-name ${accent}">막힘 / 도움 필요</span>${clearBtn}<button class="reality-toggle ${(e.helper_member_id||e.helper_name||e.support_type||e.support_detail)?'has-content':''}" style="margin-left:auto;" data-act="toggle-reality" data-key="${helperKey}">${helpOpen?'도움요청 ▴':'도움요청 ▾'}</button></div>
     <textarea class="field-input" rows="3" placeholder="없으면 비워두기 — 무엇이 막혔나 (구체적으로)" data-field="standup" data-fieldname="blockers" data-mid="${mid}" data-date="${viewingDate}">${esc(e.blockers||'')}</textarea>
     ${helpOpen?`<div class="reality-box" style="margin-top:6px;padding:8px 10px;">
       <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:6px;">
@@ -1326,6 +1328,19 @@ document.addEventListener('click',async e=>{
     return;
   }
   if(a==='set-support-type'){const mid=btn.dataset.mid;const type=btn.dataset.type;const e=ensureStandup(viewingDate);if(!e.entries[mid])e.entries[mid]={yesterday:'',today:'',blockers:'',helper_member_id:'',helper_name:'',support_type:'',support_detail:''};const old=e.entries[mid].support_type;e.entries[mid].support_type=(old===type)?'':type;saveEntry(viewingDate,mid,'support_type',e.entries[mid].support_type);render();return;}
+  if(a==='clear-blocker'){
+    const mid=btn.dataset.mid;
+    if(!confirm('막힘과 도움 요청을 모두 지울까요?'))return;
+    const s=ensureStandup(viewingDate);
+    if(!s.entries[mid])s.entries[mid]={yesterday:'',today:'',blockers:'',helper_member_id:'',helper_name:'',support_type:'',support_detail:''};
+    s.entries[mid].blockers='';s.entries[mid].helper_member_id='';s.entries[mid].helper_name='';s.entries[mid].support_type='';s.entries[mid].support_detail='';
+    // 한 번에 전체 저장 (saveEntry는 마지막 호출로 전체 row를 upsert함)
+    saveEntry(viewingDate,mid,'support_detail','');
+    realityOpen.delete(`helper:${mid}`);
+    render();
+    showToast('지웠습니다');
+    return;
+  }
   if(a==='open-review'){openReflection('member',btn.dataset.mid,btn.dataset.period);return;}
   if(a==='open-reflection'){openReflection(btn.dataset.etype,btn.dataset.eid,btn.dataset.period);return;}
   if(a==='refl-mode'){window._reflMode=btn.dataset.mode;const opts=window._reviewOpts||{};const r=window._editingReview;if(r)openReflection(r.entity_type||'member',r.entity_id||r.member_id,r.period,opts);return;}
@@ -1648,7 +1663,7 @@ init();
     const tagBg=krInfo?'#EEEAFE':'#F4F4F5';
     const tagFg=krInfo?'#6241F5':'#737373';
     const tagBorder=krInfo?'#D9CFFB':'var(--line)';
-    const textStyle='flex:1;min-width:80px;padding:10px 12px;border:1px solid var(--line);border-radius:6px;background:#FAFAFA;outline:none;font-size:15px;line-height:1.6;font-family:inherit;color:var(--text);resize:none;overflow:hidden;min-height:44px;'+(task.d?'text-decoration:line-through;color:var(--text-soft);':'');
+    const textStyle='flex:1;min-width:80px;padding:9px 11px;border:1px solid var(--line);border-radius:6px;background:#FAFAFA;outline:none;font-size:13px;line-height:1.55;font-family:inherit;color:var(--text);resize:none;overflow:hidden;min-height:38px;'+(task.d?'text-decoration:line-through;color:var(--text-soft);':'');
     return '<div class="krl-task-row" data-tid="'+task.id+'" data-mid="'+mid+'" data-kind="'+kind+'" style="display:flex;align-items:flex-start;gap:8px;padding:6px 0;">'+
       '<button class="rt-check '+(task.d?'checked':'')+'" style="width:20px;height:20px;border-width:2px;border-radius:5px;flex-shrink:0;margin-top:11px;" data-act="krl-toggle-task" data-mid="'+mid+'" data-kind="'+kind+'" data-tid="'+task.id+'" title="완료 체크">'+(task.d?'✓':'')+'</button>'+
       '<textarea data-krl-field="task-text" data-krl-autogrow data-mid="'+mid+'" data-kind="'+kind+'" data-tid="'+task.id+'" rows="1" placeholder="할일 내용을 적어주세요" style="'+textStyle+'">'+escapeHtml(task.t||'')+'</textarea>'+
@@ -1660,14 +1675,16 @@ init();
   function renderTaskListBlock(mid,kind,label){
     const data=getMemberTasks(mid,kind);
     const legacy=data.legacy,tasks=data.tasks;
+    const addLabel=(kind==='today'?'할일':'작업')+' 추가';
     return '<div class="krl-block" data-krl-block="'+mid+':'+kind+'" style="background:white;border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin-top:8px;">'+
-      '<div class="krl-block-head" data-krl-head="'+mid+':'+kind+'" style="font-size:12px;color:var(--text-soft);font-weight:600;margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;gap:8px;">'+
-        '<span>'+escapeHtml(label)+' — KR 직접 연결</span>'+
-        '<span class="krl-right" style="display:inline-flex;align-items:center;gap:6px;"><span class="krl-count" style="font-size:11px;color:var(--text-soft);font-weight:600;">'+tasks.length+'건</span></span>'+
+      '<div class="krl-block-head" data-krl-head="'+mid+':'+kind+'" style="font-size:12px;color:var(--text-soft);font-weight:600;margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">'+
+        '<span style="display:inline-flex;align-items:center;gap:6px;">'+escapeHtml(label)+' — KR 직접 연결<span class="krl-count" style="font-size:11px;color:var(--text-soft);font-weight:600;">'+tasks.length+'건</span></span>'+
+        '<span class="krl-right" style="display:inline-flex;align-items:center;gap:6px;">'+
+          '<button data-act="krl-add-task" data-mid="'+mid+'" data-kind="'+kind+'" style="padding:4px 10px;font-size:11px;color:#6241F5;background:#EEEAFE;border:1px dashed #D9CFFB;border-radius:5px;cursor:pointer;font-weight:700;font-family:inherit;line-height:1.4;">＋ '+addLabel+'</button>'+
+        '</span>'+
       '</div>'+
       '<div class="krl-tasks" data-krl-tasks="'+mid+':'+kind+'">'+tasks.map(t=>renderTaskRowHtml(t,mid,kind)).join('')+'</div>'+
       (legacy?'<div class="krl-legacy" data-krl-legacy="'+mid+':'+kind+'" style="font-size:12.5px;color:var(--text);background:#FFF8E1;border:1px dashed #E5B340;border-radius:6px;padding:8px 10px;margin-top:6px;line-height:1.55;"><div style="font-size:10.5px;font-weight:700;color:#946800;margin-bottom:3px;">기존 평문 메모</div>'+escapeHtml(legacy)+'<br><button data-act="krl-clear-legacy" data-mid="'+mid+'" data-kind="'+kind+'" style="margin-top:5px;font-size:11px;color:#6241F5;background:none;border:none;cursor:pointer;padding:0;font-weight:700;">이 메모 정리 →</button></div>':'')+
-      '<button data-act="krl-add-task" data-mid="'+mid+'" data-kind="'+kind+'" style="margin-top:8px;padding:7px 12px;font-size:12.5px;color:#6241F5;background:#EEEAFE;border:1px dashed #D9CFFB;border-radius:6px;cursor:pointer;font-weight:700;font-family:inherit;">＋ '+(kind==='today'?'할일':'작업')+' 추가</button>'+
       '</div>';
   }
   let distributionTimer=null;
@@ -1676,6 +1693,8 @@ init();
     distributionTimer=setTimeout(()=>{const el=document.querySelector('[data-krl-distribution]');const html=renderKRDistributionInner();if(el){if(html){const tmp=document.createElement('div');tmp.innerHTML=html;el.replaceWith(tmp.firstElementChild);}else el.remove();}},600);
   }
   function renderKRDistributionInner(){
+    return ''; // v10 — 사용자 요청으로 KR 분포 차트 비활성화
+    /* 아래는 보존(향후 재활성 가능)
     const st=getState();const date=getViewingDate();
     if(!st||!date||!st.standups||!st.standups[date])return '';
     const standup=st.standups[date];
@@ -1699,6 +1718,7 @@ init();
     if(neglected.length>0){html+='<div style="font-size:12px;color:#E5484D;margin-top:10px;line-height:1.55;background:#FCE8E9;padding:9px 12px;border-radius:6px;"><b>⚠ 오늘 활동 0건:</b> '+neglected.map(k=>{const t=k.title.length>20?k.title.slice(0,20)+'…':k.title;return escapeHtml(t);}).join(' · ')+' — 방치 신호</div>';}
     html+='</section>';
     return html;
+    */
   }
   function updateCount(mid,kind,n){const head=document.querySelector('[data-krl-head="'+mid+':'+kind+'"]');if(head){const c=head.querySelector('.krl-count');if(c)c.textContent=n+'건';}}
   function applyPatches(){
