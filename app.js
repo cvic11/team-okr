@@ -1402,8 +1402,20 @@ async function reorderInits(krid,srcId,tgtId){
   showToast('순서 저장됨');
 }
 
+// 달력 날짜 변경 처리 (input/change 모두에서 호출되도록 함수 분리)
+async function handleDateChange(newDate){
+  if(!newDate || newDate === viewingDate)return;
+  viewingDate = newDate;
+  if(!state.standups[newDate] || !state.routineLogs[newDate]){
+    dateLoading = true; render();
+    try{ await Promise.all([loadStandup(newDate), loadRoutineLogs(newDate)]); }finally{ dateLoading = false; }
+  }
+  render();
+}
 document.addEventListener('input',e=>{
   const el=e.target;
+  // 달력 즉시 연동 (input 이벤트로도 처리 — Edge/일부 브라우저는 change보다 input이 빠름)
+  if(el.dataset.act==='date-set'){handleDateChange(el.value);return;}
   // 검색 인풋 (저장 인디케이터 영향 없는 별도 디바운스)
   if(el.id==='okr-search'){okrSearchQuery=el.value;clearTimeout(window._searchDeb);window._searchDeb=setTimeout(()=>render(),200);return;}
   if(el.id==='refl-search'){reflSearchQuery=el.value;clearTimeout(window._reflSearchDeb);window._reflSearchDeb=setTimeout(()=>render(),200);return;}
@@ -1435,20 +1447,8 @@ document.addEventListener('input',e=>{
 
 document.addEventListener('change',async e=>{
   const el=e.target;
-  // 달력 변경 시 즉시 데이터 연동
-  if(el.dataset.act==='date-set'){
-    const newDate=el.value;
-    if(newDate && newDate !== viewingDate){
-      viewingDate = newDate;
-      // 캐시 없으면 로드, 있으면 즉시 렌더
-      if(!state.standups[newDate] || !state.routineLogs[newDate]){
-        dateLoading = true; render();
-        try{ await Promise.all([loadStandup(newDate), loadRoutineLogs(newDate)]); }finally{ dateLoading = false; }
-      }
-      render();
-    }
-    return;
-  }
+  // 달력 변경 시 즉시 데이터 연동 (input 이벤트와 동일 함수 사용 — 안전 백업)
+  if(el.dataset.act==='date-set'){handleDateChange(el.value);return;}
   // review custom date inputs (use change event)
   if(el.dataset.act==='review-custom'){const which=el.dataset.which;const v=el.value;const cur=window._reviewOpts||{preset:'14',start:null,end:todayKey()};const et=el.dataset.etype||'member';const opts={preset:'custom',start:which==='start'?v:cur.start,end:which==='end'?v:cur.end};openReflection(et,el.dataset.mid,el.dataset.period,opts);return;}
   const f=el.dataset.field;if(!f)return;
