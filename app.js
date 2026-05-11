@@ -797,7 +797,7 @@ function renderMemberCard(m,e){
   const todayChecks=getIDLForMemberDate(m.id,date);
   const yChecks=getIDLForMemberDate(m.id,yesterday);
   // 어제 체크된 Initiative 자동 요약
-  const yDoneInits=Object.entries(yChecks).filter(([_,v])=>v.checked).map(([iid,v])=>{const i=findInitiative(iid);return i?{title:i.title,note:v.note}:null;}).filter(Boolean);
+  const yDoneInits=Object.entries(yChecks).filter(([_,v])=>v.checked).map(([iid,v])=>{const i=findInitiative(iid);return i?{id:iid,title:i.title,note:v.note}:null;}).filter(Boolean);
   return `<div class="member-card ${has?'has-blocker':''}" data-member-card="${m.id}">
     <div class="member-head"><div class="avatar" style="background:${m.color};">${esc(m.name.slice(0,1).toUpperCase())}</div><div><div class="member-name">${esc(m.name)}</div><div class="member-role">${esc(m.role||'')}</div></div>${has?`<span class="blocker-badge">${I.alert} 도움 필요</span>`:''}</div>
     ${renderYesterdaySection(m.id,e.yesterday,yDoneInits)}
@@ -1645,9 +1645,11 @@ init();
     };
     window.renderYesterdaySection=function(mid,memo,yDone){
       const summaryHtml=yDone.length>0
-        ? '<div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:6px;">'+yDone.map(i=>'<span style="font-size:11.5px;padding:3px 9px;background:var(--growth-soft);color:var(--growth);border-radius:999px;font-weight:600;">'+esc(i.title.slice(0,20))+(i.title.length>20?'…':'')+'</span>').join('')+'</div>'
+        ? '<div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:6px;">'+yDone.map(i=>'<span style="font-size:11.5px;padding:3px 4px 3px 10px;background:var(--growth-soft);color:var(--growth);border-radius:999px;font-weight:600;display:inline-flex;align-items:center;gap:4px;">'+esc(i.title.slice(0,20))+(i.title.length>20?'…':'')+'<button data-act="krl-del-yesterday-check" data-mid="'+mid+'" data-iid="'+(i.id||'')+'" title="이 체크 지우기" style="background:transparent;border:none;cursor:pointer;color:var(--growth);font-size:13px;line-height:1;padding:0 4px;border-radius:999px;opacity:.7;font-weight:700;">✕</button></span>').join('')+'</div>'
         : '<div style="font-size:12px;color:var(--text-soft);margin-bottom:6px;">어제 체크된 Initiative 없음</div>';
-      return '<div class="field"><div class="field-label"><span class="field-dot"></span><span class="field-name">최근 한 일</span><span style="font-size:10.5px;color:var(--text-soft);margin-left:auto;font-weight:600;">최근 완료 작업</span></div>'+summaryHtml+renderTaskListBlock(mid,'yesterday','추가 작업')+'</div>';
+      const hasAny=yDone.length>0;
+      const clearBtn=hasAny?`<button data-act="krl-clear-all-yesterday" data-mid="${mid}" style="background:transparent;border:none;cursor:pointer;color:var(--text-soft);font-size:10.5px;padding:2px 6px;border-radius:5px;font-weight:600;text-decoration:underline;text-underline-offset:2px;" title="어제 체크된 Initiative 해제 + 추가 작업 모두 삭제">모두 비우기</button>`:'';
+      return '<div class="field"><div class="field-label"><span class="field-dot"></span><span class="field-name">최근 한 일</span><span style="font-size:10.5px;color:var(--text-soft);margin-left:auto;font-weight:600;">최근 완료 작업</span>'+clearBtn+'</div>'+summaryHtml+renderTaskListBlock(mid,'yesterday','추가 작업')+'</div>';
     };
     const _origRenderToday=window.renderToday;
     window.renderToday=function(){const html=_origRenderToday.apply(this,arguments);return html+(renderKRDistributionInner()||'');};
@@ -1663,6 +1665,34 @@ init();
   document.addEventListener('click',function(e){
     const btn=e.target.closest('[data-act]');if(!btn)return;
     const a=btn.dataset.act;
+    if(a==='krl-del-yesterday-check'){
+      // 어제 체크된 Initiative의 체크 해제 (자동 요약 칩에서 X 클릭)
+      const mid=btn.dataset.mid;const iid=btn.dataset.iid;
+      if(!iid){return;}
+      try{
+        const yDate=shiftDate(getViewingDate(),-1);
+        saveInitiativeDailyLog(iid,mid,yDate,false);
+        // 즉시 UI에서 칩 제거
+        const sp=btn.closest('span');if(sp)sp.remove();
+        scheduleDistributionUpdate();
+      }catch(err){console.warn('[KR-Link] del-yesterday-check failed',err);}
+      return;
+    }
+    if(a==='krl-clear-all-yesterday'){
+      // 어제 체크된 Initiative 모두 해제 + 추가 작업 모두 삭제
+      const mid=btn.dataset.mid;
+      if(!confirm('이 팀원의 "최근 한 일"을 모두 비울까요? (어제 체크된 Initiative 해제 + 추가 작업 삭제)'))return;
+      try{
+        const yDate=shiftDate(getViewingDate(),-1);
+        const yChecks=(getState().initiativeDailyLogs[yDate]&&getState().initiativeDailyLogs[yDate][mid])||{};
+        Object.entries(yChecks).forEach(([iid,v])=>{if(v&&v.checked)saveInitiativeDailyLog(iid,mid,yDate,false);});
+        // 추가 작업도 비움 (legacy도 함께)
+        updateMemberTasks(mid,'yesterday','',[]);
+        // 즉시 재렌더
+        if(typeof render==='function')render();
+      }catch(err){console.warn('[KR-Link] clear-all-yesterday failed',err);}
+      return;
+    }
     if(a!=='krl-add-task'&&a!=='krl-toggle-task'&&a!=='krl-del-task'&&a!=='krl-clear-legacy')return;
     const mid=btn.dataset.mid,kind=btn.dataset.kind,tid=btn.dataset.tid;
     const data=getMemberTasks(mid,kind);
