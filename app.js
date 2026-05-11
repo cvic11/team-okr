@@ -37,8 +37,10 @@
 }
 /* v6.1 — 폰트·패딩 시인성 개선 */
 body{font-size:15.5px}
-.field-input{font-size:15px;padding:12px 13px;line-height:1.6;min-height:96px;font-family:inherit}
-body.present .field-input{font-size:16.5px;min-height:120px}
+.field-input{font-size:15px;padding:12px 14px;line-height:1.65;min-height:110px;font-family:inherit;border-radius:8px;background:#FAFAFA;border:1px solid transparent;transition:all .15s}
+.field-input:hover{background:#F4F4F5}
+.field-input:focus{background:white;border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-soft)}
+body.present .field-input{font-size:16.5px;min-height:140px}
 .kr-title-input{font-size:15px;padding:6px 4px}
 .obj-title-input{font-size:18px;padding:5px 0}
 body.present .obj-title-input{font-size:22px}
@@ -132,21 +134,57 @@ body.present .headline-input{font-size:28px}
 mark{background:#FFF59D;color:var(--text);padding:0 2px;border-radius:3px}
 /* v10 — 멤버 가로 레이아웃 + 오늘 화면 2열 */
 @media (min-width:880px){
-  .member-grid{grid-template-columns:1fr;gap:12px}
-  .member-card{display:grid;grid-template-columns:160px minmax(0,1fr) minmax(0,1fr) minmax(0,1fr);gap:18px;align-items:start;padding:16px 20px}
-  .member-card .member-head{margin-bottom:0;flex-direction:column;align-items:flex-start;gap:6px}
-  .member-card .member-head .avatar{margin-bottom:4px}
-  .member-card .field{margin-bottom:0;min-width:0}
-  .member-card .field-input{min-height:90px}
-  .krl-block{max-width:100%;overflow:hidden}
-  .krl-task-row{flex-wrap:wrap}
-  .krl-task-row textarea{min-width:140px}
+  .member-grid{grid-template-columns:1fr;gap:14px}
+  .member-card{
+    display:grid;
+    grid-template-columns:repeat(3,minmax(0,1fr));
+    grid-template-rows:auto auto;
+    column-gap:18px;
+    row-gap:14px;
+    padding:18px 22px;
+    align-items:start;
+  }
+  .member-card .member-head{
+    grid-column:1/-1;
+    margin-bottom:0;
+    padding-bottom:12px;
+    border-bottom:1px solid var(--line);
+    flex-direction:row;
+    align-items:center;
+    gap:12px;
+  }
+  .member-card .member-head .avatar{margin-bottom:0;width:36px;height:36px;font-size:14px}
+  .member-card .member-head .member-name{font-size:15px;font-weight:800}
+  .member-card .member-head .member-role{font-size:12px;color:var(--text-soft)}
+  .member-card .field{margin-bottom:0;min-width:0;display:flex;flex-direction:column}
+  .member-card .field-label{margin-bottom:6px}
+  .member-card .field-input{min-height:110px;font-size:14.5px;width:100%}
+  .member-card .reality-box{margin-top:8px}
+  /* KR-Link task row — 좁은 컬럼에서 wrap 자연스럽게 */
+  .member-card .krl-block{padding:10px 12px}
+  .member-card .krl-task-row{flex-wrap:wrap;gap:6px;padding:6px 0;align-items:center}
+  .member-card .krl-task-row > .rt-check{order:1;margin-top:0}
+  .member-card .krl-task-row > textarea{order:2;flex:1 1 calc(100% - 32px);min-width:0;min-height:42px;margin-top:0}
+  .member-card .krl-task-row > select{order:3;flex:1 1 calc(100% - 40px);min-width:0;max-width:none;margin-top:0}
+  .member-card .krl-task-row > button[data-act="krl-del-task"]{order:4;margin-top:0;align-self:center}
 }
 @media (max-width:879px){
   .today-twocol{grid-template-columns:1fr !important}
 }
 .drag-handle.member-handle{display:inline-block;padding:6px 4px;color:var(--text-soft);cursor:grab;font-size:14px;line-height:1;margin-right:2px}
 .drag-handle.member-handle:hover{color:var(--primary)}
+/* v10 — 멤버 카드 시각 정돈 */
+.member-card{border:1px solid var(--line);border-radius:12px;background:white;box-shadow:0 1px 2px rgba(0,0,0,.02);transition:box-shadow .15s}
+.member-card:hover{box-shadow:0 2px 8px rgba(0,0,0,.04)}
+.member-card .field-label{font-size:11.5px;font-weight:700;letter-spacing:.3px;color:var(--text-soft);text-transform:uppercase}
+.member-card .field-label .field-name{font-size:12px;font-weight:700}
+.member-card .field-label .field-name.accent-primary{color:var(--primary)}
+.member-card .field-label .field-name.accent-warning{color:var(--warning)}
+/* KR-Link 블록 내부 시각 정돈 */
+.krl-block{background:#FCFCFD !important}
+.krl-block-head{padding-bottom:8px;border-bottom:1px solid #F4F4F5;margin-bottom:8px !important}
+.krl-task-row textarea{transition:all .15s}
+.krl-task-row textarea:focus{background:white !important;border-color:var(--primary) !important;box-shadow:0 0 0 2px var(--primary-soft)}
 /* v9 다크 모드 */
 html.dark{color-scheme:dark}
 html.dark body{background:#0F1117;color:#E5E7EB}
@@ -750,9 +788,9 @@ function renderToday(){
     <section class="card" style="margin:0;display:flex;flex-direction:column;"><div class="headline-meta">${I.cal} ${formatDateLong(date)} · <span style="font-weight:700;color:var(--primary);">오늘의 한 줄</span> ${guideHelp('headline')} <span style="color:var(--text-soft);">— 회의의 초점·결론을 한 문장으로</span></div><textarea class="headline-input" rows="3" placeholder="결론·의사결정·합의 사항 (예: 가맹문의 KR 50% 돌파를 위해 인터뷰 결과 합의가 필요)" data-field="headline" data-date="${date}">${esc(standup.headline||'')}</textarea><div class="stat-row" style="margin-top:auto;"><div><div class="stat-label">OKR 평균 진척</div><div class="stat-value" style="color:${progressColor(overall)};">${overall}%</div></div><div class="stat-divider"></div><div><div class="stat-label">진행 중 KR</div><div class="stat-value">${allKR.length}개</div></div><div class="stat-divider"></div><div><div class="stat-label">${isToday?'오늘 막힘':'그날 막힘'}</div><div class="stat-value" data-blocker-stat style="color:${blockers>0?C.warning:C.growth};">${blockers>0?`${blockers}건`:'없음'}</div></div>${isToday&&todayRoutines.length>0?`<div class="stat-divider"></div><div><div class="stat-label">오늘 루틴</div><div class="stat-value" style="color:${doneCnt===todayRoutines.length?C.growth:C.amber};">${doneCnt}/${todayRoutines.length}</div></div>`:''}</div></section>
     <section class="card" style="margin:0;"><div class="section-head"><span style="color:var(--primary);">${I.trend}</span><span class="section-title">이번 분기 KR 한판 보기</span><span class="section-meta" style="margin-left:auto;">${esc(currentTeam()?.quarter||'')}</span></div>${renderKRStrip(allKR)}</section>
   </div>
-  ${isToday&&todayRoutines.length>0?`<section class="card card-section"><div class="section-head"><span style="color:var(--primary);">${I.loop}</span><span class="section-title">오늘의 루틴</span><span class="section-meta">· 매일 챙겨야 할 일</span></div>${todayRoutines.map(r=>renderRoutineCheck(r,rl[r.id]||{})).join('')}</section>`:''}
   ${dueItems.length>0?`<section class="card card-section"><div class="section-head"><span style="color:var(--amber);">${I.flag}</span><span class="section-title">이번 주 마감 (${dueItems.length}건)</span></div>${dueItems.map(d=>`<div style="padding:8px 0;display:flex;align-items:center;gap:10px;border-bottom:1px solid #F4F4F5;font-size:13px;"><span style="font-size:11px;padding:2px 8px;border-radius:999px;background:${d.type==='kr'?'#EEEAFE':'#F4F4F5'};color:${d.type==='kr'?C.primary:C.textSoft};font-weight:700;">${d.type==='kr'?'KR':'Init'}</span><span style="flex:1;">${esc(d.title)}</span><span style="font-size:11.5px;color:${isOverdue(d.dueDate,d.status)?C.warning:C.textSoft};font-weight:600;">${dueShort(d.dueDate)}${isOverdue(d.dueDate,d.status)?' · 지연':''}</span></div>`).join('')}</section>`:''}
   <div class="card-section"><div class="section-head"><span style="color:var(--primary);">${I.msg}</span><span class="section-title">${isToday?'오늘의 스탠드업':`${date} 스탠드업`}</span><span class="section-meta">· 어제 / 오늘 / 막힘</span></div>${state.members.length===0?'<div class="empty">팀원을 먼저 등록해주세요. <strong>관리</strong> 탭에서 추가할 수 있습니다.</div>':`<div class="member-grid">${state.members.map(m=>renderMemberCard(m,standup.entries?.[m.id]||{})).join('')}</div>`}</div>
+  ${isToday&&todayRoutines.length>0?`<section class="card card-section"><div class="section-head"><span style="color:var(--primary);">${I.loop}</span><span class="section-title">오늘의 루틴</span><span class="section-meta">· 매일 챙겨야 할 일</span></div>${todayRoutines.map(r=>renderRoutineCheck(r,rl[r.id]||{})).join('')}</section>`:''}
   ${self?renderMyInitiatives(self):''}`;
 }
 // ============================================================
