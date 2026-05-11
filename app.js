@@ -130,6 +130,23 @@ body.present .headline-input{font-size:28px}
 .search-bar input{border:none;outline:none;flex:1;font-size:13px;background:transparent;font-family:inherit;min-width:0}
 .search-bar .clear{cursor:pointer;color:var(--text-soft);font-size:14px;padding:2px}
 mark{background:#FFF59D;color:var(--text);padding:0 2px;border-radius:3px}
+/* v10 — 멤버 가로 레이아웃 + 오늘 화면 2열 */
+@media (min-width:880px){
+  .member-grid{grid-template-columns:1fr;gap:12px}
+  .member-card{display:grid;grid-template-columns:160px minmax(0,1fr) minmax(0,1fr) minmax(0,1fr);gap:18px;align-items:start;padding:16px 20px}
+  .member-card .member-head{margin-bottom:0;flex-direction:column;align-items:flex-start;gap:6px}
+  .member-card .member-head .avatar{margin-bottom:4px}
+  .member-card .field{margin-bottom:0;min-width:0}
+  .member-card .field-input{min-height:90px}
+  .krl-block{max-width:100%;overflow:hidden}
+  .krl-task-row{flex-wrap:wrap}
+  .krl-task-row textarea{min-width:140px}
+}
+@media (max-width:879px){
+  .today-twocol{grid-template-columns:1fr !important}
+}
+.drag-handle.member-handle{display:inline-block;padding:6px 4px;color:var(--text-soft);cursor:grab;font-size:14px;line-height:1;margin-right:2px}
+.drag-handle.member-handle:hover{color:var(--primary)}
 /* v9 다크 모드 */
 html.dark{color-scheme:dark}
 html.dark body{background:#0F1117;color:#E5E7EB}
@@ -729,10 +746,12 @@ function renderToday(){
   const self=selfMember();
   return `<div class="date-bar"><button class="date-nav-btn" data-act="date-shift" data-delta="-1">${I.chevLeft}</button><input type="date" class="date-input" value="${date}" data-act="date-set"><button class="date-nav-btn" data-act="date-shift" data-delta="1">${I.chevRight}</button>${isToday?'<span class="today-tag">오늘</span>':`<span class="past-tag">${date<todayKey()?'지난 회의':'미래 날짜'}</span><button class="btn btn-soft" data-act="date-today">오늘로</button>`}</div>
   ${isToday?renderBriefingMerged(self,date,standup):''}
-  <section class="card card-section"><div class="headline-meta">${I.cal} ${formatDateLong(date)} · <span style="font-weight:700;color:var(--primary);">오늘의 한 줄</span> ${guideHelp('headline')} <span style="color:var(--text-soft);">— 회의의 초점·결론을 한 문장으로</span></div><textarea class="headline-input" rows="2" placeholder="결론·의사결정·합의 사항 (예: 가맹문의 KR 50% 돌파를 위해 인터뷰 결과 합의가 필요)" data-field="headline" data-date="${date}">${esc(standup.headline||'')}</textarea><div class="stat-row"><div><div class="stat-label">OKR 평균 진척</div><div class="stat-value" style="color:${progressColor(overall)};">${overall}%</div></div><div class="stat-divider"></div><div><div class="stat-label">진행 중 KR</div><div class="stat-value">${allKR.length}개</div></div><div class="stat-divider"></div><div><div class="stat-label">${isToday?'오늘 막힘':'그날 막힘'}</div><div class="stat-value" data-blocker-stat style="color:${blockers>0?C.warning:C.growth};">${blockers>0?`${blockers}건`:'없음'}</div></div>${isToday&&todayRoutines.length>0?`<div class="stat-divider"></div><div><div class="stat-label">오늘 루틴</div><div class="stat-value" style="color:${doneCnt===todayRoutines.length?C.growth:C.amber};">${doneCnt}/${todayRoutines.length}</div></div>`:''}</div></section>
+  <div class="today-twocol" style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px;">
+    <section class="card" style="margin:0;display:flex;flex-direction:column;"><div class="headline-meta">${I.cal} ${formatDateLong(date)} · <span style="font-weight:700;color:var(--primary);">오늘의 한 줄</span> ${guideHelp('headline')} <span style="color:var(--text-soft);">— 회의의 초점·결론을 한 문장으로</span></div><textarea class="headline-input" rows="3" placeholder="결론·의사결정·합의 사항 (예: 가맹문의 KR 50% 돌파를 위해 인터뷰 결과 합의가 필요)" data-field="headline" data-date="${date}">${esc(standup.headline||'')}</textarea><div class="stat-row" style="margin-top:auto;"><div><div class="stat-label">OKR 평균 진척</div><div class="stat-value" style="color:${progressColor(overall)};">${overall}%</div></div><div class="stat-divider"></div><div><div class="stat-label">진행 중 KR</div><div class="stat-value">${allKR.length}개</div></div><div class="stat-divider"></div><div><div class="stat-label">${isToday?'오늘 막힘':'그날 막힘'}</div><div class="stat-value" data-blocker-stat style="color:${blockers>0?C.warning:C.growth};">${blockers>0?`${blockers}건`:'없음'}</div></div>${isToday&&todayRoutines.length>0?`<div class="stat-divider"></div><div><div class="stat-label">오늘 루틴</div><div class="stat-value" style="color:${doneCnt===todayRoutines.length?C.growth:C.amber};">${doneCnt}/${todayRoutines.length}</div></div>`:''}</div></section>
+    <section class="card" style="margin:0;"><div class="section-head"><span style="color:var(--primary);">${I.trend}</span><span class="section-title">이번 분기 KR 한판 보기</span><span class="section-meta" style="margin-left:auto;">${esc(currentTeam()?.quarter||'')}</span></div>${renderKRStrip(allKR)}</section>
+  </div>
   ${isToday&&todayRoutines.length>0?`<section class="card card-section"><div class="section-head"><span style="color:var(--primary);">${I.loop}</span><span class="section-title">오늘의 루틴</span><span class="section-meta">· 매일 챙겨야 할 일</span></div>${todayRoutines.map(r=>renderRoutineCheck(r,rl[r.id]||{})).join('')}</section>`:''}
   ${dueItems.length>0?`<section class="card card-section"><div class="section-head"><span style="color:var(--amber);">${I.flag}</span><span class="section-title">이번 주 마감 (${dueItems.length}건)</span></div>${dueItems.map(d=>`<div style="padding:8px 0;display:flex;align-items:center;gap:10px;border-bottom:1px solid #F4F4F5;font-size:13px;"><span style="font-size:11px;padding:2px 8px;border-radius:999px;background:${d.type==='kr'?'#EEEAFE':'#F4F4F5'};color:${d.type==='kr'?C.primary:C.textSoft};font-weight:700;">${d.type==='kr'?'KR':'Init'}</span><span style="flex:1;">${esc(d.title)}</span><span style="font-size:11.5px;color:${isOverdue(d.dueDate,d.status)?C.warning:C.textSoft};font-weight:600;">${dueShort(d.dueDate)}${isOverdue(d.dueDate,d.status)?' · 지연':''}</span></div>`).join('')}</section>`:''}
-  <section class="card card-section"><div class="section-head"><span style="color:var(--primary);">${I.trend}</span><span class="section-title">이번 분기 KR 한판 보기</span><span class="section-meta" style="margin-left:auto;">${esc(currentTeam()?.quarter||'')}</span></div>${renderKRStrip(allKR)}</section>
   <div class="card-section"><div class="section-head"><span style="color:var(--primary);">${I.msg}</span><span class="section-title">${isToday?'오늘의 스탠드업':`${date} 스탠드업`}</span><span class="section-meta">· 어제 / 오늘 / 막힘</span></div>${state.members.length===0?'<div class="empty">팀원을 먼저 등록해주세요. <strong>관리</strong> 탭에서 추가할 수 있습니다.</div>':`<div class="member-grid">${state.members.map(m=>renderMemberCard(m,standup.entries?.[m.id]||{})).join('')}</div>`}</div>
   ${self?renderMyInitiatives(self):''}`;
 }
@@ -1022,7 +1041,7 @@ function renderPerfCard(m){
 
 function renderManage(){
   const t=currentTeam();
-  return `<section class="card"><div class="section-head" style="margin-bottom:14px;"><span class="section-title">현재 팀 정보</span><span class="section-meta">· 헤더에서 다른 팀으로 전환 가능</span></div><div class="manage-grid"><label><span class="labeled-label">팀 이름</span><input class="labeled-input" data-field="team-name" value="${esc(t?.name||'')}" /></label><label><span class="labeled-label">분기</span><input class="labeled-input" data-field="team-quarter" value="${esc(t?.quarter||'')}" /></label></div>${state.teams.length>1?`<div style="margin-top:12px;"><button class="btn btn-danger" data-act="del-team">이 팀 삭제 (모든 데이터 함께)</button></div>`:''}</section><section class="card"><div class="section-head" style="margin-bottom:14px;justify-content:space-between;"><span class="section-title">팀원 (${state.members.length})</span><button class="btn btn-soft" data-act="add-member">${I.plus} 팀원 추가</button></div>${state.members.map(m=>`<div class="member-row"><input type="color" class="member-color" data-field="member-color" data-mid="${m.id}" value="${m.color}" /><input class="member-name-input" data-field="member-name" data-mid="${m.id}" value="${esc(m.name)}" /><input class="member-role-input" data-field="member-role" data-mid="${m.id}" placeholder="역할" value="${esc(m.role||'')}" /><button class="btn-icon" data-act="del-member" data-mid="${m.id}">${I.trash}</button></div>`).join('')}</section><section class="card"><div class="section-head" style="margin-bottom:14px;"><span class="section-title">모든 팀</span></div>${state.teams.map(t=>`<div class="member-row"><span style="width:18px;height:18px;border-radius:5px;background:${teamColor(t)};display:inline-block;"></span><span style="flex:1;font-weight:600;font-size:13.5px;">${esc(t.name)}</span><span style="font-size:11.5px;color:var(--text-soft);">${esc(t.quarter)}</span>${t.id===state.currentTeamId?'<span class="today-tag">현재</span>':`<button class="btn btn-ghost" data-act="switch-team" data-tid="${t.id}">전환</button>`}</div>`).join('')}</section>`;
+  return `<section class="card"><div class="section-head" style="margin-bottom:14px;"><span class="section-title">현재 팀 정보</span><span class="section-meta">· 헤더에서 다른 팀으로 전환 가능</span></div><div class="manage-grid"><label><span class="labeled-label">팀 이름</span><input class="labeled-input" data-field="team-name" value="${esc(t?.name||'')}" /></label><label><span class="labeled-label">분기</span><input class="labeled-input" data-field="team-quarter" value="${esc(t?.quarter||'')}" /></label></div>${state.teams.length>1?`<div style="margin-top:12px;"><button class="btn btn-danger" data-act="del-team">이 팀 삭제 (모든 데이터 함께)</button></div>`:''}</section><section class="card"><div class="section-head" style="margin-bottom:14px;justify-content:space-between;"><span class="section-title">팀원 (${state.members.length})</span><button class="btn btn-soft" data-act="add-member">${I.plus} 팀원 추가</button></div><div style="font-size:11px;color:var(--text-soft);margin-bottom:8px;">⋮⋮ 핸들 잡고 드래그로 순서 변경 — 변경된 순서는 모든 팀원에게 동일하게 보입니다</div>${state.members.map(m=>`<div class="member-row" data-mem-id="${m.id}" draggable="true" data-drag-type="member"><span class="drag-handle member-handle" title="드래그로 순서 변경">⋮⋮</span><input type="color" class="member-color" data-field="member-color" data-mid="${m.id}" value="${m.color}" /><input class="member-name-input" data-field="member-name" data-mid="${m.id}" value="${esc(m.name)}" /><input class="member-role-input" data-field="member-role" data-mid="${m.id}" placeholder="역할" value="${esc(m.role||'')}" /><button class="btn-icon" data-act="del-member" data-mid="${m.id}">${I.trash}</button></div>`).join('')}</section><section class="card"><div class="section-head" style="margin-bottom:14px;"><span class="section-title">모든 팀</span></div>${state.teams.map(t=>`<div class="member-row"><span style="width:18px;height:18px;border-radius:5px;background:${teamColor(t)};display:inline-block;"></span><span style="flex:1;font-weight:600;font-size:13.5px;">${esc(t.name)}</span><span style="font-size:11.5px;color:var(--text-soft);">${esc(t.quarter)}</span>${t.id===state.currentTeamId?'<span class="today-tag">현재</span>':`<button class="btn btn-ghost" data-act="switch-team" data-tid="${t.id}">전환</button>`}</div>`).join('')}</section>`;
 }
 
 function updateBlockerUI(date,mid){if(date!==viewingDate)return;const s=state.standups[date]||{entries:{}};const e=s.entries[mid]||{};const has=!!(e.blockers&&e.blockers.trim());const c=document.querySelector(`[data-member-card="${mid}"]`);if(c){c.classList.toggle('has-blocker',has);let b=c.querySelector('.blocker-badge');if(has&&!b){const h=c.querySelector('.member-head');if(h){const sp=document.createElement('span');sp.className='blocker-badge';sp.innerHTML=`${I.alert} 막힘`;h.appendChild(sp);}}else if(!has&&b){b.remove();}}const cnt=Object.values(s.entries||{}).filter(en=>en?.blockers?.trim()).length;const st=document.querySelector('[data-blocker-stat]');if(st){st.textContent=cnt>0?`${cnt}건`:'없음';st.style.color=cnt>0?C.warning:C.growth;}}
@@ -1371,6 +1390,7 @@ document.addEventListener('drop',async e=>{
   if(type==='obj'){await reorderObjectives(dragSrc.dataset.objId,tgt.dataset.objId);}
   else if(type==='kr'){await reorderKRs(dragSrc.dataset.dragParent,dragSrc.dataset.krId,tgt.dataset.krId);}
   else if(type==='init'){await reorderInits(dragSrc.dataset.dragParent,dragSrc.dataset.initId,tgt.dataset.initId);}
+  else if(type==='member'){await reorderMembers(dragSrc.dataset.memId,tgt.dataset.memId);}
   document.querySelectorAll('.drop-target').forEach(el=>el.classList.remove('drop-target'));
   dragSrc=null;
 });
@@ -1400,6 +1420,14 @@ async function reorderInits(krid,srcId,tgtId){
   render();
   for(let i=0;i<kr.initiatives.length;i++){markLocal('initiatives',kr.initiatives[i].id);await sb.from('initiatives').update({sort_order:i}).eq('id',kr.initiatives[i].id);}
   showToast('순서 저장됨');
+}
+async function reorderMembers(srcId,tgtId){
+  const arr=state.members;const sIdx=arr.findIndex(m=>m.id===srcId);const tIdx=arr.findIndex(m=>m.id===tgtId);
+  if(sIdx<0||tIdx<0||srcId===tgtId)return;
+  const[item]=arr.splice(sIdx,1);arr.splice(tIdx,0,item);
+  render();
+  for(let i=0;i<arr.length;i++){markLocal('members',arr[i].id);await sb.from('members').update({sort_order:i}).eq('id',arr[i].id);}
+  showToast('팀원 순서 저장됨');
 }
 
 // 달력 날짜 변경 처리 (input/change 모두에서 호출되도록 함수 분리)
