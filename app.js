@@ -1482,27 +1482,38 @@ async function init(){
 }
 init();
 // ============================================================
-// KR-Link Addon v3 · 일일 스탠드업 "오늘 할 일 / 최근 한 일"을 KR과 직접 연결
-// app.js 끝에 붙여 넣는 monkey-patch
-// v3 개선 (사용자 피드백 반영):
-//  - state 접근 방식 수정 → KR 옵션 정상 표시 (window.state 의존 제거)
-//  - 모든 조작에서 render() 호출 제거 → 부분 DOM 업데이트로 깜빡임 완전 제거
-//  - 텍스트 입력 시 DOM 변경 없음, 커서 유지
-//  - KR 옵션을 Objective별 optgroup으로 그룹화
-//  - 저장 표시는 DOM 직접 조작 (render 호출 안 함)
+// ============================================================
+// KR-Link Addon v4 · 일일 스탠드업 "오늘 할 일 / 최근 한 일"을 KR과 직접 연결
+// app.js 끝에 붙여 넣는 monkey-patch (v3 블록을 통째로 교체)
+// v4 개선:
+//  - 드롭다운을 "클릭하는 순간" 최신 state로 동적 빌드 → 로딩 타이밍 문제 해결
+//  - 브라우저 콘솔에 진단 로그 출력 (F12 → Console 탭에서 확인)
+//  - state 접근 다중 폴백 (state / window.state / 글로벌 검색)
+//  - v3의 깜빡임 제거·자동확장·저장배지 그대로 유지
 // ============================================================
 (function(){
   'use strict';
 
-  // ----- helpers -----
+  // ===== helpers =====
   function escapeHtml(s){if(s==null)return'';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
   function newTaskId(){return't_'+Math.random().toString(36).slice(2,9)+Date.now().toString(36).slice(-3);}
 
-  // ----- 외부 let 변수 접근 (window.state 안 씀) -----
-  function getState(){try{return state;}catch(e){return null;}}
-  function getViewingDate(){try{return viewingDate;}catch(e){return null;}}
+  // ===== 다중 폴백으로 state 접근 =====
+  function getState(){
+    // 1: 클로저로 외부 let state 참조
+    try{if(typeof state!=='undefined'&&state)return state;}catch(e){}
+    // 2: window.state (var 또는 글로벌 할당된 경우)
+    try{if(window.state)return window.state;}catch(e){}
+    // 3: 함수 인자/스코프 검색은 불가하므로 null
+    return null;
+  }
+  function getViewingDate(){
+    try{if(typeof viewingDate!=='undefined'&&viewingDate)return viewingDate;}catch(e){}
+    try{if(window.viewingDate)return window.viewingDate;}catch(e){}
+    return null;
+  }
 
-  // ----- 데이터 직렬화 -----
+  // ===== 데이터 직렬화 =====
   function parseTasksField(text){
     if(!text)return{legacy:'',tasks:[]};
     const trimmed=String(text).trim();
@@ -1536,7 +1547,6 @@ init();
     const e=st.standups[date].entries[mid]||{};
     return parseTasksField(e[kind]||'');
   }
-
   function updateMemberTasks(mid,kind,legacy,tasks){
     const st=getState();const date=getViewingDate();
     if(!st||!date)return;
@@ -1550,7 +1560,7 @@ init();
     showSaveBadge(mid,kind);
   }
 
-  // ----- 저장 배지 (DOM 직접 조작, render 호출 안 함) -----
+  // ===== 저장 배지 =====
   const badgeTimers=new Map();
   function showSaveBadge(mid,kind){
     const key=mid+':'+kind;
@@ -1576,38 +1586,44 @@ init();
     },2500));
   }
 
-  // ----- 자동 확장 -----
+  // ===== 자동 확장 =====
   function autoGrow(el){if(!el)return;el.style.height='auto';el.style.height=(el.scrollHeight+2)+'px';}
   function autoGrowAll(){document.querySelectorAll('textarea[data-krl-autogrow]').forEach(autoGrow);}
 
-  // ----- KR 옵션 (Objective별 그룹화) -----
+  // ===== KR 옵션 빌드 (상태에 따른 안내 메시지 포함) =====
   function buildKROptions(selectedId,allKR){
-    let html='<option value="">운영 (KR 무관)</option>';
+    let html='<option value=""'+(selectedId?'':' selected')+'>운영 (KR 무관)</option>';
     if(allKR.length===0){
-      html+='<option value="" disabled>— OKR 탭에서 KR을 먼저 추가하세요 —</option>';
+      const st=getState();
+      let msg='— 데이터 로딩 중 —';
+      if(!st)msg='⚠ state 접근 불가 (콘솔 확인)';
+      else if(!st.objectives||st.objectives.length===0)msg='— OKR 탭에서 Objective를 먼저 추가하세요 —';
+      else {
+        const withKR=st.objectives.filter(o=>(o.keyResults||[]).length>0);
+        if(withKR.length===0)msg='— 각 Objective에 KR을 추가하세요 —';
+      }
+      html+='<option disabled>'+msg+'</option>';
+      if(selectedId)html+='<option value="'+escapeHtml(selectedId)+'" selected>● 이전 선택 유지</option>';
       return html;
     }
-    // Objective별 그룹화 (입력 순서 유지)
-    const groupOrder=[];const groups={};
-    allKR.forEach(k=>{
-      const ot=k.objTitle||'(미분류)';
-      if(!groups[ot]){groups[ot]=[];groupOrder.push(ot);}
-      groups[ot].push(k);
-    });
-    groupOrder.forEach(ot=>{
+    // Objective별로 그룹화
+    const order=[];const groups={};
+    allKR.forEach(k=>{const ot=k.objTitle||'(미분류)';if(!groups[ot]){groups[ot]=[];order.push(ot);}groups[ot].push(k);});
+    order.forEach(ot=>{
       const label=ot.length>45?ot.slice(0,45)+'…':ot;
       html+='<optgroup label="'+escapeHtml(label)+'">';
       groups[ot].forEach(k=>{
         const title=k.title.length>45?k.title.slice(0,45)+'…':k.title;
-        html+='<option value="'+k.id+'"'+(selectedId===k.id?' selected':'')+'>'+escapeHtml(title)+'</option>';
+        html+='<option value="'+escapeHtml(k.id)+'"'+(selectedId===k.id?' selected':'')+'>'+escapeHtml(title)+'</option>';
       });
       html+='</optgroup>';
     });
     return html;
   }
 
-  // ----- 행 렌더링 -----
-  function renderTaskRowHtml(task,mid,kind,allKR){
+  // ===== 행 렌더링 =====
+  function renderTaskRowHtml(task,mid,kind){
+    const allKR=collectAllKR();
     const krInfo=task.k?allKR.find(k=>k.id===task.k):null;
     const tagBg=krInfo?'#EEEAFE':'#F4F4F5';
     const tagFg=krInfo?'#6241F5':'#737373';
@@ -1616,7 +1632,7 @@ init();
     return '<div class="krl-task-row" data-tid="'+task.id+'" data-mid="'+mid+'" data-kind="'+kind+'" style="display:flex;align-items:flex-start;gap:8px;padding:6px 0;">'+
       '<button class="rt-check '+(task.d?'checked':'')+'" style="width:20px;height:20px;border-width:2px;border-radius:5px;flex-shrink:0;margin-top:10px;" data-act="krl-toggle-task" data-mid="'+mid+'" data-kind="'+kind+'" data-tid="'+task.id+'" title="완료 체크">'+(task.d?'✓':'')+'</button>'+
       '<textarea data-krl-field="task-text" data-krl-autogrow data-mid="'+mid+'" data-kind="'+kind+'" data-tid="'+task.id+'" rows="1" placeholder="할일 내용을 적어주세요" style="'+textStyle+'">'+escapeHtml(task.t||'')+'</textarea>'+
-      '<select data-krl-field="task-kr" data-mid="'+mid+'" data-kind="'+kind+'" data-tid="'+task.id+'" style="font-size:12px;padding:8px 10px;background:'+tagBg+';color:'+tagFg+';font-weight:700;border:1px solid '+tagBorder+';border-radius:6px;outline:none;max-width:220px;margin-top:6px;flex-shrink:0;cursor:pointer;font-family:inherit;">'+
+      '<select data-krl-field="task-kr" data-mid="'+mid+'" data-kind="'+kind+'" data-tid="'+task.id+'" style="font-size:12px;padding:8px 10px;background:'+tagBg+';color:'+tagFg+';font-weight:700;border:1px solid '+tagBorder+';border-radius:6px;outline:none;max-width:220px;margin-top:6px;flex-shrink:0;cursor:pointer;font-family:inherit;" title="클릭하여 KR 선택">'+
       buildKROptions(task.k,allKR)+
       '</select>'+
       '<button data-act="krl-del-task" data-mid="'+mid+'" data-kind="'+kind+'" data-tid="'+task.id+'" style="padding:6px 8px;margin-top:6px;background:none;border:1px solid transparent;border-radius:6px;cursor:pointer;color:var(--text-soft);font-size:14px;flex-shrink:0;line-height:1;" title="삭제">✕</button>'+
@@ -1624,7 +1640,6 @@ init();
   }
 
   function renderTaskListBlock(mid,kind,label){
-    const allKR=collectAllKR();
     const data=getMemberTasks(mid,kind);
     const legacy=data.legacy,tasks=data.tasks;
     return '<div class="krl-block" data-krl-block="'+mid+':'+kind+'" style="background:white;border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin-top:8px;">'+
@@ -1635,14 +1650,14 @@ init();
         '</span>'+
       '</div>'+
       '<div class="krl-tasks" data-krl-tasks="'+mid+':'+kind+'">'+
-        tasks.map(t=>renderTaskRowHtml(t,mid,kind,allKR)).join('')+
+        tasks.map(t=>renderTaskRowHtml(t,mid,kind)).join('')+
       '</div>'+
       (legacy?'<div class="krl-legacy" data-krl-legacy="'+mid+':'+kind+'" style="font-size:12.5px;color:var(--text);background:#FFF8E1;border:1px dashed #E5B340;border-radius:6px;padding:8px 10px;margin-top:6px;line-height:1.55;"><div style="font-size:10.5px;font-weight:700;color:#946800;margin-bottom:3px;">기존 평문 메모</div>'+escapeHtml(legacy)+'<br><button data-act="krl-clear-legacy" data-mid="'+mid+'" data-kind="'+kind+'" style="margin-top:5px;font-size:11px;color:#6241F5;background:none;border:none;cursor:pointer;padding:0;font-weight:700;">이 메모 정리 →</button></div>':'')+
       '<button data-act="krl-add-task" data-mid="'+mid+'" data-kind="'+kind+'" style="margin-top:8px;padding:7px 12px;font-size:12.5px;color:#6241F5;background:#EEEAFE;border:1px dashed #D9CFFB;border-radius:6px;cursor:pointer;font-weight:700;font-family:inherit;">＋ '+(kind==='today'?'할일':'작업')+' 추가</button>'+
       '</div>';
   }
 
-  // ----- KR 분포 (debounce 후 부분 업데이트) -----
+  // ===== KR 분포 (debounce 부분 업데이트) =====
   let distributionTimer=null;
   function scheduleDistributionUpdate(){
     if(distributionTimer)clearTimeout(distributionTimer);
@@ -1650,16 +1665,11 @@ init();
       const el=document.querySelector('[data-krl-distribution]');
       const html=renderKRDistributionInner();
       if(el){
-        if(html){
-          const tmp=document.createElement('div');tmp.innerHTML=html;
-          el.replaceWith(tmp.firstElementChild);
-        } else {
-          el.remove();
-        }
+        if(html){const tmp=document.createElement('div');tmp.innerHTML=html;el.replaceWith(tmp.firstElementChild);}
+        else el.remove();
       }
     },600);
   }
-
   function renderKRDistributionInner(){
     const st=getState();const date=getViewingDate();
     if(!st||!date||!st.standups||!st.standups[date])return '';
@@ -1668,7 +1678,6 @@ init();
     if(allKR.length===0)return '';
     const counts={};allKR.forEach(k=>{counts[k.id]=0;});
     let opsCount=0;
-    // Initiative 체크 집계
     (st.members||[]).forEach(m=>{
       const idl=(st.initiativeDailyLogs&&st.initiativeDailyLogs[date]&&st.initiativeDailyLogs[date][m.id])||{};
       Object.entries(idl).forEach(entry=>{
@@ -1679,7 +1688,6 @@ init();
         }));
       });
     });
-    // 구조화 할일 집계
     (st.members||[]).forEach(m=>{
       const e=(standup.entries||{})[m.id]||{};
       ['today','yesterday'].forEach(kind=>{
@@ -1700,38 +1708,30 @@ init();
       const title=k.title.length>22?k.title.slice(0,22)+'…':k.title;
       html+='<div style="background:'+(active?'#EEEAFE':'#FAFAFA')+';border-radius:8px;padding:10px 12px;border:1px solid '+(active?'#D9CFFB':'var(--line)')+';">'+
         '<div style="font-size:11px;color:'+(active?'#6241F5':'var(--text-soft)')+';font-weight:700;margin-bottom:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+escapeHtml(k.title)+'">'+escapeHtml(title)+'</div>'+
-        '<div style="font-size:20px;font-weight:800;color:'+(active?'#26215C':'var(--text-soft)')+';">'+c+'건</div>'+
-        '</div>';
+        '<div style="font-size:20px;font-weight:800;color:'+(active?'#26215C':'var(--text-soft)')+';">'+c+'건</div></div>';
     });
     if(opsCount>0){
-      html+='<div style="background:#FAFAFA;border-radius:8px;padding:10px 12px;border:1px solid var(--line);">'+
-        '<div style="font-size:11px;color:var(--text-soft);font-weight:700;margin-bottom:3px;">운영 (KR 무관)</div>'+
-        '<div style="font-size:20px;font-weight:800;color:var(--text);">'+opsCount+'건</div>'+
-        '</div>';
+      html+='<div style="background:#FAFAFA;border-radius:8px;padding:10px 12px;border:1px solid var(--line);"><div style="font-size:11px;color:var(--text-soft);font-weight:700;margin-bottom:3px;">운영 (KR 무관)</div><div style="font-size:20px;font-weight:800;color:var(--text);">'+opsCount+'건</div></div>';
     }
     html+='</div>';
     if(neglected.length>0){
       html+='<div style="font-size:12px;color:#E5484D;margin-top:10px;line-height:1.55;background:#FCE8E9;padding:9px 12px;border-radius:6px;"><b>⚠ 오늘 활동 0건:</b> '+
-        neglected.map(k=>{const t=k.title.length>20?k.title.slice(0,20)+'…':k.title;return escapeHtml(t);}).join(' · ')+
-        ' — 방치 신호</div>';
+        neglected.map(k=>{const t=k.title.length>20?k.title.slice(0,20)+'…':k.title;return escapeHtml(t);}).join(' · ')+' — 방치 신호</div>';
     }
     html+='</section>';
     return html;
   }
 
-  // ----- 부분 업데이트 헬퍼 -----
   function updateCount(mid,kind,n){
     const head=document.querySelector('[data-krl-head="'+mid+':'+kind+'"]');
     if(head){const c=head.querySelector('.krl-count');if(c)c.textContent=n+'건';}
   }
 
-  // ----- 기존 함수 덮어쓰기 -----
+  // ===== 기존 함수 덮어쓰기 =====
   function applyPatches(){
     if(typeof renderTodaySection!=='function'||typeof renderYesterdaySection!=='function'||typeof renderToday!=='function'){
       setTimeout(applyPatches,150);return;
     }
-
-    // 오늘 할 일
     window.renderTodaySection=function(mid,memo,myInits,checks){
       const checklistHtml=myInits.length===0
         ? '<div style="font-size:12px;color:var(--text-soft);padding:6px 0;">담당 Initiative가 없습니다. OKR 탭에서 배정하세요.</div>'
@@ -1741,41 +1741,69 @@ init();
         }).join('');
       return '<div class="field"><div class="field-label"><span class="field-dot accent-primary"></span><span class="field-name accent-primary">오늘 할 일</span><span style="font-size:10.5px;color:var(--text-soft);margin-left:auto;font-weight:600;">담당 Initiative '+myInits.length+'건</span></div>'+
         '<div style="background:#FAFAFA;border-radius:8px;padding:10px 12px;margin-bottom:6px;">'+checklistHtml+'</div>'+
-        renderTaskListBlock(mid,'today','추가 할일')+
-        '</div>';
+        renderTaskListBlock(mid,'today','추가 할일')+'</div>';
     };
-
-    // 최근 한 일
     window.renderYesterdaySection=function(mid,memo,yDone){
       const summaryHtml=yDone.length>0
         ? '<div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:6px;">'+yDone.map(i=>'<span style="font-size:11.5px;padding:3px 9px;background:var(--growth-soft);color:var(--growth);border-radius:999px;font-weight:600;">'+esc(i.title.slice(0,20))+(i.title.length>20?'…':'')+'</span>').join('')+'</div>'
         : '<div style="font-size:12px;color:var(--text-soft);margin-bottom:6px;">어제 체크된 Initiative 없음</div>';
       return '<div class="field"><div class="field-label"><span class="field-dot"></span><span class="field-name">최근 한 일</span><span style="font-size:10.5px;color:var(--text-soft);margin-left:auto;font-weight:600;">최근 완료 작업</span></div>'+
-        summaryHtml+
-        renderTaskListBlock(mid,'yesterday','추가 작업')+
-        '</div>';
+        summaryHtml+renderTaskListBlock(mid,'yesterday','추가 작업')+'</div>';
     };
-
-    // renderToday 끝에 KR 분포 추가
     const _origRenderToday=window.renderToday;
     window.renderToday=function(){
       const html=_origRenderToday.apply(this,arguments);
       return html+(renderKRDistributionInner()||'');
     };
-
-    // render 후 textarea 자동 확장
     const _origRender=window.render;
     window.render=function(){
       _origRender.apply(this,arguments);
       if(window.currentView==='today')setTimeout(autoGrowAll,0);
     };
-
     if(typeof render==='function'&&currentView==='today')render();
-    console.log('[KR-Link v3] 패치 적용 완료. KR 개수:',collectAllKR().length);
+
+    // ===== 진단 로그 =====
+    setTimeout(function(){
+      const st=getState();
+      console.log('═══════ [KR-Link v4] 진단 ═══════');
+      console.log('1) state 접근:', st?'✓ 성공':'✗ 실패 (state 변수에 접근 불가)');
+      if(st){
+        console.log('2) 현재 팀 ID:', st.currentTeamId);
+        console.log('3) Objective 개수:', (st.objectives||[]).length);
+        let totalKR=0;
+        (st.objectives||[]).forEach((o,oi)=>{
+          const krCnt=(o.keyResults||[]).length;
+          console.log('   O'+(oi+1)+':', o.title||'(이름 없음)', '— KR '+krCnt+'건');
+          totalKR+=krCnt;
+        });
+        console.log('4) 총 KR 개수:', totalKR);
+        if(totalKR===0){console.warn('⚠ KR이 0건입니다. OKR 탭에서 각 Objective에 KR을 추가하세요.');}
+        else{console.log('✓ KR이 정상적으로 로드되었습니다. 드롭다운에 표시되어야 합니다.');}
+      }
+      console.log('═══════════════════════════════════');
+    },2500);
+
+    console.log('[KR-Link v4] 패치 적용 완료');
   }
   applyPatches();
 
-  // ----- 이벤트 핸들러 (모두 부분 DOM 업데이트, render 호출 안 함) -----
+  // ===== ★ 핵심 : 드롭다운 열리는 순간 최신 state로 옵션 재생성 =====
+  // mousedown(capture)으로 native open 직전에 실행
+  document.addEventListener('mousedown',function(e){
+    const sel=e.target.closest('select[data-krl-field="task-kr"]');
+    if(!sel)return;
+    const cur=sel.value;
+    const allKR=collectAllKR();
+    sel.innerHTML=buildKROptions(cur,allKR);
+  },true);
+  // 키보드 포커스로 열 때도 처리
+  document.addEventListener('focusin',function(e){
+    const sel=e.target;
+    if(sel.tagName!=='SELECT'||sel.dataset.krlField!=='task-kr')return;
+    sel.innerHTML=buildKROptions(sel.value,collectAllKR());
+  },true);
+
+  // ===== 이벤트 핸들러 =====
   document.addEventListener('click',function(e){
     const btn=e.target.closest('[data-act]');
     if(!btn)return;
@@ -1783,17 +1811,15 @@ init();
     if(a!=='krl-add-task'&&a!=='krl-toggle-task'&&a!=='krl-del-task'&&a!=='krl-clear-legacy')return;
     const mid=btn.dataset.mid,kind=btn.dataset.kind,tid=btn.dataset.tid;
     const data=getMemberTasks(mid,kind);
-    const allKR=collectAllKR();
 
     if(a==='krl-add-task'){
       const newTask={id:newTaskId(),t:'',k:'',d:false};
       data.tasks.push(newTask);
       updateMemberTasks(mid,kind,data.legacy,data.tasks);
-      // 부분 DOM 업데이트: 새 행 append
       const container=document.querySelector('[data-krl-tasks="'+mid+':'+kind+'"]');
       if(container){
         const tmp=document.createElement('div');
-        tmp.innerHTML=renderTaskRowHtml(newTask,mid,kind,allKR);
+        tmp.innerHTML=renderTaskRowHtml(newTask,mid,kind);
         const newRow=tmp.firstElementChild;
         container.appendChild(newRow);
         updateCount(mid,kind,data.tasks.length);
@@ -1807,7 +1833,6 @@ init();
       if(!t)return;
       t.d=!t.d;
       updateMemberTasks(mid,kind,data.legacy,data.tasks);
-      // 부분 업데이트: 해당 행 체크박스/스타일만
       const row=document.querySelector('.krl-task-row[data-tid="'+tid+'"][data-mid="'+mid+'"][data-kind="'+kind+'"]');
       if(row){
         const check=row.querySelector('.rt-check');
@@ -1820,7 +1845,6 @@ init();
     else if(a==='krl-del-task'){
       const next=data.tasks.filter(x=>x.id!==tid);
       updateMemberTasks(mid,kind,data.legacy,next);
-      // 부분 업데이트: 행만 제거
       const row=document.querySelector('.krl-task-row[data-tid="'+tid+'"][data-mid="'+mid+'"][data-kind="'+kind+'"]');
       if(row)row.remove();
       updateCount(mid,kind,next.length);
@@ -1834,7 +1858,6 @@ init();
     }
   });
 
-  // 텍스트 입력 — DOM 변경 절대 없음, state/저장만 (커서 유지)
   document.addEventListener('input',function(e){
     const el=e.target;
     if(el.dataset.krlField!=='task-text')return;
@@ -1845,7 +1868,6 @@ init();
     if(t){t.t=el.value;updateMemberTasks(mid,kind,data.legacy,data.tasks);}
   });
 
-  // KR 선택 — 셀렉트 색상만 업데이트
   document.addEventListener('change',function(e){
     const el=e.target;
     if(el.dataset.krlField!=='task-kr')return;
@@ -1862,7 +1884,7 @@ init();
     scheduleDistributionUpdate();
   });
 
-  // 포커스 강조 (기존 .field-input 톤과 일치)
+  // textarea 포커스 강조 (KR 셀렉트는 이벤트가 다르므로 제외)
   document.addEventListener('focusin',function(e){
     const el=e.target;
     if(el.tagName==='TEXTAREA'&&el.dataset.krlField==='task-text'){
@@ -1876,5 +1898,4 @@ init();
     }
   });
 
-})();
 })();
