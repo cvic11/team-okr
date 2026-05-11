@@ -865,14 +865,15 @@ function renderMemberCard(m,e){
 function renderYesterdaySection(mid,memo,yDone){
   const summaryHtml=yDone.length>0
     ? `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px;">${yDone.map(i=>`<span style="font-size:10.5px;padding:2px 7px;background:var(--growth-soft);color:var(--growth);border-radius:999px;font-weight:600;">${esc(i.title.slice(0,18))}${i.title.length>18?'…':''}</span>`).join('')}</div>`
-    : '<div style="font-size:11px;color:var(--text-soft);margin-bottom:6px;">어제 체크된 Initiative 없음</div>';
+    : '';
   return `<div class="field"><div class="field-label"><span class="field-dot"></span><span class="field-name">어제 한 일</span></div>${summaryHtml}<textarea class="field-input" rows="3" placeholder="추가 메모 (선택) — 어제 진행한 내용을 자유롭게" data-field="standup" data-fieldname="yesterday" data-mid="${mid}" data-date="${viewingDate}">${esc(memo||'')}</textarea></div>`;
 }
 function renderTodaySection(mid,memo,myInits,checks){
   const checklistHtml=myInits.length===0
-    ? '<div style="font-size:12px;color:var(--text-soft);padding:6px 0;">담당 Initiative가 없습니다. OKR 탭에서 배정하세요.</div>'
+    ? ''
     : myInits.map(i=>{const c=!!checks[i.id]?.checked;return `<div style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:13.5px;"><button class="rt-check ${c?'checked':''}" style="width:18px;height:18px;border-width:1.5px;border-radius:4px;flex-shrink:0;" data-act="toggle-init-check" data-iid="${i.id}" data-mid="${mid}">${c?I.check:''}</button><span style="${c?'text-decoration:line-through;color:var(--text-soft);':''}flex:1;cursor:pointer;line-height:1.45;" data-act="toggle-init-check" data-iid="${i.id}" data-mid="${mid}">${esc(i.title)}</span><span style="font-size:11px;color:var(--text-soft);flex-shrink:0;">${esc(i.krTitle.slice(0,14))}${i.krTitle.length>14?'…':''}</span></div>`;}).join('');
-  return `<div class="field"><div class="field-label"><span class="field-dot accent-primary"></span><span class="field-name accent-primary">오늘 할 일</span><span style="font-size:11px;color:var(--text-soft);margin-left:auto;">담당 Initiative ${myInits.length}건</span></div><div style="background:#FAFAFA;border-radius:8px;padding:10px 12px;margin-bottom:8px;">${checklistHtml}</div><textarea class="field-input" rows="4" placeholder="추가 메모 — Initiative 외 오늘 목표를 자유롭게 (여러 줄 가능)" data-field="standup" data-fieldname="today" data-mid="${mid}" data-date="${viewingDate}">${esc(memo||'')}</textarea></div>`;
+  const initBlock=myInits.length>0?`<div style="background:#FAFAFA;border-radius:8px;padding:10px 12px;margin-bottom:8px;">${checklistHtml}</div>`:'';
+  return `<div class="field"><div class="field-label"><span class="field-dot accent-primary"></span><span class="field-name accent-primary">오늘 할 일</span>${myInits.length>0?`<span style="font-size:11px;color:var(--text-soft);margin-left:auto;">담당 Initiative ${myInits.length}건</span>`:''}</div>${initBlock}<textarea class="field-input" rows="4" placeholder="추가 메모 — Initiative 외 오늘 목표를 자유롭게 (여러 줄 가능)" data-field="standup" data-fieldname="today" data-mid="${mid}" data-date="${viewingDate}">${esc(memo||'')}</textarea></div>`;
 }
 function renderBlockerSection(mid,e){
   const has=!!(e.blockers&&e.blockers.trim());
@@ -1689,8 +1690,9 @@ init();
   }
   let distributionTimer=null;
   function scheduleDistributionUpdate(){
-    if(distributionTimer)clearTimeout(distributionTimer);
-    distributionTimer=setTimeout(()=>{const el=document.querySelector('[data-krl-distribution]');const html=renderKRDistributionInner();if(el){if(html){const tmp=document.createElement('div');tmp.innerHTML=html;el.replaceWith(tmp.firstElementChild);}else el.remove();}},600);
+    // v10 — 분포 비활성. 혹시 DOM에 남아 있으면 자동 제거
+    const el=document.querySelector('[data-krl-distribution]');
+    if(el)el.remove();
   }
   function renderKRDistributionInner(){
     return ''; // v10 — 사용자 요청으로 KR 분포 차트 비활성화
@@ -1725,20 +1727,21 @@ init();
     if(typeof renderTodaySection!=='function'||typeof renderYesterdaySection!=='function'||typeof renderToday!=='function'){setTimeout(applyPatches,150);return;}
     window.renderTodaySection=function(mid,memo,myInits,checks){
       const checklistHtml=myInits.length===0
-        ? '<div style="font-size:12px;color:var(--text-soft);padding:6px 0;">담당 Initiative가 없습니다. OKR 탭에서 배정하세요.</div>'
+        ? ''
         : myInits.map(i=>{const c=!!(checks[i.id]&&checks[i.id].checked);return '<div style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:13px;"><button class="rt-check '+(c?'checked':'')+'" style="width:18px;height:18px;border-width:1.5px;border-radius:4px;flex-shrink:0;" data-act="toggle-init-check" data-iid="'+i.id+'" data-mid="'+mid+'">'+(c?I.check:'')+'</button><span style="'+(c?'text-decoration:line-through;color:var(--text-soft);':'')+'flex:1;cursor:pointer;line-height:1.5;" data-act="toggle-init-check" data-iid="'+i.id+'" data-mid="'+mid+'">'+esc(i.title)+'</span><span style="font-size:11px;color:var(--text-soft);flex-shrink:0;">'+esc(i.krTitle.slice(0,14))+(i.krTitle.length>14?'…':'')+'</span></div>';}).join('');
-      return '<div class="field"><div class="field-label"><span class="field-dot accent-primary"></span><span class="field-name accent-primary">오늘 할 일</span><span style="font-size:10.5px;color:var(--text-soft);margin-left:auto;font-weight:600;">담당 Initiative '+myInits.length+'건</span></div><div style="background:#FAFAFA;border-radius:8px;padding:10px 12px;margin-bottom:6px;">'+checklistHtml+'</div>'+renderTaskListBlock(mid,'today','추가 할일')+'</div>';
+      const initBlock=myInits.length>0?'<div style="background:#FAFAFA;border-radius:8px;padding:10px 12px;margin-bottom:6px;">'+checklistHtml+'</div>':'';
+      return '<div class="field"><div class="field-label"><span class="field-dot accent-primary"></span><span class="field-name accent-primary">오늘 할 일</span>'+(myInits.length>0?'<span style="font-size:10.5px;color:var(--text-soft);margin-left:auto;font-weight:600;">담당 Initiative '+myInits.length+'건</span>':'')+'</div>'+initBlock+renderTaskListBlock(mid,'today','추가 할일')+'</div>';
     };
     window.renderYesterdaySection=function(mid,memo,yDone){
       const summaryHtml=yDone.length>0
         ? '<div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:6px;">'+yDone.map(i=>'<span style="font-size:11.5px;padding:3px 4px 3px 10px;background:var(--growth-soft);color:var(--growth);border-radius:999px;font-weight:600;display:inline-flex;align-items:center;gap:4px;">'+esc(i.title.slice(0,20))+(i.title.length>20?'…':'')+'<button data-act="krl-del-yesterday-check" data-mid="'+mid+'" data-iid="'+(i.id||'')+'" title="이 체크 지우기" style="background:transparent;border:none;cursor:pointer;color:var(--growth);font-size:13px;line-height:1;padding:0 4px;border-radius:999px;opacity:.7;font-weight:700;">✕</button></span>').join('')+'</div>'
-        : '<div style="font-size:12px;color:var(--text-soft);margin-bottom:6px;">어제 체크된 Initiative 없음</div>';
+        : '';
       const hasAny=yDone.length>0;
       const clearBtn=hasAny?`<button data-act="krl-clear-all-yesterday" data-mid="${mid}" style="background:transparent;border:none;cursor:pointer;color:var(--text-soft);font-size:10.5px;padding:2px 6px;border-radius:5px;font-weight:600;text-decoration:underline;text-underline-offset:2px;" title="어제 체크된 Initiative 해제 + 추가 작업 모두 삭제">모두 비우기</button>`:'';
-      return '<div class="field"><div class="field-label"><span class="field-dot"></span><span class="field-name">최근 한 일</span><span style="font-size:10.5px;color:var(--text-soft);margin-left:auto;font-weight:600;">최근 완료 작업</span>'+clearBtn+'</div>'+summaryHtml+renderTaskListBlock(mid,'yesterday','추가 작업')+'</div>';
+      return '<div class="field"><div class="field-label"><span class="field-dot"></span><span class="field-name">최근 한 일</span>'+(hasAny?'<span style="font-size:10.5px;color:var(--text-soft);margin-left:auto;font-weight:600;">최근 완료 작업</span>':'')+clearBtn+'</div>'+summaryHtml+renderTaskListBlock(mid,'yesterday','추가 작업')+'</div>';
     };
     const _origRenderToday=window.renderToday;
-    window.renderToday=function(){const html=_origRenderToday.apply(this,arguments);return html+(renderKRDistributionInner()||'');};
+    window.renderToday=function(){return _origRenderToday.apply(this,arguments);}; // v10 — 분포 차트 호출 제거
     const _origRender=window.render;
     window.render=function(){_origRender.apply(this,arguments);if(window.currentView==='today')setTimeout(autoGrowAll,0);};
     if(typeof render==='function'&&currentView==='today')render();
