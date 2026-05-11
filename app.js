@@ -37,8 +37,8 @@
 }
 /* v6.1 — 폰트·패딩 시인성 개선 */
 body{font-size:15.5px}
-.field-input{font-size:14.5px;padding:10px 11px;line-height:1.55;min-height:46px}
-body.present .field-input{font-size:16px}
+.field-input{font-size:15px;padding:12px 13px;line-height:1.6;min-height:96px;font-family:inherit}
+body.present .field-input{font-size:16.5px;min-height:120px}
 .kr-title-input{font-size:15px;padding:6px 4px}
 .obj-title-input{font-size:18px;padding:5px 0}
 body.present .obj-title-input{font-size:22px}
@@ -809,13 +809,13 @@ function renderYesterdaySection(mid,memo,yDone){
   const summaryHtml=yDone.length>0
     ? `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px;">${yDone.map(i=>`<span style="font-size:10.5px;padding:2px 7px;background:var(--growth-soft);color:var(--growth);border-radius:999px;font-weight:600;">${esc(i.title.slice(0,18))}${i.title.length>18?'…':''}</span>`).join('')}</div>`
     : '<div style="font-size:11px;color:var(--text-soft);margin-bottom:6px;">어제 체크된 Initiative 없음</div>';
-  return `<div class="field"><div class="field-label"><span class="field-dot"></span><span class="field-name">어제 한 일</span></div>${summaryHtml}<textarea class="field-input" rows="1" placeholder="추가 메모 (선택)" data-field="standup" data-fieldname="yesterday" data-mid="${mid}" data-date="${viewingDate}">${esc(memo||'')}</textarea></div>`;
+  return `<div class="field"><div class="field-label"><span class="field-dot"></span><span class="field-name">어제 한 일</span></div>${summaryHtml}<textarea class="field-input" rows="3" placeholder="추가 메모 (선택) — 어제 진행한 내용을 자유롭게" data-field="standup" data-fieldname="yesterday" data-mid="${mid}" data-date="${viewingDate}">${esc(memo||'')}</textarea></div>`;
 }
 function renderTodaySection(mid,memo,myInits,checks){
   const checklistHtml=myInits.length===0
-    ? '<div style="font-size:11px;color:var(--text-soft);padding:4px 0;">담당 Initiative가 없습니다. OKR 탭에서 배정하세요.</div>'
-    : myInits.map(i=>{const c=!!checks[i.id]?.checked;return `<div style="display:flex;align-items:center;gap:6px;padding:3px 0;font-size:12px;"><button class="rt-check ${c?'checked':''}" style="width:16px;height:16px;border-width:1.5px;border-radius:4px;" data-act="toggle-init-check" data-iid="${i.id}" data-mid="${mid}">${c?I.check:''}</button><span style="${c?'text-decoration:line-through;color:var(--text-soft);':''}flex:1;cursor:pointer;" data-act="toggle-init-check" data-iid="${i.id}" data-mid="${mid}">${esc(i.title)}</span><span style="font-size:10px;color:var(--text-soft);">${esc(i.krTitle.slice(0,12))}${i.krTitle.length>12?'…':''}</span></div>`;}).join('');
-  return `<div class="field"><div class="field-label"><span class="field-dot accent-primary"></span><span class="field-name accent-primary">오늘 할 일</span><span style="font-size:10px;color:var(--text-soft);margin-left:auto;">담당 Initiative ${myInits.length}건</span></div><div style="background:#FAFAFA;border-radius:6px;padding:6px 8px;margin-bottom:6px;">${checklistHtml}</div><textarea class="field-input" rows="1" placeholder="추가 메모 — Initiative 외 오늘의 목표" data-field="standup" data-fieldname="today" data-mid="${mid}" data-date="${viewingDate}">${esc(memo||'')}</textarea></div>`;
+    ? '<div style="font-size:12px;color:var(--text-soft);padding:6px 0;">담당 Initiative가 없습니다. OKR 탭에서 배정하세요.</div>'
+    : myInits.map(i=>{const c=!!checks[i.id]?.checked;return `<div style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:13.5px;"><button class="rt-check ${c?'checked':''}" style="width:18px;height:18px;border-width:1.5px;border-radius:4px;flex-shrink:0;" data-act="toggle-init-check" data-iid="${i.id}" data-mid="${mid}">${c?I.check:''}</button><span style="${c?'text-decoration:line-through;color:var(--text-soft);':''}flex:1;cursor:pointer;line-height:1.45;" data-act="toggle-init-check" data-iid="${i.id}" data-mid="${mid}">${esc(i.title)}</span><span style="font-size:11px;color:var(--text-soft);flex-shrink:0;">${esc(i.krTitle.slice(0,14))}${i.krTitle.length>14?'…':''}</span></div>`;}).join('');
+  return `<div class="field"><div class="field-label"><span class="field-dot accent-primary"></span><span class="field-name accent-primary">오늘 할 일</span><span style="font-size:11px;color:var(--text-soft);margin-left:auto;">담당 Initiative ${myInits.length}건</span></div><div style="background:#FAFAFA;border-radius:8px;padding:10px 12px;margin-bottom:8px;">${checklistHtml}</div><textarea class="field-input" rows="4" placeholder="추가 메모 — Initiative 외 오늘 목표를 자유롭게 (여러 줄 가능)" data-field="standup" data-fieldname="today" data-mid="${mid}" data-date="${viewingDate}">${esc(memo||'')}</textarea></div>`;
 }
 function renderBlockerSection(mid,e){
   const has=!!(e.blockers&&e.blockers.trim());
@@ -825,7 +825,7 @@ function renderBlockerSection(mid,e){
   const helper=state.members.find(x=>x.id===e.helper_member_id);
   const helperLabel=helper?helper.name:(e.helper_name||'');
   return `<div class="field"><div class="field-label"><span class="field-dot ${accent}"></span><span class="field-name ${accent}">막힘 / 도움 필요</span><button class="reality-toggle ${(e.helper_member_id||e.helper_name||e.support_type||e.support_detail)?'has-content':''}" style="margin-left:auto;" data-act="toggle-reality" data-key="${helperKey}">${helpOpen?'도움요청 ▴':'도움요청 ▾'}</button></div>
-    <textarea class="field-input" rows="2" placeholder="없으면 비워두기 — 무엇이 막혔나" data-field="standup" data-fieldname="blockers" data-mid="${mid}" data-date="${viewingDate}">${esc(e.blockers||'')}</textarea>
+    <textarea class="field-input" rows="3" placeholder="없으면 비워두기 — 무엇이 막혔나 (구체적으로)" data-field="standup" data-fieldname="blockers" data-mid="${mid}" data-date="${viewingDate}">${esc(e.blockers||'')}</textarea>
     ${helpOpen?`<div class="reality-box" style="margin-top:6px;padding:8px 10px;">
       <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:6px;">
         <span style="font-size:10.5px;font-weight:700;color:var(--text-soft);">누구에게:</span>
@@ -842,7 +842,7 @@ function renderBlockerSection(mid,e){
       <textarea class="reality-input" rows="2" placeholder="구체적으로 어떤 도움이 필요한가요?" data-field="support-detail" data-mid="${mid}">${esc(e.support_detail||'')}</textarea>
     </div>`:''}</div>`;
 }
-function renderField(l,f,mid,v,ph,acc){const cls=acc?`accent-${acc}`:'';return `<div class="field"><div class="field-label"><span class="field-dot ${cls}"></span><span class="field-name ${cls}">${esc(l)}</span></div><textarea class="field-input" rows="2" placeholder="${esc(ph)}" data-field="standup" data-fieldname="${f}" data-mid="${mid}" data-date="${viewingDate}">${esc(v||'')}</textarea></div>`;}
+function renderField(l,f,mid,v,ph,acc){const cls=acc?`accent-${acc}`:'';return `<div class="field"><div class="field-label"><span class="field-dot ${cls}"></span><span class="field-name ${cls}">${esc(l)}</span></div><textarea class="field-input" rows="4" placeholder="${esc(ph)}" data-field="standup" data-fieldname="${f}" data-mid="${mid}" data-date="${viewingDate}">${esc(v||'')}</textarea></div>`;}
 function activeRoutinesForDate(date){const dt=new Date(date+'T00:00:00');const dow=dt.getDay()===0?7:dt.getDay();const dom=dt.getDate();return state.routines.filter(r=>{if(r.active===false)return false;if(r.frequency==='daily')return true;if(r.frequency==='weekdays')return dow>=1&&dow<=5;if(r.frequency==='weekly'||r.frequency==='custom'){return(r.days_of_week||[]).includes(dow);}if(r.frequency==='monthly')return r.day_of_month===dom;return false;});}
 function renderRoutineCheck(r,log){const o=state.members.find(m=>m.id===r.owner_id);const c=!!log.completed;return `<div class="rt-item ${c?'done':''}"><button class="rt-check ${c?'checked':''}" data-act="toggle-routine" data-rid="${r.id}">${c?I.check:''}</button><div class="rt-info"><div class="rt-title">${esc(r.title)}</div><div class="rt-meta">${o?esc(o.name)+' · ':''}${freqText(r)}</div></div><input class="rt-note-input" placeholder="메모 (선택)" data-field="rt-note" data-rid="${r.id}" value="${esc(log.note||'')}" /></div>`;}
 function freqText(r){if(r.frequency==='daily')return '매일';if(r.frequency==='weekdays')return '평일';if(r.frequency==='monthly')return `매월 ${r.day_of_month||1}일`;if(r.frequency==='weekly'||r.frequency==='custom'){const dn=['월','화','수','목','금','토','일'];return(r.days_of_week||[]).map(d=>dn[d-1]).join(',');}return '';}
@@ -1433,8 +1433,22 @@ document.addEventListener('input',e=>{
   else if(f==='support-detail'){saveEntry(viewingDate,el.dataset.mid,'support_detail',el.value);}
 });
 
-document.addEventListener('change',e=>{
+document.addEventListener('change',async e=>{
   const el=e.target;
+  // 달력 변경 시 즉시 데이터 연동
+  if(el.dataset.act==='date-set'){
+    const newDate=el.value;
+    if(newDate && newDate !== viewingDate){
+      viewingDate = newDate;
+      // 캐시 없으면 로드, 있으면 즉시 렌더
+      if(!state.standups[newDate] || !state.routineLogs[newDate]){
+        dateLoading = true; render();
+        try{ await Promise.all([loadStandup(newDate), loadRoutineLogs(newDate)]); }finally{ dateLoading = false; }
+      }
+      render();
+    }
+    return;
+  }
   // review custom date inputs (use change event)
   if(el.dataset.act==='review-custom'){const which=el.dataset.which;const v=el.value;const cur=window._reviewOpts||{preset:'14',start:null,end:todayKey()};const et=el.dataset.etype||'member';const opts={preset:'custom',start:which==='start'?v:cur.start,end:which==='end'?v:cur.end};openReflection(et,el.dataset.mid,el.dataset.period,opts);return;}
   const f=el.dataset.field;if(!f)return;
@@ -1481,38 +1495,22 @@ async function init(){
   }catch(e){console.error(e);renderSetup('초기 로드 실패: '+(e.message||e));}
 }
 init();
+
 // ============================================================
 // KR-Link Addon v4 · 일일 스탠드업 "오늘 할 일 / 최근 한 일"을 KR과 직접 연결
-// app.js 끝에 붙여 넣는 monkey-patch (v3 블록을 통째로 교체)
-// v4 개선:
-//  - 드롭다운을 "클릭하는 순간" 최신 state로 동적 빌드 → 로딩 타이밍 문제 해결
-//  - 브라우저 콘솔에 진단 로그 출력 (F12 → Console 탭에서 확인)
-//  - state 접근 다중 폴백 (state / window.state / 글로벌 검색)
-//  - v3의 깜빡임 제거·자동확장·저장배지 그대로 유지
+// monkey-patch (v9 코드를 손대지 않고 기능 추가)
+// 장점:
+//  - 할일별 KR 드롭다운 연결 (OKR↔스탠드업 연결고리)
+//  - 자동 확장 textarea (입력량 따라 칸 자동 확장)
+//  - KR 분포 차트 (오늘 어떤 KR이 활동/방치되는지 한눈에)
+//  - 저장 배지, 동적 드롭다운 (KR 늦게 로드되어도 자동 갱신)
 // ============================================================
 (function(){
   'use strict';
-
-  // ===== helpers =====
   function escapeHtml(s){if(s==null)return'';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
   function newTaskId(){return't_'+Math.random().toString(36).slice(2,9)+Date.now().toString(36).slice(-3);}
-
-  // ===== 다중 폴백으로 state 접근 =====
-  function getState(){
-    // 1: 클로저로 외부 let state 참조
-    try{if(typeof state!=='undefined'&&state)return state;}catch(e){}
-    // 2: window.state (var 또는 글로벌 할당된 경우)
-    try{if(window.state)return window.state;}catch(e){}
-    // 3: 함수 인자/스코프 검색은 불가하므로 null
-    return null;
-  }
-  function getViewingDate(){
-    try{if(typeof viewingDate!=='undefined'&&viewingDate)return viewingDate;}catch(e){}
-    try{if(window.viewingDate)return window.viewingDate;}catch(e){}
-    return null;
-  }
-
-  // ===== 데이터 직렬화 =====
+  function getState(){try{if(typeof state!=='undefined'&&state)return state;}catch(e){}try{if(window.state)return window.state;}catch(e){}return null;}
+  function getViewingDate(){try{if(typeof viewingDate!=='undefined'&&viewingDate)return viewingDate;}catch(e){}try{if(window.viewingDate)return window.viewingDate;}catch(e){}return null;}
   function parseTasksField(text){
     if(!text)return{legacy:'',tasks:[]};
     const trimmed=String(text).trim();
@@ -1527,19 +1525,11 @@ init();
     if(!hasTasks)return legacy;
     return JSON.stringify({_krlv:1,legacy:legacy||'',tasks});
   }
-
   function collectAllKR(){
-    const list=[];
-    const st=getState();
-    if(!st||!st.objectives)return list;
-    st.objectives.forEach(o=>{
-      (o.keyResults||[]).forEach(k=>{
-        list.push({id:k.id,title:k.title||'(제목 없는 KR)',objTitle:o.title||'(이름 없는 Objective)'});
-      });
-    });
+    const list=[];const st=getState();if(!st||!st.objectives)return list;
+    st.objectives.forEach(o=>{(o.keyResults||[]).forEach(k=>{list.push({id:k.id,title:k.title||'(제목 없는 KR)',objTitle:o.title||'(이름 없는 Objective)'});});});
     return list;
   }
-
   function getMemberTasks(mid,kind){
     const st=getState();const date=getViewingDate();
     if(!st||!date||!st.standups||!st.standups[date])return{legacy:'',tasks:[]};
@@ -1550,16 +1540,12 @@ init();
     const st=getState();const date=getViewingDate();
     if(!st||!date)return;
     if(!st.standups[date])st.standups[date]={headline:'',entries:{}};
-    if(!st.standups[date].entries[mid]){
-      st.standups[date].entries[mid]={yesterday:'',today:'',blockers:'',helper_member_id:'',helper_name:'',support_type:'',support_detail:''};
-    }
+    if(!st.standups[date].entries[mid]){st.standups[date].entries[mid]={yesterday:'',today:'',blockers:'',helper_member_id:'',helper_name:'',support_type:'',support_detail:''};}
     const text=serializeTasks(legacy,tasks);
     st.standups[date].entries[mid][kind]=text;
     try{saveEntry(date,mid,kind,text);}catch(e){console.warn('[KR-Link] save failed',e);}
     showSaveBadge(mid,kind);
   }
-
-  // ===== 저장 배지 =====
   const badgeTimers=new Map();
   function showSaveBadge(mid,kind){
     const key=mid+':'+kind;
@@ -1567,107 +1553,61 @@ init();
     const headEl=document.querySelector('[data-krl-head="'+mid+':'+kind+'"]');
     if(headEl){
       let badge=headEl.querySelector('.krl-save-badge');
-      if(!badge){
-        badge=document.createElement('span');
-        badge.className='krl-save-badge';
-        badge.style.cssText='font-size:11px;color:#30AB62;font-weight:700;background:#E6F6EE;padding:2px 9px;border-radius:999px;margin-right:6px;transition:opacity .4s;flex-shrink:0;';
-        const right=headEl.querySelector('.krl-right');
-        if(right)right.insertBefore(badge,right.firstChild);
-        else headEl.appendChild(badge);
-      }
-      badge.textContent='✓ 저장됨';
-      badge.style.opacity='1';
+      if(!badge){badge=document.createElement('span');badge.className='krl-save-badge';badge.style.cssText='font-size:11px;color:#30AB62;font-weight:700;background:#E6F6EE;padding:2px 9px;border-radius:999px;margin-right:6px;transition:opacity .4s;flex-shrink:0;';const right=headEl.querySelector('.krl-right');if(right)right.insertBefore(badge,right.firstChild);else headEl.appendChild(badge);}
+      badge.textContent='✓ 저장됨';badge.style.opacity='1';
     }
-    badgeTimers.set(key,setTimeout(()=>{
-      const h=document.querySelector('[data-krl-head="'+mid+':'+kind+'"]');
-      if(h){const b=h.querySelector('.krl-save-badge');if(b){b.style.opacity='0';setTimeout(()=>{if(b.parentNode)b.parentNode.removeChild(b);},420);}}
-      badgeTimers.delete(key);
-    },2500));
+    badgeTimers.set(key,setTimeout(()=>{const h=document.querySelector('[data-krl-head="'+mid+':'+kind+'"]');if(h){const b=h.querySelector('.krl-save-badge');if(b){b.style.opacity='0';setTimeout(()=>{if(b.parentNode)b.parentNode.removeChild(b);},420);}}badgeTimers.delete(key);},2500));
   }
-
-  // ===== 자동 확장 =====
   function autoGrow(el){if(!el)return;el.style.height='auto';el.style.height=(el.scrollHeight+2)+'px';}
   function autoGrowAll(){document.querySelectorAll('textarea[data-krl-autogrow]').forEach(autoGrow);}
-
-  // ===== KR 옵션 빌드 (상태에 따른 안내 메시지 포함) =====
   function buildKROptions(selectedId,allKR){
     let html='<option value=""'+(selectedId?'':' selected')+'>운영 (KR 무관)</option>';
     if(allKR.length===0){
-      const st=getState();
-      let msg='— 데이터 로딩 중 —';
-      if(!st)msg='⚠ state 접근 불가 (콘솔 확인)';
+      const st=getState();let msg='— 데이터 로딩 중 —';
+      if(!st)msg='⚠ state 접근 불가';
       else if(!st.objectives||st.objectives.length===0)msg='— OKR 탭에서 Objective를 먼저 추가하세요 —';
-      else {
-        const withKR=st.objectives.filter(o=>(o.keyResults||[]).length>0);
-        if(withKR.length===0)msg='— 각 Objective에 KR을 추가하세요 —';
-      }
+      else {const withKR=st.objectives.filter(o=>(o.keyResults||[]).length>0);if(withKR.length===0)msg='— 각 Objective에 KR을 추가하세요 —';}
       html+='<option disabled>'+msg+'</option>';
       if(selectedId)html+='<option value="'+escapeHtml(selectedId)+'" selected>● 이전 선택 유지</option>';
       return html;
     }
-    // Objective별로 그룹화
     const order=[];const groups={};
     allKR.forEach(k=>{const ot=k.objTitle||'(미분류)';if(!groups[ot]){groups[ot]=[];order.push(ot);}groups[ot].push(k);});
-    order.forEach(ot=>{
-      const label=ot.length>45?ot.slice(0,45)+'…':ot;
-      html+='<optgroup label="'+escapeHtml(label)+'">';
-      groups[ot].forEach(k=>{
-        const title=k.title.length>45?k.title.slice(0,45)+'…':k.title;
-        html+='<option value="'+escapeHtml(k.id)+'"'+(selectedId===k.id?' selected':'')+'>'+escapeHtml(title)+'</option>';
-      });
-      html+='</optgroup>';
-    });
+    order.forEach(ot=>{const label=ot.length>45?ot.slice(0,45)+'…':ot;html+='<optgroup label="'+escapeHtml(label)+'">';groups[ot].forEach(k=>{const title=k.title.length>45?k.title.slice(0,45)+'…':k.title;html+='<option value="'+escapeHtml(k.id)+'"'+(selectedId===k.id?' selected':'')+'>'+escapeHtml(title)+'</option>';});html+='</optgroup>';});
     return html;
   }
-
-  // ===== 행 렌더링 =====
   function renderTaskRowHtml(task,mid,kind){
     const allKR=collectAllKR();
     const krInfo=task.k?allKR.find(k=>k.id===task.k):null;
     const tagBg=krInfo?'#EEEAFE':'#F4F4F5';
     const tagFg=krInfo?'#6241F5':'#737373';
     const tagBorder=krInfo?'#D9CFFB':'var(--line)';
-    const textStyle='flex:1;min-width:80px;padding:9px 11px;border:1px solid var(--line);border-radius:6px;background:#FAFAFA;outline:none;font-size:14.5px;line-height:1.55;font-family:inherit;color:var(--text);resize:none;overflow:hidden;min-height:40px;'+(task.d?'text-decoration:line-through;color:var(--text-soft);':'');
+    const textStyle='flex:1;min-width:80px;padding:10px 12px;border:1px solid var(--line);border-radius:6px;background:#FAFAFA;outline:none;font-size:15px;line-height:1.6;font-family:inherit;color:var(--text);resize:none;overflow:hidden;min-height:44px;'+(task.d?'text-decoration:line-through;color:var(--text-soft);':'');
     return '<div class="krl-task-row" data-tid="'+task.id+'" data-mid="'+mid+'" data-kind="'+kind+'" style="display:flex;align-items:flex-start;gap:8px;padding:6px 0;">'+
-      '<button class="rt-check '+(task.d?'checked':'')+'" style="width:20px;height:20px;border-width:2px;border-radius:5px;flex-shrink:0;margin-top:10px;" data-act="krl-toggle-task" data-mid="'+mid+'" data-kind="'+kind+'" data-tid="'+task.id+'" title="완료 체크">'+(task.d?'✓':'')+'</button>'+
+      '<button class="rt-check '+(task.d?'checked':'')+'" style="width:20px;height:20px;border-width:2px;border-radius:5px;flex-shrink:0;margin-top:11px;" data-act="krl-toggle-task" data-mid="'+mid+'" data-kind="'+kind+'" data-tid="'+task.id+'" title="완료 체크">'+(task.d?'✓':'')+'</button>'+
       '<textarea data-krl-field="task-text" data-krl-autogrow data-mid="'+mid+'" data-kind="'+kind+'" data-tid="'+task.id+'" rows="1" placeholder="할일 내용을 적어주세요" style="'+textStyle+'">'+escapeHtml(task.t||'')+'</textarea>'+
-      '<select data-krl-field="task-kr" data-mid="'+mid+'" data-kind="'+kind+'" data-tid="'+task.id+'" style="font-size:12px;padding:8px 10px;background:'+tagBg+';color:'+tagFg+';font-weight:700;border:1px solid '+tagBorder+';border-radius:6px;outline:none;max-width:220px;margin-top:6px;flex-shrink:0;cursor:pointer;font-family:inherit;" title="클릭하여 KR 선택">'+
-      buildKROptions(task.k,allKR)+
-      '</select>'+
-      '<button data-act="krl-del-task" data-mid="'+mid+'" data-kind="'+kind+'" data-tid="'+task.id+'" style="padding:6px 8px;margin-top:6px;background:none;border:1px solid transparent;border-radius:6px;cursor:pointer;color:var(--text-soft);font-size:14px;flex-shrink:0;line-height:1;" title="삭제">✕</button>'+
+      '<select data-krl-field="task-kr" data-mid="'+mid+'" data-kind="'+kind+'" data-tid="'+task.id+'" style="font-size:12px;padding:8px 10px;background:'+tagBg+';color:'+tagFg+';font-weight:700;border:1px solid '+tagBorder+';border-radius:6px;outline:none;max-width:220px;margin-top:7px;flex-shrink:0;cursor:pointer;font-family:inherit;" title="클릭하여 KR 선택">'+
+      buildKROptions(task.k,allKR)+'</select>'+
+      '<button data-act="krl-del-task" data-mid="'+mid+'" data-kind="'+kind+'" data-tid="'+task.id+'" style="padding:6px 8px;margin-top:7px;background:none;border:1px solid transparent;border-radius:6px;cursor:pointer;color:var(--text-soft);font-size:14px;flex-shrink:0;line-height:1;" title="삭제">✕</button>'+
       '</div>';
   }
-
   function renderTaskListBlock(mid,kind,label){
     const data=getMemberTasks(mid,kind);
     const legacy=data.legacy,tasks=data.tasks;
     return '<div class="krl-block" data-krl-block="'+mid+':'+kind+'" style="background:white;border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin-top:8px;">'+
       '<div class="krl-block-head" data-krl-head="'+mid+':'+kind+'" style="font-size:12px;color:var(--text-soft);font-weight:600;margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;gap:8px;">'+
         '<span>'+escapeHtml(label)+' — KR 직접 연결</span>'+
-        '<span class="krl-right" style="display:inline-flex;align-items:center;gap:6px;">'+
-          '<span class="krl-count" style="font-size:11px;color:var(--text-soft);font-weight:600;">'+tasks.length+'건</span>'+
-        '</span>'+
+        '<span class="krl-right" style="display:inline-flex;align-items:center;gap:6px;"><span class="krl-count" style="font-size:11px;color:var(--text-soft);font-weight:600;">'+tasks.length+'건</span></span>'+
       '</div>'+
-      '<div class="krl-tasks" data-krl-tasks="'+mid+':'+kind+'">'+
-        tasks.map(t=>renderTaskRowHtml(t,mid,kind)).join('')+
-      '</div>'+
+      '<div class="krl-tasks" data-krl-tasks="'+mid+':'+kind+'">'+tasks.map(t=>renderTaskRowHtml(t,mid,kind)).join('')+'</div>'+
       (legacy?'<div class="krl-legacy" data-krl-legacy="'+mid+':'+kind+'" style="font-size:12.5px;color:var(--text);background:#FFF8E1;border:1px dashed #E5B340;border-radius:6px;padding:8px 10px;margin-top:6px;line-height:1.55;"><div style="font-size:10.5px;font-weight:700;color:#946800;margin-bottom:3px;">기존 평문 메모</div>'+escapeHtml(legacy)+'<br><button data-act="krl-clear-legacy" data-mid="'+mid+'" data-kind="'+kind+'" style="margin-top:5px;font-size:11px;color:#6241F5;background:none;border:none;cursor:pointer;padding:0;font-weight:700;">이 메모 정리 →</button></div>':'')+
       '<button data-act="krl-add-task" data-mid="'+mid+'" data-kind="'+kind+'" style="margin-top:8px;padding:7px 12px;font-size:12.5px;color:#6241F5;background:#EEEAFE;border:1px dashed #D9CFFB;border-radius:6px;cursor:pointer;font-weight:700;font-family:inherit;">＋ '+(kind==='today'?'할일':'작업')+' 추가</button>'+
       '</div>';
   }
-
-  // ===== KR 분포 (debounce 부분 업데이트) =====
   let distributionTimer=null;
   function scheduleDistributionUpdate(){
     if(distributionTimer)clearTimeout(distributionTimer);
-    distributionTimer=setTimeout(()=>{
-      const el=document.querySelector('[data-krl-distribution]');
-      const html=renderKRDistributionInner();
-      if(el){
-        if(html){const tmp=document.createElement('div');tmp.innerHTML=html;el.replaceWith(tmp.firstElementChild);}
-        else el.remove();
-      }
-    },600);
+    distributionTimer=setTimeout(()=>{const el=document.querySelector('[data-krl-distribution]');const html=renderKRDistributionInner();if(el){if(html){const tmp=document.createElement('div');tmp.innerHTML=html;el.replaceWith(tmp.firstElementChild);}else el.remove();}},600);
   }
   function renderKRDistributionInner(){
     const st=getState();const date=getViewingDate();
@@ -1679,166 +1619,66 @@ init();
     let opsCount=0;
     (st.members||[]).forEach(m=>{
       const idl=(st.initiativeDailyLogs&&st.initiativeDailyLogs[date]&&st.initiativeDailyLogs[date][m.id])||{};
-      Object.entries(idl).forEach(entry=>{
-        const iid=entry[0],v=entry[1];
-        if(!v||!v.checked)return;
-        st.objectives.forEach(o=>(o.keyResults||[]).forEach(k=>{
-          if((k.initiatives||[]).some(i=>i.id===iid))counts[k.id]=(counts[k.id]||0)+1;
-        }));
-      });
+      Object.entries(idl).forEach(entry=>{const iid=entry[0],v=entry[1];if(!v||!v.checked)return;st.objectives.forEach(o=>(o.keyResults||[]).forEach(k=>{if((k.initiatives||[]).some(i=>i.id===iid))counts[k.id]=(counts[k.id]||0)+1;}));});
     });
-    (st.members||[]).forEach(m=>{
-      const e=(standup.entries||{})[m.id]||{};
-      ['today','yesterday'].forEach(kind=>{
-        const data=parseTasksField(e[kind]||'');
-        data.tasks.forEach(t=>{
-          if(t.k&&counts[t.k]!==undefined)counts[t.k]++;
-          else if(!t.k)opsCount++;
-        });
-      });
-    });
+    (st.members||[]).forEach(m=>{const e=(standup.entries||{})[m.id]||{};['today','yesterday'].forEach(kind=>{const data=parseTasksField(e[kind]||'');data.tasks.forEach(t=>{if(t.k&&counts[t.k]!==undefined)counts[t.k]++;else if(!t.k)opsCount++;});});});
     const total=Object.values(counts).reduce((s,n)=>s+n,0)+opsCount;
     if(total===0)return '';
     const neglected=allKR.filter(k=>counts[k.id]===0);
     let html='<section class="card card-section" data-krl-distribution><div class="section-head"><span style="color:#6241F5;">📊</span><span class="section-title">오늘 KR 분포</span><span class="section-meta">· Initiative 체크 + KR 연결 할일</span></div>';
     html+='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;">';
-    allKR.forEach(k=>{
-      const c=counts[k.id];const active=c>0;
-      const title=k.title.length>22?k.title.slice(0,22)+'…':k.title;
-      html+='<div style="background:'+(active?'#EEEAFE':'#FAFAFA')+';border-radius:8px;padding:10px 12px;border:1px solid '+(active?'#D9CFFB':'var(--line)')+';">'+
-        '<div style="font-size:11px;color:'+(active?'#6241F5':'var(--text-soft)')+';font-weight:700;margin-bottom:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+escapeHtml(k.title)+'">'+escapeHtml(title)+'</div>'+
-        '<div style="font-size:20px;font-weight:800;color:'+(active?'#26215C':'var(--text-soft)')+';">'+c+'건</div></div>';
-    });
-    if(opsCount>0){
-      html+='<div style="background:#FAFAFA;border-radius:8px;padding:10px 12px;border:1px solid var(--line);"><div style="font-size:11px;color:var(--text-soft);font-weight:700;margin-bottom:3px;">운영 (KR 무관)</div><div style="font-size:20px;font-weight:800;color:var(--text);">'+opsCount+'건</div></div>';
-    }
+    allKR.forEach(k=>{const c=counts[k.id];const active=c>0;const title=k.title.length>22?k.title.slice(0,22)+'…':k.title;html+='<div style="background:'+(active?'#EEEAFE':'#FAFAFA')+';border-radius:8px;padding:10px 12px;border:1px solid '+(active?'#D9CFFB':'var(--line)')+';"><div style="font-size:11px;color:'+(active?'#6241F5':'var(--text-soft)')+';font-weight:700;margin-bottom:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+escapeHtml(k.title)+'">'+escapeHtml(title)+'</div><div style="font-size:20px;font-weight:800;color:'+(active?'#26215C':'var(--text-soft)')+';">'+c+'건</div></div>';});
+    if(opsCount>0){html+='<div style="background:#FAFAFA;border-radius:8px;padding:10px 12px;border:1px solid var(--line);"><div style="font-size:11px;color:var(--text-soft);font-weight:700;margin-bottom:3px;">운영 (KR 무관)</div><div style="font-size:20px;font-weight:800;color:var(--text);">'+opsCount+'건</div></div>';}
     html+='</div>';
-    if(neglected.length>0){
-      html+='<div style="font-size:12px;color:#E5484D;margin-top:10px;line-height:1.55;background:#FCE8E9;padding:9px 12px;border-radius:6px;"><b>⚠ 오늘 활동 0건:</b> '+
-        neglected.map(k=>{const t=k.title.length>20?k.title.slice(0,20)+'…':k.title;return escapeHtml(t);}).join(' · ')+' — 방치 신호</div>';
-    }
+    if(neglected.length>0){html+='<div style="font-size:12px;color:#E5484D;margin-top:10px;line-height:1.55;background:#FCE8E9;padding:9px 12px;border-radius:6px;"><b>⚠ 오늘 활동 0건:</b> '+neglected.map(k=>{const t=k.title.length>20?k.title.slice(0,20)+'…':k.title;return escapeHtml(t);}).join(' · ')+' — 방치 신호</div>';}
     html+='</section>';
     return html;
   }
-
-  function updateCount(mid,kind,n){
-    const head=document.querySelector('[data-krl-head="'+mid+':'+kind+'"]');
-    if(head){const c=head.querySelector('.krl-count');if(c)c.textContent=n+'건';}
-  }
-
-  // ===== 기존 함수 덮어쓰기 =====
+  function updateCount(mid,kind,n){const head=document.querySelector('[data-krl-head="'+mid+':'+kind+'"]');if(head){const c=head.querySelector('.krl-count');if(c)c.textContent=n+'건';}}
   function applyPatches(){
-    if(typeof renderTodaySection!=='function'||typeof renderYesterdaySection!=='function'||typeof renderToday!=='function'){
-      setTimeout(applyPatches,150);return;
-    }
+    if(typeof renderTodaySection!=='function'||typeof renderYesterdaySection!=='function'||typeof renderToday!=='function'){setTimeout(applyPatches,150);return;}
     window.renderTodaySection=function(mid,memo,myInits,checks){
       const checklistHtml=myInits.length===0
         ? '<div style="font-size:12px;color:var(--text-soft);padding:6px 0;">담당 Initiative가 없습니다. OKR 탭에서 배정하세요.</div>'
-        : myInits.map(i=>{
-          const c=!!(checks[i.id]&&checks[i.id].checked);
-          return '<div style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:13px;"><button class="rt-check '+(c?'checked':'')+'" style="width:18px;height:18px;border-width:1.5px;border-radius:4px;flex-shrink:0;" data-act="toggle-init-check" data-iid="'+i.id+'" data-mid="'+mid+'">'+(c?I.check:'')+'</button><span style="'+(c?'text-decoration:line-through;color:var(--text-soft);':'')+'flex:1;cursor:pointer;line-height:1.5;" data-act="toggle-init-check" data-iid="'+i.id+'" data-mid="'+mid+'">'+esc(i.title)+'</span><span style="font-size:11px;color:var(--text-soft);flex-shrink:0;">'+esc(i.krTitle.slice(0,14))+(i.krTitle.length>14?'…':'')+'</span></div>';
-        }).join('');
-      return '<div class="field"><div class="field-label"><span class="field-dot accent-primary"></span><span class="field-name accent-primary">오늘 할 일</span><span style="font-size:10.5px;color:var(--text-soft);margin-left:auto;font-weight:600;">담당 Initiative '+myInits.length+'건</span></div>'+
-        '<div style="background:#FAFAFA;border-radius:8px;padding:10px 12px;margin-bottom:6px;">'+checklistHtml+'</div>'+
-        renderTaskListBlock(mid,'today','추가 할일')+'</div>';
+        : myInits.map(i=>{const c=!!(checks[i.id]&&checks[i.id].checked);return '<div style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:13px;"><button class="rt-check '+(c?'checked':'')+'" style="width:18px;height:18px;border-width:1.5px;border-radius:4px;flex-shrink:0;" data-act="toggle-init-check" data-iid="'+i.id+'" data-mid="'+mid+'">'+(c?I.check:'')+'</button><span style="'+(c?'text-decoration:line-through;color:var(--text-soft);':'')+'flex:1;cursor:pointer;line-height:1.5;" data-act="toggle-init-check" data-iid="'+i.id+'" data-mid="'+mid+'">'+esc(i.title)+'</span><span style="font-size:11px;color:var(--text-soft);flex-shrink:0;">'+esc(i.krTitle.slice(0,14))+(i.krTitle.length>14?'…':'')+'</span></div>';}).join('');
+      return '<div class="field"><div class="field-label"><span class="field-dot accent-primary"></span><span class="field-name accent-primary">오늘 할 일</span><span style="font-size:10.5px;color:var(--text-soft);margin-left:auto;font-weight:600;">담당 Initiative '+myInits.length+'건</span></div><div style="background:#FAFAFA;border-radius:8px;padding:10px 12px;margin-bottom:6px;">'+checklistHtml+'</div>'+renderTaskListBlock(mid,'today','추가 할일')+'</div>';
     };
     window.renderYesterdaySection=function(mid,memo,yDone){
       const summaryHtml=yDone.length>0
         ? '<div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:6px;">'+yDone.map(i=>'<span style="font-size:11.5px;padding:3px 9px;background:var(--growth-soft);color:var(--growth);border-radius:999px;font-weight:600;">'+esc(i.title.slice(0,20))+(i.title.length>20?'…':'')+'</span>').join('')+'</div>'
         : '<div style="font-size:12px;color:var(--text-soft);margin-bottom:6px;">어제 체크된 Initiative 없음</div>';
-      return '<div class="field"><div class="field-label"><span class="field-dot"></span><span class="field-name">최근 한 일</span><span style="font-size:10.5px;color:var(--text-soft);margin-left:auto;font-weight:600;">최근 완료 작업</span></div>'+
-        summaryHtml+renderTaskListBlock(mid,'yesterday','추가 작업')+'</div>';
+      return '<div class="field"><div class="field-label"><span class="field-dot"></span><span class="field-name">최근 한 일</span><span style="font-size:10.5px;color:var(--text-soft);margin-left:auto;font-weight:600;">최근 완료 작업</span></div>'+summaryHtml+renderTaskListBlock(mid,'yesterday','추가 작업')+'</div>';
     };
     const _origRenderToday=window.renderToday;
-    window.renderToday=function(){
-      const html=_origRenderToday.apply(this,arguments);
-      return html+(renderKRDistributionInner()||'');
-    };
+    window.renderToday=function(){const html=_origRenderToday.apply(this,arguments);return html+(renderKRDistributionInner()||'');};
     const _origRender=window.render;
-    window.render=function(){
-      _origRender.apply(this,arguments);
-      if(window.currentView==='today')setTimeout(autoGrowAll,0);
-    };
+    window.render=function(){_origRender.apply(this,arguments);if(window.currentView==='today')setTimeout(autoGrowAll,0);};
     if(typeof render==='function'&&currentView==='today')render();
-
-    // ===== 진단 로그 =====
-    setTimeout(function(){
-      const st=getState();
-      console.log('═══════ [KR-Link v4] 진단 ═══════');
-      console.log('1) state 접근:', st?'✓ 성공':'✗ 실패 (state 변수에 접근 불가)');
-      if(st){
-        console.log('2) 현재 팀 ID:', st.currentTeamId);
-        console.log('3) Objective 개수:', (st.objectives||[]).length);
-        let totalKR=0;
-        (st.objectives||[]).forEach((o,oi)=>{
-          const krCnt=(o.keyResults||[]).length;
-          console.log('   O'+(oi+1)+':', o.title||'(이름 없음)', '— KR '+krCnt+'건');
-          totalKR+=krCnt;
-        });
-        console.log('4) 총 KR 개수:', totalKR);
-        if(totalKR===0){console.warn('⚠ KR이 0건입니다. OKR 탭에서 각 Objective에 KR을 추가하세요.');}
-        else{console.log('✓ KR이 정상적으로 로드되었습니다. 드롭다운에 표시되어야 합니다.');}
-      }
-      console.log('═══════════════════════════════════');
-    },2500);
-
     console.log('[KR-Link v4] 패치 적용 완료');
   }
   applyPatches();
-
-  // ===== ★ 핵심 : 드롭다운 열리는 순간 최신 state로 옵션 재생성 =====
-  // mousedown(capture)으로 native open 직전에 실행
-  document.addEventListener('mousedown',function(e){
-    const sel=e.target.closest('select[data-krl-field="task-kr"]');
-    if(!sel)return;
-    const cur=sel.value;
-    const allKR=collectAllKR();
-    sel.innerHTML=buildKROptions(cur,allKR);
-  },true);
-  // 키보드 포커스로 열 때도 처리
-  document.addEventListener('focusin',function(e){
-    const sel=e.target;
-    if(sel.tagName!=='SELECT'||sel.dataset.krlField!=='task-kr')return;
-    sel.innerHTML=buildKROptions(sel.value,collectAllKR());
-  },true);
-
-  // ===== 이벤트 핸들러 =====
+  // 드롭다운 열리는 순간 최신 state로 옵션 재생성
+  document.addEventListener('mousedown',function(e){const sel=e.target.closest('select[data-krl-field="task-kr"]');if(!sel)return;const cur=sel.value;const allKR=collectAllKR();sel.innerHTML=buildKROptions(cur,allKR);},true);
+  document.addEventListener('focusin',function(e){const sel=e.target;if(sel.tagName!=='SELECT'||sel.dataset.krlField!=='task-kr')return;sel.innerHTML=buildKROptions(sel.value,collectAllKR());},true);
   document.addEventListener('click',function(e){
-    const btn=e.target.closest('[data-act]');
-    if(!btn)return;
+    const btn=e.target.closest('[data-act]');if(!btn)return;
     const a=btn.dataset.act;
     if(a!=='krl-add-task'&&a!=='krl-toggle-task'&&a!=='krl-del-task'&&a!=='krl-clear-legacy')return;
     const mid=btn.dataset.mid,kind=btn.dataset.kind,tid=btn.dataset.tid;
     const data=getMemberTasks(mid,kind);
-
     if(a==='krl-add-task'){
       const newTask={id:newTaskId(),t:'',k:'',d:false};
       data.tasks.push(newTask);
       updateMemberTasks(mid,kind,data.legacy,data.tasks);
       const container=document.querySelector('[data-krl-tasks="'+mid+':'+kind+'"]');
-      if(container){
-        const tmp=document.createElement('div');
-        tmp.innerHTML=renderTaskRowHtml(newTask,mid,kind);
-        const newRow=tmp.firstElementChild;
-        container.appendChild(newRow);
-        updateCount(mid,kind,data.tasks.length);
-        const ta=newRow.querySelector('textarea[data-krl-field="task-text"]');
-        if(ta){ta.focus();autoGrow(ta);}
-      }
+      if(container){const tmp=document.createElement('div');tmp.innerHTML=renderTaskRowHtml(newTask,mid,kind);const newRow=tmp.firstElementChild;container.appendChild(newRow);updateCount(mid,kind,data.tasks.length);const ta=newRow.querySelector('textarea[data-krl-field="task-text"]');if(ta){ta.focus();autoGrow(ta);}}
       scheduleDistributionUpdate();
     }
     else if(a==='krl-toggle-task'){
-      const t=data.tasks.find(x=>x.id===tid);
-      if(!t)return;
-      t.d=!t.d;
-      updateMemberTasks(mid,kind,data.legacy,data.tasks);
+      const t=data.tasks.find(x=>x.id===tid);if(!t)return;
+      t.d=!t.d;updateMemberTasks(mid,kind,data.legacy,data.tasks);
       const row=document.querySelector('.krl-task-row[data-tid="'+tid+'"][data-mid="'+mid+'"][data-kind="'+kind+'"]');
-      if(row){
-        const check=row.querySelector('.rt-check');
-        if(check){check.classList.toggle('checked',t.d);check.innerHTML=t.d?'✓':'';}
-        const ta=row.querySelector('textarea[data-krl-field="task-text"]');
-        if(ta){ta.style.textDecoration=t.d?'line-through':'';ta.style.color=t.d?'var(--text-soft)':'var(--text)';}
-      }
+      if(row){const check=row.querySelector('.rt-check');if(check){check.classList.toggle('checked',t.d);check.innerHTML=t.d?'✓':'';}const ta=row.querySelector('textarea[data-krl-field="task-text"]');if(ta){ta.style.textDecoration=t.d?'line-through':'';ta.style.color=t.d?'var(--text-soft)':'var(--text)';}}
       scheduleDistributionUpdate();
     }
     else if(a==='krl-del-task'){
@@ -1856,45 +1696,24 @@ init();
       if(legacyEl)legacyEl.remove();
     }
   });
-
   document.addEventListener('input',function(e){
-    const el=e.target;
-    if(el.dataset.krlField!=='task-text')return;
+    const el=e.target;if(el.dataset.krlField!=='task-text')return;
     autoGrow(el);
     const mid=el.dataset.mid,kind=el.dataset.kind,tid=el.dataset.tid;
     const data=getMemberTasks(mid,kind);
     const t=data.tasks.find(x=>x.id===tid);
     if(t){t.t=el.value;updateMemberTasks(mid,kind,data.legacy,data.tasks);}
   });
-
   document.addEventListener('change',function(e){
-    const el=e.target;
-    if(el.dataset.krlField!=='task-kr')return;
+    const el=e.target;if(el.dataset.krlField!=='task-kr')return;
     const mid=el.dataset.mid,kind=el.dataset.kind,tid=el.dataset.tid;
     const data=getMemberTasks(mid,kind);
-    const t=data.tasks.find(x=>x.id===tid);
-    if(!t)return;
-    t.k=el.value||'';
-    updateMemberTasks(mid,kind,data.legacy,data.tasks);
+    const t=data.tasks.find(x=>x.id===tid);if(!t)return;
+    t.k=el.value||'';updateMemberTasks(mid,kind,data.legacy,data.tasks);
     const hasKR=!!t.k;
-    el.style.background=hasKR?'#EEEAFE':'#F4F4F5';
-    el.style.color=hasKR?'#6241F5':'#737373';
-    el.style.borderColor=hasKR?'#D9CFFB':'var(--line)';
+    el.style.background=hasKR?'#EEEAFE':'#F4F4F5';el.style.color=hasKR?'#6241F5':'#737373';el.style.borderColor=hasKR?'#D9CFFB':'var(--line)';
     scheduleDistributionUpdate();
   });
-
-  // textarea 포커스 강조 (KR 셀렉트는 이벤트가 다르므로 제외)
-  document.addEventListener('focusin',function(e){
-    const el=e.target;
-    if(el.tagName==='TEXTAREA'&&el.dataset.krlField==='task-text'){
-      el.style.background='white';el.style.borderColor='#6241F5';
-    }
-  });
-  document.addEventListener('focusout',function(e){
-    const el=e.target;
-    if(el.tagName==='TEXTAREA'&&el.dataset.krlField==='task-text'){
-      el.style.background='#FAFAFA';el.style.borderColor='var(--line)';
-    }
-  });
-
+  document.addEventListener('focusin',function(e){const el=e.target;if(el.tagName==='TEXTAREA'&&el.dataset.krlField==='task-text'){el.style.background='white';el.style.borderColor='#6241F5';}});
+  document.addEventListener('focusout',function(e){const el=e.target;if(el.tagName==='TEXTAREA'&&el.dataset.krlField==='task-text'){el.style.background='#FAFAFA';el.style.borderColor='var(--line)';}});
 })();
