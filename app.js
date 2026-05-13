@@ -214,14 +214,18 @@ html.dark .btn-ghost{background:#222631}
 html.dark .member-row{background:#191B23}
 html.dark .team-menu,html.dark .team-menu-item:hover{background:#1A1D27}
 html.dark .kr-menu-btn.open{background:#2A2245;color:#A89BF5;border-color:#3A2F5A}
-/* v12 — 입력 완료 시 시각 표시 (placeholder가 안 보이면 = 내용 있음) */
-.field-input:not(:placeholder-shown), textarea[data-krl-field="task-text"]:not(:placeholder-shown){background:#F0F8F4;border-color:#9FD9B8;box-shadow:inset 0 0 0 1px rgba(48,171,98,.08)}
-.field-input:not(:placeholder-shown):focus, textarea[data-krl-field="task-text"]:not(:placeholder-shown):focus{background:white;border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-soft)}
-.headline-input:not(:placeholder-shown){background:#F0F8F4;border-color:#9FD9B8}
-.headline-input:not(:placeholder-shown):focus{background:white;border-color:var(--primary)}
-.field-input[readonly]:not(:placeholder-shown), textarea[readonly][data-krl-field="task-text"]:not(:placeholder-shown){background:#EDEFEE !important;border-color:#D5DCD7 !important}
-html.dark .field-input:not(:placeholder-shown), html.dark textarea[data-krl-field="task-text"]:not(:placeholder-shown){background:#15291E;border-color:#2A4034}
-html.dark .field-input:not(:placeholder-shown):focus, html.dark textarea[data-krl-field="task-text"]:not(:placeholder-shown):focus{background:#222631;border-color:var(--primary)}
+/* v13 — 입력 완료 시 시각 표시 — 따뜻한 노란/주황 톤 (#FFF8DA 베이스) */
+.field-input:not(:placeholder-shown), textarea[data-krl-field="task-text"]:not(:placeholder-shown){background:#FFF8DA !important;border-color:#F5C76A !important;color:#3D2F00 !important;box-shadow:inset 0 0 0 1px rgba(245,184,42,.10) !important}
+.field-input:not(:placeholder-shown):focus, textarea[data-krl-field="task-text"]:not(:placeholder-shown):focus{background:#FFFDF2 !important;border-color:var(--primary) !important;box-shadow:0 0 0 3px var(--primary-soft) !important;color:var(--text) !important}
+.headline-input:not(:placeholder-shown){background:#FFF8DA !important;border-color:#F5C76A !important;color:#3D2F00 !important}
+.headline-input:not(:placeholder-shown):focus{background:#FFFDF2 !important;border-color:var(--primary) !important;color:var(--text) !important}
+.field-input[readonly]:not(:placeholder-shown), textarea[readonly][data-krl-field="task-text"]:not(:placeholder-shown){background:#FFF4C4 !important;border-color:#EBB94D !important;color:#3D2F00 !important;opacity:1}
+html.dark .field-input:not(:placeholder-shown), html.dark textarea[data-krl-field="task-text"]:not(:placeholder-shown){background:#3A2F0A !important;border-color:#6A5318 !important;color:#FFE9A8 !important}
+html.dark .field-input:not(:placeholder-shown):focus, html.dark textarea[data-krl-field="task-text"]:not(:placeholder-shown):focus{background:#22202A !important;border-color:var(--primary) !important;color:#E5E7EB !important}
+html.dark .field-input[readonly]:not(:placeholder-shown), html.dark textarea[readonly][data-krl-field="task-text"]:not(:placeholder-shown){background:#3A2F0A !important;border-color:#5A4818 !important;color:#FFE9A8 !important}
+/* v13 — 자동 확장 textarea: 내용 모두 표시 (페이지 스크롤 허용) */
+textarea[data-autogrow]{overflow:hidden !important;resize:none !important}
+.krl-task-row > textarea[data-krl-field="task-text"]{overflow:hidden !important;resize:none !important;height:auto}
 /* v12 — 발표 모드: 한 화면 + 사람별 전환 */
 body.present .present-member-nav{display:flex;align-items:center;gap:8px;margin:10px 0 14px;padding:8px 12px;background:white;border:1px solid var(--line);border-radius:10px;overflow-x:auto;flex-wrap:wrap}
 body.present .present-member-btn{display:inline-flex;align-items:center;gap:8px;padding:8px 14px;border-radius:8px;border:1px solid var(--line);background:white;cursor:pointer;font-size:13px;font-weight:700;color:var(--text);font-family:inherit;white-space:nowrap;flex-shrink:0;transition:all .15s}
@@ -233,7 +237,8 @@ body.present .present-arrow:hover{background:var(--primary-soft);border-color:va
 body.present .present-arrow:disabled{opacity:.3;cursor:not-allowed}
 body.present .member-grid{display:block !important}
 body.present .member-card{max-width:none;margin:0}
-body.present .field-input{min-height:auto !important;max-height:calc(100vh - 320px);overflow:auto}
+body.present .field-input{min-height:auto !important;max-height:none !important;overflow:hidden !important}
+body.present .krl-task-row > textarea[data-krl-field="task-text"]{max-height:none !important;overflow:hidden !important}
 body.present .objectives-pair-row{margin-top:8px !important}
 body.present .card-section,body.present .objectives-pair-row,body.present .obj-card{margin-top:8px !important}
 body.present footer.app-footer{display:none}
@@ -834,8 +839,16 @@ function render(){
   app.innerHTML=html;
   document.body.classList.toggle('present',presentMode);
   restoreFocus(focusSig);
-  // v12 — 모든 자동 확장 textarea 즉시 적용
-  setTimeout(()=>{document.querySelectorAll('textarea[data-autogrow]').forEach(el=>{el.style.height='auto';el.style.height=(el.scrollHeight+2)+'px';});},0);
+  // v13 — 모든 자동 확장 textarea 즉시 적용 (data-autogrow + data-krl-autogrow 통합)
+  // 다중 timing — 첫 페인트 후 즉시 + 다음 프레임 + 200ms 후 (콘텐츠 lazy load 대응)
+  const _autoGrowSweep=()=>{
+    document.querySelectorAll('textarea[data-autogrow], textarea[data-krl-autogrow]').forEach(el=>{
+      el.style.height='auto';el.style.height=(el.scrollHeight+2)+'px';
+    });
+  };
+  requestAnimationFrame(_autoGrowSweep);
+  setTimeout(_autoGrowSweep,0);
+  setTimeout(_autoGrowSweep,200);
 }
 
 function renderHeader(){
@@ -1683,8 +1696,8 @@ document.addEventListener('keydown',e=>{
 });
 document.addEventListener('input',e=>{
   const el=e.target;
-  // v12 — 자동 확장 textarea
-  if(el.tagName==='TEXTAREA'&&el.dataset.autogrow!==undefined){el.style.height='auto';el.style.height=(el.scrollHeight+2)+'px';}
+  // v13 — 자동 확장 textarea (data-autogrow + data-krl-autogrow 통합)
+  if(el.tagName==='TEXTAREA'&&(el.dataset.autogrow!==undefined||el.dataset.krlAutogrow!==undefined)){el.style.height='auto';el.style.height=(el.scrollHeight+2)+'px';}
   // 달력 즉시 연동 (input 이벤트로도 처리 — Edge/일부 브라우저는 change보다 input이 빠름)
   if(el.dataset.act==='date-set'){handleDateChange(el.value);return;}
   // 검색 인풋 (저장 인디케이터 영향 없는 별도 디바운스)
@@ -1857,7 +1870,7 @@ init();
     const ro=editable?'':' readonly';
     const dis=editable?'':' disabled';
     const tip=editable?'':' title="본인이 작성한 항목만 수정할 수 있습니다"';
-    const textStyle='flex:1;min-width:80px;padding:11px 13px;border:1px solid var(--line);border-radius:6px;background:#FAFAFA;outline:none;font-size:13.5px;line-height:1.6;font-family:inherit;color:var(--text);resize:vertical;overflow:auto;min-height:72px;'+(task.d?'text-decoration:line-through;color:var(--text-soft);':'');
+    const textStyle='flex:1;min-width:80px;padding:11px 13px;border:1px solid var(--line);border-radius:6px;background:#FAFAFA;outline:none;font-size:13.5px;line-height:1.6;font-family:inherit;color:var(--text);resize:none;overflow:hidden;min-height:72px;'+(task.d?'text-decoration:line-through;color:var(--text-soft);':'');
     return '<div class="krl-task-row" data-tid="'+task.id+'" data-mid="'+mid+'" data-kind="'+kind+'" style="display:flex;align-items:flex-start;gap:8px;padding:8px 0;">'+
       '<button class="rt-check '+(task.d?'checked':'')+'" style="width:20px;height:20px;border-width:2px;border-radius:5px;flex-shrink:0;margin-top:24px;" data-act="krl-toggle-task" data-mid="'+mid+'" data-kind="'+kind+'" data-tid="'+task.id+'"'+dis+tip+'>'+(task.d?'✓':'')+'</button>'+
       '<textarea data-krl-field="task-text" data-krl-autogrow data-mid="'+mid+'" data-kind="'+kind+'" data-tid="'+task.id+'" rows="3" placeholder="할일 내용을 적어주세요 (여러 줄 가능)" style="'+textStyle+'"'+ro+tip+'>'+escapeHtml(task.t||'')+'</textarea>'+
