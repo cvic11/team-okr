@@ -214,6 +214,35 @@ html.dark .btn-ghost{background:#222631}
 html.dark .member-row{background:#191B23}
 html.dark .team-menu,html.dark .team-menu-item:hover{background:#1A1D27}
 html.dark .kr-menu-btn.open{background:#2A2245;color:#A89BF5;border-color:#3A2F5A}
+/* v12 — 입력 완료 시 시각 표시 (placeholder가 안 보이면 = 내용 있음) */
+.field-input:not(:placeholder-shown), textarea[data-krl-field="task-text"]:not(:placeholder-shown){background:#F0F8F4;border-color:#9FD9B8;box-shadow:inset 0 0 0 1px rgba(48,171,98,.08)}
+.field-input:not(:placeholder-shown):focus, textarea[data-krl-field="task-text"]:not(:placeholder-shown):focus{background:white;border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-soft)}
+.headline-input:not(:placeholder-shown){background:#F0F8F4;border-color:#9FD9B8}
+.headline-input:not(:placeholder-shown):focus{background:white;border-color:var(--primary)}
+.field-input[readonly]:not(:placeholder-shown), textarea[readonly][data-krl-field="task-text"]:not(:placeholder-shown){background:#EDEFEE !important;border-color:#D5DCD7 !important}
+html.dark .field-input:not(:placeholder-shown), html.dark textarea[data-krl-field="task-text"]:not(:placeholder-shown){background:#15291E;border-color:#2A4034}
+html.dark .field-input:not(:placeholder-shown):focus, html.dark textarea[data-krl-field="task-text"]:not(:placeholder-shown):focus{background:#222631;border-color:var(--primary)}
+/* v12 — 발표 모드: 한 화면 + 사람별 전환 */
+body.present .present-member-nav{display:flex;align-items:center;gap:8px;margin:10px 0 14px;padding:8px 12px;background:white;border:1px solid var(--line);border-radius:10px;overflow-x:auto;flex-wrap:wrap}
+body.present .present-member-btn{display:inline-flex;align-items:center;gap:8px;padding:8px 14px;border-radius:8px;border:1px solid var(--line);background:white;cursor:pointer;font-size:13px;font-weight:700;color:var(--text);font-family:inherit;white-space:nowrap;flex-shrink:0;transition:all .15s}
+body.present .present-member-btn:hover{background:#F4F4F5}
+body.present .present-member-btn.active{background:var(--primary);color:white;border-color:var(--primary);box-shadow:0 2px 8px rgba(98,65,245,.25)}
+body.present .present-member-btn .avatar{width:24px;height:24px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;color:white;font-size:11px;font-weight:800}
+body.present .present-arrow{display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:50%;background:white;border:1px solid var(--line);cursor:pointer;font-size:18px;color:var(--text);flex-shrink:0;transition:all .15s}
+body.present .present-arrow:hover{background:var(--primary-soft);border-color:var(--primary);color:var(--primary)}
+body.present .present-arrow:disabled{opacity:.3;cursor:not-allowed}
+body.present .member-grid{display:block !important}
+body.present .member-card{max-width:none;margin:0}
+body.present .field-input{min-height:auto !important;max-height:calc(100vh - 320px);overflow:auto}
+body.present .objectives-pair-row{margin-top:8px !important}
+body.present .card-section,body.present .objectives-pair-row,body.present .obj-card{margin-top:8px !important}
+body.present footer.app-footer{display:none}
+body.present .date-bar{margin-bottom:6px}
+body.present main.view{padding-top:8px}
+body.present .member-card .member-head{padding-bottom:8px;margin-bottom:6px}
+html.dark body.present .present-member-nav{background:#1A1D27;border-color:#2A2D38}
+html.dark body.present .present-member-btn{background:#1A1D27;color:#E5E7EB;border-color:#2A2D38}
+html.dark body.present .present-arrow{background:#1A1D27;border-color:#2A2D38;color:#E5E7EB}
 /* v11 — 읽기 전용 필드 시각 표시 (본인이 아닌 항목) */
 textarea[readonly], input[readonly]{background:#F5F5F6 !important;color:var(--text-soft) !important;cursor:not-allowed;border-color:#EDEDEE !important}
 textarea[readonly]:focus, input[readonly]:focus{outline:none;box-shadow:none}
@@ -453,6 +482,7 @@ const GUIDES={
 };
 const CONF_HINTS={high:'9/10 — 거의 확실. 야심 부족 가능성 (sandbag 신호)',mid:'5~7/10 — 적정 stretch. 시작 시점 권장 위치 (Wodtke 원칙)',low:'3/10 이하 — 위험 신호. 도움 요청 권장'};
 let currentView='today',viewingDate=todayKey(),presentMode=false;
+let presentMid=null; // v12 — 발표 모드에서 현재 표시 중인 팀원 id (날짜 변경해도 유지)
 let expanded=new Set(),krExpanded=new Set(),realityOpen=new Set(),krMenuOpen=new Set();
 let okrSearchQuery='';
 let reflSearchQuery='';
@@ -804,6 +834,8 @@ function render(){
   app.innerHTML=html;
   document.body.classList.toggle('present',presentMode);
   restoreFocus(focusSig);
+  // v12 — 모든 자동 확장 textarea 즉시 적용
+  setTimeout(()=>{document.querySelectorAll('textarea[data-autogrow]').forEach(el=>{el.style.height='auto';el.style.height=(el.scrollHeight+2)+'px';});},0);
 }
 
 function renderHeader(){
@@ -823,12 +855,51 @@ function renderToday(){
   const doneCnt=todayRoutines.filter(r=>rl[r.id]?.completed).length;
   const dueItems=collectDueThisWeek();
   const self=selfMember();
+  // v12 — 발표 모드: 한 화면 + 사람별 전환
+  if(presentMode&&state.members.length>0){
+    return renderTodayPresent(date,isToday,standup,todayRoutines,rl);
+  }
   return `<div class="date-bar"><button class="date-nav-btn" data-act="date-shift" data-delta="-1">${I.chevLeft}</button><input type="date" class="date-input" value="${date}" data-act="date-set"><button class="date-nav-btn" data-act="date-shift" data-delta="1">${I.chevRight}</button>${isToday?'<span class="today-tag">오늘</span>':`<span class="past-tag">${date<todayKey()?'지난 회의':'미래 날짜'}</span><button class="btn btn-soft" data-act="date-today">오늘로</button>`}</div>
   ${renderObjectivePairRow()}
   ${dueItems.length>0?`<section class="card card-section"><div class="section-head"><span style="color:var(--amber);">${I.flag}</span><span class="section-title">이번 주 마감 (${dueItems.length}건)</span></div>${dueItems.map(d=>`<div style="padding:8px 0;display:flex;align-items:center;gap:10px;border-bottom:1px solid #F4F4F5;font-size:13px;"><span style="font-size:11px;padding:2px 8px;border-radius:999px;background:${d.type==='kr'?'#EEEAFE':'#F4F4F5'};color:${d.type==='kr'?C.primary:C.textSoft};font-weight:700;">${d.type==='kr'?'KR':'Init'}</span><span style="flex:1;">${esc(d.title)}</span><span style="font-size:11.5px;color:${isOverdue(d.dueDate,d.status)?C.warning:C.textSoft};font-weight:600;">${dueShort(d.dueDate)}${isOverdue(d.dueDate,d.status)?' · 지연':''}</span></div>`).join('')}</section>`:''}
   <div class="card-section"><div class="section-head"><span style="color:var(--primary);">${I.msg}</span><span class="section-title">${isToday?'오늘의 스탠드업':`${date} 스탠드업`}</span><span class="section-meta">· 어제 / 오늘 / 막힘</span></div>${state.members.length===0?'<div class="empty">팀원을 먼저 등록해주세요. <strong>관리</strong> 탭에서 추가할 수 있습니다.</div>':`<div class="member-grid">${state.members.map(m=>renderMemberCard(m,standup.entries?.[m.id]||{})).join('')}</div>`}</div>
   ${self?renderMyInitiatives(self):''}
   ${isToday&&todayRoutines.length>0?`<section class="card card-section"><div class="section-head"><span style="color:var(--primary);">${I.loop}</span><span class="section-title">오늘의 루틴</span><span class="section-meta">· 매일 챙겨야 할 일</span></div>${todayRoutines.map(r=>renderRoutineCheck(r,rl[r.id]||{})).join('')}</section>`:''}`;
+}
+
+// v12 — 발표 모드 (사람별 전환, 한 화면 fit)
+function renderTodayPresent(date,isToday,standup,todayRoutines,rl){
+  // presentMid 유효성 검증
+  if(!presentMid||!state.members.find(m=>m.id===presentMid)){
+    const self=selfMember();
+    presentMid=self?self.id:state.members[0].id;
+  }
+  const curIdx=state.members.findIndex(m=>m.id===presentMid);
+  const cur=state.members[curIdx];
+  const prevIdx=curIdx>0?curIdx-1:state.members.length-1;
+  const nextIdx=curIdx<state.members.length-1?curIdx+1:0;
+  const prev=state.members[prevIdx];
+  const next=state.members[nextIdx];
+  const entry=standup.entries?.[cur.id]||{};
+  // 진척 보기 좋게 — KR 진행
+  const memberRoutines=todayRoutines.filter(r=>r.owner_id===cur.id);
+  return `<div class="date-bar"><button class="date-nav-btn" data-act="date-shift" data-delta="-1">${I.chevLeft}</button><input type="date" class="date-input" value="${date}" data-act="date-set"><button class="date-nav-btn" data-act="date-shift" data-delta="1">${I.chevRight}</button>${isToday?'<span class="today-tag">오늘</span>':`<span class="past-tag">${date<todayKey()?'지난 회의':'미래 날짜'}</span><button class="btn btn-soft" data-act="date-today">오늘로</button>`}<span style="margin-left:auto;font-size:11px;color:var(--text-soft);font-weight:600;">발표 모드 · ${curIdx+1}/${state.members.length}</span></div>
+  <div class="present-member-nav">
+    <button class="present-arrow" data-act="present-prev" title="이전 팀원 (${esc(prev.name)})">${I.chevLeft}</button>
+    ${state.members.map(m=>{
+      const e=standup.entries?.[m.id]||{};
+      const filled=(e.yesterday||'').trim()||(e.today||'').trim()||(e.blockers||'').trim();
+      return `<button class="present-member-btn ${m.id===cur.id?'active':''}" data-act="present-set" data-mid="${m.id}">
+        <span class="avatar" style="background:${m.color||'#6241F5'};">${esc(m.name.slice(0,1).toUpperCase())}</span>
+        <span>${esc(m.name)}</span>
+        ${filled?`<span style="font-size:9px;color:${m.id===cur.id?'white':'var(--growth)'};font-weight:800;margin-left:2px;">●</span>`:''}
+        ${e.blockers&&e.blockers.trim()?`<span style="font-size:11px;margin-left:2px;">⚠</span>`:''}
+      </button>`;
+    }).join('')}
+    <button class="present-arrow" data-act="present-next" title="다음 팀원 (${esc(next.name)})">${I.chevRight}</button>
+  </div>
+  ${renderMemberCard(cur,entry)}
+  ${memberRoutines.length>0?`<section class="card card-section" style="margin-top:10px;"><div class="section-head"><span style="color:var(--primary);">${I.loop}</span><span class="section-title">${esc(cur.name)}님 오늘의 루틴</span><span class="section-meta">· ${memberRoutines.length}건</span></div>${memberRoutines.map(r=>renderRoutineCheck(r,rl[r.id]||{})).join('')}</section>`:''}`;
 }
 // ============================================================
 // Initiative My Items — 오늘 화면 하단 본인 담당 Initiative 통합 뷰
@@ -959,7 +1030,7 @@ function renderYesterdaySection(mid,memo,yDone){
     ? `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px;">${yDone.map(i=>`<span style="font-size:10.5px;padding:2px 7px;background:var(--growth-soft);color:var(--growth);border-radius:999px;font-weight:600;">${esc(i.title.slice(0,18))}${i.title.length>18?'…':''}</span>`).join('')}</div>`
     : '';
   const editable=canEditAs(mid);const ro=editable?'':' readonly';const tip=editable?'':' title="본인이 작성한 항목만 수정할 수 있습니다"';
-  return `<div class="field"><div class="field-label"><span class="field-dot"></span><span class="field-name">어제 한 일</span></div>${summaryHtml}<textarea class="field-input" rows="3" placeholder="추가 메모 (선택) — 어제 진행한 내용을 자유롭게" data-field="standup" data-fieldname="yesterday" data-mid="${mid}" data-date="${viewingDate}"${ro}${tip}>${esc(memo||'')}</textarea></div>`;
+  return `<div class="field"><div class="field-label"><span class="field-dot"></span><span class="field-name">어제 한 일</span></div>${summaryHtml}<textarea class="field-input" rows="3" data-autogrow placeholder="추가 메모 (선택) — 어제 진행한 내용을 자유롭게" data-field="standup" data-fieldname="yesterday" data-mid="${mid}" data-date="${viewingDate}"${ro}${tip}>${esc(memo||'')}</textarea></div>`;
 }
 function renderTodaySection(mid,memo,myInits,checks){
   const editable=canEditAs(mid);const ro=editable?'':' readonly';const dis=editable?'':' disabled';const tip=editable?'':' title="본인이 작성한 항목만 수정할 수 있습니다"';
@@ -967,7 +1038,7 @@ function renderTodaySection(mid,memo,myInits,checks){
     ? ''
     : myInits.map(i=>{const c=!!checks[i.id]?.checked;return `<div style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:13.5px;"><button class="rt-check ${c?'checked':''}" style="width:18px;height:18px;border-width:1.5px;border-radius:4px;flex-shrink:0;" data-act="toggle-init-check" data-iid="${i.id}" data-mid="${mid}"${dis}${tip}>${c?I.check:''}</button><span style="${c?'text-decoration:line-through;color:var(--text-soft);':''}flex:1;${editable?'cursor:pointer;':''}line-height:1.45;" ${editable?`data-act="toggle-init-check" data-iid="${i.id}" data-mid="${mid}"`:''}>${esc(i.title)}</span><span style="font-size:11px;color:var(--text-soft);flex-shrink:0;">${esc(i.krTitle.slice(0,14))}${i.krTitle.length>14?'…':''}</span></div>`;}).join('');
   const initBlock=myInits.length>0?`<div style="background:#FAFAFA;border-radius:8px;padding:10px 12px;margin-bottom:8px;">${checklistHtml}</div>`:'';
-  return `<div class="field"><div class="field-label"><span class="field-dot accent-primary"></span><span class="field-name accent-primary">오늘 할 일</span>${myInits.length>0?`<span style="font-size:11px;color:var(--text-soft);margin-left:auto;">담당 Initiative ${myInits.length}건</span>`:''}</div>${initBlock}<textarea class="field-input" rows="4" placeholder="추가 메모 — Initiative 외 오늘 목표를 자유롭게 (여러 줄 가능)" data-field="standup" data-fieldname="today" data-mid="${mid}" data-date="${viewingDate}"${ro}${tip}>${esc(memo||'')}</textarea></div>`;
+  return `<div class="field"><div class="field-label"><span class="field-dot accent-primary"></span><span class="field-name accent-primary">오늘 할 일</span>${myInits.length>0?`<span style="font-size:11px;color:var(--text-soft);margin-left:auto;">담당 Initiative ${myInits.length}건</span>`:''}</div>${initBlock}<textarea class="field-input" rows="4" data-autogrow placeholder="추가 메모 — Initiative 외 오늘 목표를 자유롭게 (여러 줄 가능)" data-field="standup" data-fieldname="today" data-mid="${mid}" data-date="${viewingDate}"${ro}${tip}>${esc(memo||'')}</textarea></div>`;
 }
 function renderBlockerSection(mid,e){
   const has=!!(e.blockers&&e.blockers.trim());
@@ -980,7 +1051,7 @@ function renderBlockerSection(mid,e){
   const editable=canEditAs(mid);const ro=editable?'':' readonly';const dis=editable?'':' disabled';const tip=editable?'':' title="본인이 작성한 항목만 수정할 수 있습니다"';
   const clearBtn=(hasAnyContent&&editable)?`<button data-act="clear-blocker" data-mid="${mid}" style="background:transparent;border:none;cursor:pointer;color:var(--text-soft);font-size:10.5px;padding:2px 6px;border-radius:5px;font-weight:600;text-decoration:underline;text-underline-offset:2px;" title="막힘과 도움 요청 모두 지우기">지우기</button>`:'';
   return `<div class="field"><div class="field-label"><span class="field-dot ${accent}"></span><span class="field-name ${accent}">막힘 / 도움 필요</span>${clearBtn}<button class="reality-toggle ${(e.helper_member_id||e.helper_name||e.support_type||e.support_detail)?'has-content':''}" style="margin-left:auto;" data-act="toggle-reality" data-key="${helperKey}">${helpOpen?'도움요청 ▴':'도움요청 ▾'}</button></div>
-    <textarea class="field-input blocker-input" rows="5" placeholder="현실적인 어려움과 도움이 필요한게 있나요?" data-field="standup" data-fieldname="blockers" data-mid="${mid}" data-date="${viewingDate}"${ro}${tip}>${esc(e.blockers||'')}</textarea>
+    <textarea class="field-input blocker-input" rows="5" data-autogrow placeholder="현실적인 어려움과 도움이 필요한게 있나요?" data-field="standup" data-fieldname="blockers" data-mid="${mid}" data-date="${viewingDate}"${ro}${tip}>${esc(e.blockers||'')}</textarea>
     ${helpOpen?`<div class="reality-box" style="margin-top:6px;padding:8px 10px;">
       <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:6px;">
         <span style="font-size:10.5px;font-weight:700;color:var(--text-soft);">누구에게:</span>
@@ -1394,7 +1465,10 @@ document.addEventListener('click',async e=>{
   if(a==='add-team'){const n=prompt('새 팀 이름','새 팀');if(!n)return;const id=uid();const t={id,name:n,quarter:currentTeam()?.quarter||'2026 Q2',sort_order:state.teams.length};state.teams.push(t);state.currentTeamId=id;localStorage.setItem(TEAM_KEY,id);initialized=false;render();await sb.from('teams').insert(t);await loadTeamData(id);initialized=true;render();return;}
   if(a==='del-team'){if(state.teams.length<=1){showToast('마지막 팀은 삭제 불가',true);return;}const t=currentTeam();if(!t)return;if(!confirm(`팀 "${t.name}"과 모든 데이터를 삭제할까요?`))return;const oid=t.id;state.teams=state.teams.filter(x=>x.id!==oid);state.currentTeamId=state.teams[0].id;localStorage.setItem(TEAM_KEY,state.currentTeamId);initialized=false;render();await sb.from('teams').delete().eq('id',oid);await loadTeamData(state.currentTeamId);initialized=true;render();return;}
   if(a==='view'){currentView=btn.dataset.view;render();return;}
-  if(a==='present'){presentMode=!presentMode;render();return;}
+  if(a==='present'){presentMode=!presentMode;if(presentMode){const self=selfMember();presentMid=presentMid||(self?self.id:(state.members[0]?.id||null));}render();return;}
+  if(a==='present-set'){presentMid=btn.dataset.mid;render();return;}
+  if(a==='present-prev'){if(state.members.length===0)return;const i=state.members.findIndex(m=>m.id===presentMid);const ni=i>0?i-1:state.members.length-1;presentMid=state.members[ni].id;render();return;}
+  if(a==='present-next'){if(state.members.length===0)return;const i=state.members.findIndex(m=>m.id===presentMid);const ni=i<state.members.length-1?i+1:0;presentMid=state.members[ni].id;render();return;}
   if(a==='toggle-dark'){setDark(!isDark());render();return;}
   if(a==='date-shift'){viewingDate=shiftDate(viewingDate,parseInt(btn.dataset.delta));if(!state.standups[viewingDate]||!state.routineLogs[viewingDate]){dateLoading=true;render();await Promise.all([loadStandup(viewingDate),loadRoutineLogs(viewingDate)]);dateLoading=false;}render();return;}
   if(a==='date-today'){viewingDate=todayKey();render();return;}
@@ -1598,8 +1672,19 @@ async function handleDateChange(newDate){
   }
   render();
 }
+// v12 — 발표 모드 키보드 단축 (← → 으로 사람 이동, ESC로 발표 모드 종료)
+document.addEventListener('keydown',e=>{
+  if(!presentMode||currentView!=='today')return;
+  const tag=document.activeElement?.tagName;
+  if(tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT')return; // 입력 중에는 무시
+  if(e.key==='ArrowLeft'){document.querySelector('[data-act="present-prev"]')?.click();e.preventDefault();}
+  else if(e.key==='ArrowRight'){document.querySelector('[data-act="present-next"]')?.click();e.preventDefault();}
+  else if(e.key==='Escape'){presentMode=false;render();e.preventDefault();}
+});
 document.addEventListener('input',e=>{
   const el=e.target;
+  // v12 — 자동 확장 textarea
+  if(el.tagName==='TEXTAREA'&&el.dataset.autogrow!==undefined){el.style.height='auto';el.style.height=(el.scrollHeight+2)+'px';}
   // 달력 즉시 연동 (input 이벤트로도 처리 — Edge/일부 브라우저는 change보다 input이 빠름)
   if(el.dataset.act==='date-set'){handleDateChange(el.value);return;}
   // 검색 인풋 (저장 인디케이터 영향 없는 별도 디바운스)
