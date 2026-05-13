@@ -163,13 +163,11 @@ mark{background:#FFF59D;color:var(--text);padding:0 2px;border-radius:3px}
   .member-card .field > .krl-block{flex:1;display:flex;flex-direction:column;min-height:160px}
   .member-card .field > .krl-block > .krl-tasks{flex:1}
   .member-card .reality-box{margin-top:8px}
-  /* KR-Link task row — 좁은 컬럼에서 wrap 자연스럽게 */
+  /* KR-Link task row v14 — 2행 구조 (KR 칩 상단, 본문 꽉 차게) */
   .member-card .krl-block{padding:10px 12px}
-  .member-card .krl-task-row{flex-wrap:wrap;gap:6px;padding:6px 0;align-items:center}
-  .member-card .krl-task-row > .rt-check{order:1;margin-top:0}
-  .member-card .krl-task-row > textarea{order:2;flex:1 1 calc(100% - 32px);min-width:0;min-height:42px;margin-top:0}
-  .member-card .krl-task-row > select{order:3;flex:1 1 calc(100% - 40px);min-width:0;max-width:none;margin-top:0}
-  .member-card .krl-task-row > button[data-act="krl-del-task"]{order:4;margin-top:0;align-self:center}
+  .member-card .krl-task-row{align-items:stretch !important;flex-wrap:nowrap !important}
+  .member-card .krl-task-row textarea[data-krl-field="task-text"]{width:100% !important;min-width:0 !important;flex:1 1 auto !important}
+  .member-card .krl-task-row select[data-krl-field="task-kr"]{max-width:100% !important;flex:0 1 auto !important}
 }
 @media (max-width:879px){
   .today-twocol{grid-template-columns:1fr !important}
@@ -1874,13 +1872,21 @@ init();
     const ro=editable?'':' readonly';
     const dis=editable?'':' disabled';
     const tip=editable?'':' title="본인이 작성한 항목만 수정할 수 있습니다"';
-    const textStyle='flex:1;min-width:80px;padding:11px 13px;border:1px solid var(--line);border-radius:6px;background:#FAFAFA;outline:none;font-size:13.5px;line-height:1.6;font-family:inherit;color:var(--text);resize:none;overflow:hidden;min-height:72px;'+(task.d?'text-decoration:line-through;color:var(--text-soft);':'');
-    return '<div class="krl-task-row" data-tid="'+task.id+'" data-mid="'+mid+'" data-kind="'+kind+'" style="display:flex;align-items:flex-start;gap:8px;padding:8px 0;">'+
-      '<button class="rt-check '+(task.d?'checked':'')+'" style="width:20px;height:20px;border-width:2px;border-radius:5px;flex-shrink:0;margin-top:24px;" data-act="krl-toggle-task" data-mid="'+mid+'" data-kind="'+kind+'" data-tid="'+task.id+'"'+dis+tip+'>'+(task.d?'✓':'')+'</button>'+
-      '<textarea data-krl-field="task-text" data-krl-autogrow data-mid="'+mid+'" data-kind="'+kind+'" data-tid="'+task.id+'" rows="3" placeholder="할일 내용을 적어주세요 (여러 줄 가능)" style="'+textStyle+'"'+ro+tip+'>'+escapeHtml(task.t||'')+'</textarea>'+
-      '<select data-krl-field="task-kr" data-mid="'+mid+'" data-kind="'+kind+'" data-tid="'+task.id+'" style="font-size:12px;padding:8px 10px;background:'+tagBg+';color:'+tagFg+';font-weight:700;border:1px solid '+tagBorder+';border-radius:6px;outline:none;max-width:220px;margin-top:20px;flex-shrink:0;cursor:pointer;font-family:inherit;" title="클릭하여 KR 선택"'+dis+'>'+
-      buildKROptions(task.k,allKR)+'</select>'+
-      (editable?'<button data-act="krl-del-task" data-mid="'+mid+'" data-kind="'+kind+'" data-tid="'+task.id+'" style="padding:6px 8px;margin-top:20px;background:none;border:1px solid transparent;border-radius:6px;cursor:pointer;color:var(--text-soft);font-size:14px;flex-shrink:0;line-height:1;" title="삭제">✕</button>':'')+
+    const textStyle='width:100%;padding:11px 13px;border:1px solid var(--line);border-radius:6px;background:#FAFAFA;outline:none;font-size:13.5px;line-height:1.6;font-family:inherit;color:var(--text);resize:none;overflow:hidden;min-height:72px;box-sizing:border-box;'+(task.d?'text-decoration:line-through;color:var(--text-soft);':'');
+    // v14 — 2행 구조: 위 = KR 칩 + 삭제, 아래 = 체크 + 본문 (꽉 차게)
+    return '<div class="krl-task-row" data-tid="'+task.id+'" data-mid="'+mid+'" data-kind="'+kind+'" style="display:flex;flex-direction:column;gap:6px;padding:10px 0;border-bottom:1px dashed #F0F0F2;">'+
+      // 1행 — KR 선택 + 삭제
+      '<div style="display:flex;align-items:center;gap:8px;width:100%;">'+
+        '<select data-krl-field="task-kr" data-mid="'+mid+'" data-kind="'+kind+'" data-tid="'+task.id+'" style="font-size:12px;padding:6px 10px;background:'+tagBg+';color:'+tagFg+';font-weight:700;border:1px solid '+tagBorder+';border-radius:999px;outline:none;cursor:pointer;font-family:inherit;max-width:100%;flex:0 1 auto;" title="클릭하여 KR 선택"'+dis+'>'+
+        buildKROptions(task.k,allKR)+'</select>'+
+        '<span style="flex:1;"></span>'+
+        (editable?'<button data-act="krl-del-task" data-mid="'+mid+'" data-kind="'+kind+'" data-tid="'+task.id+'" style="padding:4px 8px;background:none;border:1px solid transparent;border-radius:6px;cursor:pointer;color:var(--text-soft);font-size:13px;line-height:1;flex-shrink:0;" title="이 작업 삭제">✕</button>':'')+
+      '</div>'+
+      // 2행 — 체크박스 + 본문 (꽉 차게)
+      '<div style="display:flex;align-items:flex-start;gap:8px;width:100%;">'+
+        '<button class="rt-check '+(task.d?'checked':'')+'" style="width:20px;height:20px;border-width:2px;border-radius:5px;flex-shrink:0;margin-top:10px;" data-act="krl-toggle-task" data-mid="'+mid+'" data-kind="'+kind+'" data-tid="'+task.id+'"'+dis+tip+'>'+(task.d?'✓':'')+'</button>'+
+        '<textarea data-krl-field="task-text" data-krl-autogrow data-mid="'+mid+'" data-kind="'+kind+'" data-tid="'+task.id+'" rows="3" placeholder="할일 내용을 적어주세요 (여러 줄 가능)" style="'+textStyle+'"'+ro+tip+'>'+escapeHtml(task.t||'')+'</textarea>'+
+      '</div>'+
       '</div>';
   }
   function renderTaskListBlock(mid,kind,label){
