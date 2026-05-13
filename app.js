@@ -214,6 +214,17 @@ html.dark .btn-ghost{background:#222631}
 html.dark .member-row{background:#191B23}
 html.dark .team-menu,html.dark .team-menu-item:hover{background:#1A1D27}
 html.dark .kr-menu-btn.open{background:#2A2245;color:#A89BF5;border-color:#3A2F5A}
+/* v11 — 읽기 전용 필드 시각 표시 (본인이 아닌 항목) */
+textarea[readonly], input[readonly]{background:#F5F5F6 !important;color:var(--text-soft) !important;cursor:not-allowed;border-color:#EDEDEE !important}
+textarea[readonly]:focus, input[readonly]:focus{outline:none;box-shadow:none}
+button:disabled, select:disabled{opacity:.55;cursor:not-allowed !important;filter:grayscale(.3)}
+.member-card.is-readonly{background:#FBFBFC}
+.member-card.is-readonly .member-head::after{content:'읽기 전용';font-size:10px;padding:2px 7px;border-radius:999px;background:#F0F0F2;color:var(--text-soft);font-weight:700;margin-left:auto}
+html.dark textarea[readonly], html.dark input[readonly]{background:#1B1E27 !important;color:#9CA3AF !important;border-color:#22252F !important}
+html.dark .member-card.is-readonly{background:#15171F}
+html.dark .member-card.is-readonly .member-head::after{background:#22252F;color:#9CA3AF}
+/* v11 — 기록 남기기/할일 추가 입력란 크기 확대 */
+.krl-task-row > textarea[data-krl-field="task-text"]{min-height:72px !important}
 `;document.head.appendChild(s);
 // 다크 모드 즉시 적용 (FOUC 방지)
 document.documentElement.classList.toggle('dark',localStorage.getItem('team-okr-dark')==='1');
@@ -240,6 +251,11 @@ function getSelfId(){return localStorage.getItem(SELF_KEY)||null;}
 function setSelfId(id){if(id==='__observer__'){localStorage.setItem(SELF_KEY,id);}else if(id){localStorage.setItem(SELF_KEY,id);}else{localStorage.removeItem(SELF_KEY);}state.selfId=id;}
 function selfMember(){if(!state.selfId||state.selfId==='__observer__')return null;return state.members.find(m=>m.id===state.selfId)||null;}
 function isObserver(){return state.selfId==='__observer__';}
+// v11 — 본인만 본인이 작성한 것 수정 가능
+function canEditAs(memberId){const s=selfMember();return !!(s&&memberId&&s.id===memberId);}
+function roAttr(memberId){return canEditAs(memberId)?'':'readonly';}
+function disAttr(memberId){return canEditAs(memberId)?'':'disabled';}
+function lockTip(memberId){return canEditAs(memberId)?'':' title="본인이 작성한 항목만 수정할 수 있습니다"';}
 // 도움 요청 알림 — 캐시
 let helpRequestsCache={count:null,items:null,lastFetch:0};
 async function fetchHelpRequests(){
@@ -369,7 +385,20 @@ function openPinSetup(memberId){
     </div>
     <div class="modal-foot"><button class="btn btn-ghost" data-act="cancel-self">취소</button><button class="btn btn-primary" data-act="save-pin" data-mid="${memberId}">PIN 등록</button></div>
   `);
-  setTimeout(()=>document.getElementById('pin-new')?.focus(),100);
+  setTimeout(()=>{
+    const p1=document.getElementById('pin-new');
+    const p2=document.getElementById('pin-confirm');
+    if(p1){
+      p1.focus();
+      // 4자리 입력 시 확인 칸으로 자동 이동
+      p1.addEventListener('input',()=>{if(p1.value.length===4&&p2){p2.focus();}});
+    }
+    if(p2){
+      // 확인 칸도 4자리 입력 시 자동 PIN 등록 시도
+      p2.addEventListener('input',()=>{if(p2.value.length===4&&p1&&p1.value.length===4){document.querySelector('[data-act="save-pin"]')?.click();}});
+      p2.addEventListener('keydown',ev=>{if(ev.key==='Enter')document.querySelector('[data-act="save-pin"]')?.click();});
+    }
+  },100);
 }
 function openPinVerify(memberId){
   const m=state.members.find(x=>x.id===memberId);if(!m)return;
@@ -382,7 +411,15 @@ function openPinVerify(memberId){
     </div>
     <div class="modal-foot"><button class="btn btn-ghost" data-act="cancel-self">취소</button><button class="btn btn-soft" data-act="reset-pin" data-mid="${memberId}">PIN 잊음 (초기화 요청)</button><button class="btn btn-primary" data-act="verify-pin" data-mid="${memberId}">확인</button></div>
   `);
-  setTimeout(()=>{const el=document.getElementById('pin-enter');if(el){el.focus();el.addEventListener('keydown',ev=>{if(ev.key==='Enter')document.querySelector('[data-act="verify-pin"]')?.click();});}},100);
+  setTimeout(()=>{
+    const el=document.getElementById('pin-enter');
+    if(el){
+      el.focus();
+      // 4자리 입력 즉시 자동 로그인 시도
+      el.addEventListener('input',()=>{if(el.value.length===4){document.querySelector('[data-act="verify-pin"]')?.click();}});
+      el.addEventListener('keydown',ev=>{if(ev.key==='Enter')document.querySelector('[data-act="verify-pin"]')?.click();});
+    }
+  },100);
 }
 async function attemptSelfChange(memberId){
   // observer 모드는 PIN 불필요
@@ -909,7 +946,8 @@ function renderMemberCard(m,e){
   const yChecks=getIDLForMemberDate(m.id,yesterday);
   // 어제 체크된 Initiative 자동 요약
   const yDoneInits=Object.entries(yChecks).filter(([_,v])=>v.checked).map(([iid,v])=>{const i=findInitiative(iid);return i?{id:iid,title:i.title,note:v.note}:null;}).filter(Boolean);
-  return `<div class="member-card ${has?'has-blocker':''}" data-member-card="${m.id}">
+  const editable=canEditAs(m.id);
+  return `<div class="member-card ${has?'has-blocker':''} ${editable?'':'is-readonly'}" data-member-card="${m.id}">
     <div class="member-head"><div class="avatar" style="background:${m.color};">${esc(m.name.slice(0,1).toUpperCase())}</div><div><div class="member-name">${esc(m.name)}</div><div class="member-role">${esc(m.role||'')}</div></div>${has?`<span class="blocker-badge">${I.alert} 도움 필요</span>`:''}</div>
     ${renderYesterdaySection(m.id,e.yesterday,yDoneInits)}
     ${renderTodaySection(m.id,e.today,myInits,todayChecks)}
@@ -920,14 +958,16 @@ function renderYesterdaySection(mid,memo,yDone){
   const summaryHtml=yDone.length>0
     ? `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px;">${yDone.map(i=>`<span style="font-size:10.5px;padding:2px 7px;background:var(--growth-soft);color:var(--growth);border-radius:999px;font-weight:600;">${esc(i.title.slice(0,18))}${i.title.length>18?'…':''}</span>`).join('')}</div>`
     : '';
-  return `<div class="field"><div class="field-label"><span class="field-dot"></span><span class="field-name">어제 한 일</span></div>${summaryHtml}<textarea class="field-input" rows="3" placeholder="추가 메모 (선택) — 어제 진행한 내용을 자유롭게" data-field="standup" data-fieldname="yesterday" data-mid="${mid}" data-date="${viewingDate}">${esc(memo||'')}</textarea></div>`;
+  const editable=canEditAs(mid);const ro=editable?'':' readonly';const tip=editable?'':' title="본인이 작성한 항목만 수정할 수 있습니다"';
+  return `<div class="field"><div class="field-label"><span class="field-dot"></span><span class="field-name">어제 한 일</span></div>${summaryHtml}<textarea class="field-input" rows="3" placeholder="추가 메모 (선택) — 어제 진행한 내용을 자유롭게" data-field="standup" data-fieldname="yesterday" data-mid="${mid}" data-date="${viewingDate}"${ro}${tip}>${esc(memo||'')}</textarea></div>`;
 }
 function renderTodaySection(mid,memo,myInits,checks){
+  const editable=canEditAs(mid);const ro=editable?'':' readonly';const dis=editable?'':' disabled';const tip=editable?'':' title="본인이 작성한 항목만 수정할 수 있습니다"';
   const checklistHtml=myInits.length===0
     ? ''
-    : myInits.map(i=>{const c=!!checks[i.id]?.checked;return `<div style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:13.5px;"><button class="rt-check ${c?'checked':''}" style="width:18px;height:18px;border-width:1.5px;border-radius:4px;flex-shrink:0;" data-act="toggle-init-check" data-iid="${i.id}" data-mid="${mid}">${c?I.check:''}</button><span style="${c?'text-decoration:line-through;color:var(--text-soft);':''}flex:1;cursor:pointer;line-height:1.45;" data-act="toggle-init-check" data-iid="${i.id}" data-mid="${mid}">${esc(i.title)}</span><span style="font-size:11px;color:var(--text-soft);flex-shrink:0;">${esc(i.krTitle.slice(0,14))}${i.krTitle.length>14?'…':''}</span></div>`;}).join('');
+    : myInits.map(i=>{const c=!!checks[i.id]?.checked;return `<div style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:13.5px;"><button class="rt-check ${c?'checked':''}" style="width:18px;height:18px;border-width:1.5px;border-radius:4px;flex-shrink:0;" data-act="toggle-init-check" data-iid="${i.id}" data-mid="${mid}"${dis}${tip}>${c?I.check:''}</button><span style="${c?'text-decoration:line-through;color:var(--text-soft);':''}flex:1;${editable?'cursor:pointer;':''}line-height:1.45;" ${editable?`data-act="toggle-init-check" data-iid="${i.id}" data-mid="${mid}"`:''}>${esc(i.title)}</span><span style="font-size:11px;color:var(--text-soft);flex-shrink:0;">${esc(i.krTitle.slice(0,14))}${i.krTitle.length>14?'…':''}</span></div>`;}).join('');
   const initBlock=myInits.length>0?`<div style="background:#FAFAFA;border-radius:8px;padding:10px 12px;margin-bottom:8px;">${checklistHtml}</div>`:'';
-  return `<div class="field"><div class="field-label"><span class="field-dot accent-primary"></span><span class="field-name accent-primary">오늘 할 일</span>${myInits.length>0?`<span style="font-size:11px;color:var(--text-soft);margin-left:auto;">담당 Initiative ${myInits.length}건</span>`:''}</div>${initBlock}<textarea class="field-input" rows="4" placeholder="추가 메모 — Initiative 외 오늘 목표를 자유롭게 (여러 줄 가능)" data-field="standup" data-fieldname="today" data-mid="${mid}" data-date="${viewingDate}">${esc(memo||'')}</textarea></div>`;
+  return `<div class="field"><div class="field-label"><span class="field-dot accent-primary"></span><span class="field-name accent-primary">오늘 할 일</span>${myInits.length>0?`<span style="font-size:11px;color:var(--text-soft);margin-left:auto;">담당 Initiative ${myInits.length}건</span>`:''}</div>${initBlock}<textarea class="field-input" rows="4" placeholder="추가 메모 — Initiative 외 오늘 목표를 자유롭게 (여러 줄 가능)" data-field="standup" data-fieldname="today" data-mid="${mid}" data-date="${viewingDate}"${ro}${tip}>${esc(memo||'')}</textarea></div>`;
 }
 function renderBlockerSection(mid,e){
   const has=!!(e.blockers&&e.blockers.trim());
@@ -937,28 +977,38 @@ function renderBlockerSection(mid,e){
   const helper=state.members.find(x=>x.id===e.helper_member_id);
   const helperLabel=helper?helper.name:(e.helper_name||'');
   const hasAnyContent=has||!!(e.helper_member_id||e.helper_name||e.support_type||e.support_detail);
-  const clearBtn=hasAnyContent?`<button data-act="clear-blocker" data-mid="${mid}" style="background:transparent;border:none;cursor:pointer;color:var(--text-soft);font-size:10.5px;padding:2px 6px;border-radius:5px;font-weight:600;text-decoration:underline;text-underline-offset:2px;" title="막힘과 도움 요청 모두 지우기">지우기</button>`:'';
+  const editable=canEditAs(mid);const ro=editable?'':' readonly';const dis=editable?'':' disabled';const tip=editable?'':' title="본인이 작성한 항목만 수정할 수 있습니다"';
+  const clearBtn=(hasAnyContent&&editable)?`<button data-act="clear-blocker" data-mid="${mid}" style="background:transparent;border:none;cursor:pointer;color:var(--text-soft);font-size:10.5px;padding:2px 6px;border-radius:5px;font-weight:600;text-decoration:underline;text-underline-offset:2px;" title="막힘과 도움 요청 모두 지우기">지우기</button>`:'';
   return `<div class="field"><div class="field-label"><span class="field-dot ${accent}"></span><span class="field-name ${accent}">막힘 / 도움 필요</span>${clearBtn}<button class="reality-toggle ${(e.helper_member_id||e.helper_name||e.support_type||e.support_detail)?'has-content':''}" style="margin-left:auto;" data-act="toggle-reality" data-key="${helperKey}">${helpOpen?'도움요청 ▴':'도움요청 ▾'}</button></div>
-    <textarea class="field-input blocker-input" rows="5" placeholder="현실적인 어려움과 도움이 필요한게 있나요?" data-field="standup" data-fieldname="blockers" data-mid="${mid}" data-date="${viewingDate}">${esc(e.blockers||'')}</textarea>
+    <textarea class="field-input blocker-input" rows="5" placeholder="현실적인 어려움과 도움이 필요한게 있나요?" data-field="standup" data-fieldname="blockers" data-mid="${mid}" data-date="${viewingDate}"${ro}${tip}>${esc(e.blockers||'')}</textarea>
     ${helpOpen?`<div class="reality-box" style="margin-top:6px;padding:8px 10px;">
       <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:6px;">
         <span style="font-size:10.5px;font-weight:700;color:var(--text-soft);">누구에게:</span>
-        <select class="rt-input" style="font-size:11.5px;padding:3px 7px;" data-field="helper-member" data-mid="${mid}">
+        <select class="rt-input" style="font-size:11.5px;padding:3px 7px;" data-field="helper-member" data-mid="${mid}"${dis}>
           <option value="">팀원 선택…</option>
           ${state.members.filter(x=>x.id!==mid).map(x=>`<option value="${x.id}" ${e.helper_member_id===x.id?'selected':''}>${esc(x.name)}</option>`).join('')}
         </select>
-        <input class="rt-input" style="font-size:11.5px;padding:3px 7px;flex:1;min-width:100px;" placeholder="또는 자유 입력 (예: 본부장님, 외부 자문)" data-field="helper-name" data-mid="${mid}" value="${esc(e.helper_name||'')}" />
+        <input class="rt-input" style="font-size:11.5px;padding:3px 7px;flex:1;min-width:100px;" placeholder="또는 자유 입력 (예: 본부장님, 외부 자문)" data-field="helper-name" data-mid="${mid}" value="${esc(e.helper_name||'')}"${ro}${tip} />
       </div>
       <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;margin-bottom:6px;">
         <span style="font-size:10.5px;font-weight:700;color:var(--text-soft);">유형:</span>
-        ${SUPPORT_TYPES.map(t=>`<button class="btn-mode" style="${e.support_type===t?'background:var(--primary-soft);color:var(--primary);font-weight:600;':''}padding:2px 8px;font-size:11px;" data-act="set-support-type" data-mid="${mid}" data-type="${esc(t)}">${esc(t)}</button>`).join('')}
+        ${SUPPORT_TYPES.map(t=>`<button class="btn-mode" style="${e.support_type===t?'background:var(--primary-soft);color:var(--primary);font-weight:600;':''}padding:2px 8px;font-size:11px;" data-act="set-support-type" data-mid="${mid}" data-type="${esc(t)}"${dis}${tip}>${esc(t)}</button>`).join('')}
       </div>
-      <textarea class="reality-input" rows="2" placeholder="구체적으로 어떤 도움이 필요한가요?" data-field="support-detail" data-mid="${mid}">${esc(e.support_detail||'')}</textarea>
+      <textarea class="reality-input" rows="2" placeholder="구체적으로 어떤 도움이 필요한가요?" data-field="support-detail" data-mid="${mid}"${ro}${tip}>${esc(e.support_detail||'')}</textarea>
     </div>`:''}</div>`;
 }
 function renderField(l,f,mid,v,ph,acc){const cls=acc?`accent-${acc}`:'';return `<div class="field"><div class="field-label"><span class="field-dot ${cls}"></span><span class="field-name ${cls}">${esc(l)}</span></div><textarea class="field-input" rows="4" placeholder="${esc(ph)}" data-field="standup" data-fieldname="${f}" data-mid="${mid}" data-date="${viewingDate}">${esc(v||'')}</textarea></div>`;}
 function activeRoutinesForDate(date){const dt=new Date(date+'T00:00:00');const dow=dt.getDay()===0?7:dt.getDay();const dom=dt.getDate();return state.routines.filter(r=>{if(r.active===false)return false;if(r.frequency==='daily')return true;if(r.frequency==='weekdays')return dow>=1&&dow<=5;if(r.frequency==='weekly'||r.frequency==='custom'){return(r.days_of_week||[]).includes(dow);}if(r.frequency==='monthly')return r.day_of_month===dom;return false;});}
-function renderRoutineCheck(r,log){const o=state.members.find(m=>m.id===r.owner_id);const c=!!log.completed;return `<div class="rt-item ${c?'done':''}"><button class="rt-check ${c?'checked':''}" data-act="toggle-routine" data-rid="${r.id}">${c?I.check:''}</button><div class="rt-info"><div class="rt-title">${esc(r.title)}</div><div class="rt-meta">${o?esc(o.name)+' · ':''}${freqText(r)}</div></div><input class="rt-note-input" placeholder="메모 (선택)" data-field="rt-note" data-rid="${r.id}" value="${esc(log.note||'')}" /></div>`;}
+function renderRoutineCheck(r,log){
+  const o=state.members.find(m=>m.id===r.owner_id);
+  const c=!!log.completed;
+  const editable=o?canEditAs(o.id):true;
+  const ro=editable?'':' readonly';
+  const dis=editable?'':' disabled';
+  const tip=editable?'':' title="담당자 본인만 수정할 수 있습니다"';
+  const ownerAvatar=o?`<span class="rt-owner-chip" style="display:inline-flex;align-items:center;gap:6px;background:#F4F4F5;border:1px solid var(--line);border-radius:999px;padding:3px 10px 3px 4px;font-size:11.5px;font-weight:700;color:var(--text);margin-left:8px;flex-shrink:0;white-space:nowrap;" title="담당자 ${esc(o.name)}"><span style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;background:${o.color||'#6241F5'};color:white;font-size:10.5px;font-weight:800;flex-shrink:0;">${esc(o.name.slice(0,1).toUpperCase())}</span><span>${esc(o.name)}</span></span>`:'';
+  return `<div class="rt-item ${c?'done':''}"><button class="rt-check ${c?'checked':''}" data-act="toggle-routine" data-rid="${r.id}"${dis}${tip}>${c?I.check:''}</button><div class="rt-info" style="min-width:0;"><div class="rt-title" style="display:flex;align-items:center;gap:6px;flex-wrap:nowrap;min-width:0;"><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(r.title)}</span>${ownerAvatar}</div><div class="rt-meta">${freqText(r)}</div></div><input class="rt-note-input" placeholder="메모 (선택)" data-field="rt-note" data-rid="${r.id}" value="${esc(log.note||'')}"${ro}${tip} /></div>`;
+}
 function freqText(r){if(r.frequency==='daily')return '매일';if(r.frequency==='weekdays')return '평일';if(r.frequency==='monthly')return `매월 ${r.day_of_month||1}일`;if(r.frequency==='weekly'||r.frequency==='custom'){const dn=['월','화','수','목','금','토','일'];return(r.days_of_week||[]).map(d=>dn[d-1]).join(',');}return '';}
 function collectDueThisWeek(){const items=[];state.objectives.forEach(o=>o.keyResults.forEach(kr=>{if(kr.dueDate&&(withinThisWeek(kr.dueDate)||isOverdue(kr.dueDate)))items.push({type:'kr',title:kr.title,dueDate:kr.dueDate});kr.initiatives.forEach(i=>{if(i.dueDate&&i.status!=='done'&&(withinThisWeek(i.dueDate)||isOverdue(i.dueDate)))items.push({type:'init',title:i.title,dueDate:i.dueDate,status:i.status});});}));return items.sort((a,b)=>String(a.dueDate).localeCompare(String(b.dueDate)));}
 
@@ -1718,24 +1768,31 @@ init();
     const tagBg=krInfo?'#EEEAFE':'#F4F4F5';
     const tagFg=krInfo?'#6241F5':'#737373';
     const tagBorder=krInfo?'#D9CFFB':'var(--line)';
-    const textStyle='flex:1;min-width:80px;padding:9px 11px;border:1px solid var(--line);border-radius:6px;background:#FAFAFA;outline:none;font-size:13px;line-height:1.55;font-family:inherit;color:var(--text);resize:none;overflow:hidden;min-height:38px;'+(task.d?'text-decoration:line-through;color:var(--text-soft);':'');
-    return '<div class="krl-task-row" data-tid="'+task.id+'" data-mid="'+mid+'" data-kind="'+kind+'" style="display:flex;align-items:flex-start;gap:8px;padding:6px 0;">'+
-      '<button class="rt-check '+(task.d?'checked':'')+'" style="width:20px;height:20px;border-width:2px;border-radius:5px;flex-shrink:0;margin-top:11px;" data-act="krl-toggle-task" data-mid="'+mid+'" data-kind="'+kind+'" data-tid="'+task.id+'" title="완료 체크">'+(task.d?'✓':'')+'</button>'+
-      '<textarea data-krl-field="task-text" data-krl-autogrow data-mid="'+mid+'" data-kind="'+kind+'" data-tid="'+task.id+'" rows="1" placeholder="할일 내용을 적어주세요" style="'+textStyle+'">'+escapeHtml(task.t||'')+'</textarea>'+
-      '<select data-krl-field="task-kr" data-mid="'+mid+'" data-kind="'+kind+'" data-tid="'+task.id+'" style="font-size:12px;padding:8px 10px;background:'+tagBg+';color:'+tagFg+';font-weight:700;border:1px solid '+tagBorder+';border-radius:6px;outline:none;max-width:220px;margin-top:7px;flex-shrink:0;cursor:pointer;font-family:inherit;" title="클릭하여 KR 선택">'+
+    const editable=(typeof canEditAs==='function')?canEditAs(mid):true;
+    const ro=editable?'':' readonly';
+    const dis=editable?'':' disabled';
+    const tip=editable?'':' title="본인이 작성한 항목만 수정할 수 있습니다"';
+    const textStyle='flex:1;min-width:80px;padding:11px 13px;border:1px solid var(--line);border-radius:6px;background:#FAFAFA;outline:none;font-size:13.5px;line-height:1.6;font-family:inherit;color:var(--text);resize:vertical;overflow:auto;min-height:72px;'+(task.d?'text-decoration:line-through;color:var(--text-soft);':'');
+    return '<div class="krl-task-row" data-tid="'+task.id+'" data-mid="'+mid+'" data-kind="'+kind+'" style="display:flex;align-items:flex-start;gap:8px;padding:8px 0;">'+
+      '<button class="rt-check '+(task.d?'checked':'')+'" style="width:20px;height:20px;border-width:2px;border-radius:5px;flex-shrink:0;margin-top:24px;" data-act="krl-toggle-task" data-mid="'+mid+'" data-kind="'+kind+'" data-tid="'+task.id+'"'+dis+tip+'>'+(task.d?'✓':'')+'</button>'+
+      '<textarea data-krl-field="task-text" data-krl-autogrow data-mid="'+mid+'" data-kind="'+kind+'" data-tid="'+task.id+'" rows="3" placeholder="할일 내용을 적어주세요 (여러 줄 가능)" style="'+textStyle+'"'+ro+tip+'>'+escapeHtml(task.t||'')+'</textarea>'+
+      '<select data-krl-field="task-kr" data-mid="'+mid+'" data-kind="'+kind+'" data-tid="'+task.id+'" style="font-size:12px;padding:8px 10px;background:'+tagBg+';color:'+tagFg+';font-weight:700;border:1px solid '+tagBorder+';border-radius:6px;outline:none;max-width:220px;margin-top:20px;flex-shrink:0;cursor:pointer;font-family:inherit;" title="클릭하여 KR 선택"'+dis+'>'+
       buildKROptions(task.k,allKR)+'</select>'+
-      '<button data-act="krl-del-task" data-mid="'+mid+'" data-kind="'+kind+'" data-tid="'+task.id+'" style="padding:6px 8px;margin-top:7px;background:none;border:1px solid transparent;border-radius:6px;cursor:pointer;color:var(--text-soft);font-size:14px;flex-shrink:0;line-height:1;" title="삭제">✕</button>'+
+      (editable?'<button data-act="krl-del-task" data-mid="'+mid+'" data-kind="'+kind+'" data-tid="'+task.id+'" style="padding:6px 8px;margin-top:20px;background:none;border:1px solid transparent;border-radius:6px;cursor:pointer;color:var(--text-soft);font-size:14px;flex-shrink:0;line-height:1;" title="삭제">✕</button>':'')+
       '</div>';
   }
   function renderTaskListBlock(mid,kind,label){
     const data=getMemberTasks(mid,kind);
     const legacy=data.legacy,tasks=data.tasks;
     const addLabel=(kind==='today'?'할일 추가':'기록 남기기');
+    const editable=(typeof canEditAs==='function')?canEditAs(mid):true;
+    const dis=editable?'':' disabled';
+    const tip=editable?'':' title="본인이 작성한 항목만 수정할 수 있습니다"';
     return '<div class="krl-block" data-krl-block="'+mid+':'+kind+'" style="background:white;border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin-top:8px;">'+
       '<div class="krl-block-head" data-krl-head="'+mid+':'+kind+'" style="font-size:12px;color:var(--text-soft);font-weight:600;margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">'+
         (tasks.length>0?'<span style="display:inline-flex;align-items:center;gap:6px;">'+escapeHtml(label)+'<span class="krl-count" style="font-size:11px;color:var(--text-soft);font-weight:600;">'+tasks.length+'건</span></span>':'<span></span>')+
         '<span class="krl-right" style="display:inline-flex;align-items:center;gap:6px;">'+
-          '<button data-act="krl-add-task" data-mid="'+mid+'" data-kind="'+kind+'" style="padding:4px 10px;font-size:11px;color:#6241F5;background:#EEEAFE;border:1px dashed #D9CFFB;border-radius:5px;cursor:pointer;font-weight:700;font-family:inherit;line-height:1.4;">＋ '+addLabel+'</button>'+
+          (editable?'<button data-act="krl-add-task" data-mid="'+mid+'" data-kind="'+kind+'" style="padding:4px 10px;font-size:11px;color:#6241F5;background:#EEEAFE;border:1px dashed #D9CFFB;border-radius:5px;cursor:pointer;font-weight:700;font-family:inherit;line-height:1.4;"'+dis+tip+'>＋ '+addLabel+'</button>':'')+
         '</span>'+
       '</div>'+
       '<div class="krl-tasks" data-krl-tasks="'+mid+':'+kind+'">'+tasks.map(t=>renderTaskRowHtml(t,mid,kind)).join('')+'</div>'+
