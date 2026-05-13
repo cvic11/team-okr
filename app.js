@@ -882,10 +882,9 @@ function renderToday(){
 
 // v12 — 발표 모드 (사람별 전환, 한 화면 fit)
 function renderTodayPresent(date,isToday,standup,todayRoutines,rl){
-  // presentMid 유효성 검증
+  // presentMid 유효성 검증 — 메인 화면 최하단 팀원부터 (members 배열 마지막)
   if(!presentMid||!state.members.find(m=>m.id===presentMid)){
-    const self=selfMember();
-    presentMid=self?self.id:state.members[0].id;
+    presentMid=state.members[state.members.length-1].id;
   }
   const curIdx=state.members.findIndex(m=>m.id===presentMid);
   const cur=state.members[curIdx];
@@ -1478,7 +1477,7 @@ document.addEventListener('click',async e=>{
   if(a==='add-team'){const n=prompt('새 팀 이름','새 팀');if(!n)return;const id=uid();const t={id,name:n,quarter:currentTeam()?.quarter||'2026 Q2',sort_order:state.teams.length};state.teams.push(t);state.currentTeamId=id;localStorage.setItem(TEAM_KEY,id);initialized=false;render();await sb.from('teams').insert(t);await loadTeamData(id);initialized=true;render();return;}
   if(a==='del-team'){if(state.teams.length<=1){showToast('마지막 팀은 삭제 불가',true);return;}const t=currentTeam();if(!t)return;if(!confirm(`팀 "${t.name}"과 모든 데이터를 삭제할까요?`))return;const oid=t.id;state.teams=state.teams.filter(x=>x.id!==oid);state.currentTeamId=state.teams[0].id;localStorage.setItem(TEAM_KEY,state.currentTeamId);initialized=false;render();await sb.from('teams').delete().eq('id',oid);await loadTeamData(state.currentTeamId);initialized=true;render();return;}
   if(a==='view'){currentView=btn.dataset.view;render();return;}
-  if(a==='present'){presentMode=!presentMode;if(presentMode){const self=selfMember();presentMid=presentMid||(self?self.id:(state.members[0]?.id||null));}render();return;}
+  if(a==='present'){presentMode=!presentMode;if(presentMode){presentMid=state.members.length>0?state.members[state.members.length-1].id:null;}render();return;}
   if(a==='present-set'){presentMid=btn.dataset.mid;render();return;}
   if(a==='present-prev'){if(state.members.length===0)return;const i=state.members.findIndex(m=>m.id===presentMid);const ni=i>0?i-1:state.members.length-1;presentMid=state.members[ni].id;render();return;}
   if(a==='present-next'){if(state.members.length===0)return;const i=state.members.findIndex(m=>m.id===presentMid);const ni=i<state.members.length-1?i+1:0;presentMid=state.members[ni].id;render();return;}
