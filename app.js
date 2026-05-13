@@ -137,7 +137,7 @@ mark{background:#FFF59D;color:var(--text);padding:0 2px;border-radius:3px}
   .member-grid{grid-template-columns:1fr;gap:14px}
   .member-card{
     display:grid;
-    grid-template-columns:repeat(3,minmax(0,1fr));
+    grid-template-columns:1.35fr 1.35fr 0.85fr;
     grid-template-rows:auto auto;
     column-gap:18px;
     row-gap:14px;
