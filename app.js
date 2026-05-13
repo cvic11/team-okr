@@ -214,6 +214,11 @@ html.dark .btn-ghost{background:#222631}
 html.dark .member-row{background:#191B23}
 html.dark .team-menu,html.dark .team-menu-item:hover{background:#1A1D27}
 html.dark .kr-menu-btn.open{background:#2A2245;color:#A89BF5;border-color:#3A2F5A}
+/* v13 — 브랜드 클릭 가능 시각 표시 (메인 홈으로 이동) */
+.brand{cursor:pointer;border-radius:8px;transition:background .15s}
+.brand:hover{background:rgba(98,65,245,.06)}
+html.dark .brand:hover{background:rgba(168,155,245,.10)}
+.brand-title{cursor:pointer}
 /* v13 — 입력 완료 시 시각 표시 — 따뜻한 노란/주황 톤 (#FFF8DA 베이스) */
 .field-input:not(:placeholder-shown), textarea[data-krl-field="task-text"]:not(:placeholder-shown){background:#FFF8DA !important;border-color:#F5C76A !important;color:#3D2F00 !important;box-shadow:inset 0 0 0 1px rgba(245,184,42,.10) !important}
 .field-input:not(:placeholder-shown):focus, textarea[data-krl-field="task-text"]:not(:placeholder-shown):focus{background:#FFFDF2 !important;border-color:var(--primary) !important;box-shadow:0 0 0 3px var(--primary-soft) !important;color:var(--text) !important}
@@ -1446,7 +1451,7 @@ document.addEventListener('click',async e=>{
   const a=btn.dataset.act;
   if(a==='setup-save'){const u=document.getElementById('setup-url').value.trim();const k=document.getElementById('setup-key').value.trim();const m=document.getElementById('setup-msg');if(!u||!k){m.textContent='두 값 모두 입력';return;}m.textContent='연결 중…';const r=await tryConnect(u,k);if(!r.ok){m.textContent='실패: '+r.msg;return;}saveConfig(u,k);location.reload();return;}
   if(a==='reset-config'){if(!confirm('연결 정보를 초기화할까요?'))return;clearConfig();location.reload();return;}
-  if(a==='goto-home'){currentView='today';render();return;}
+  if(a==='goto-home'){currentView='today';presentMode=false;viewingDate=todayKey();render();window.scrollTo({top:0,behavior:'smooth'});return;}
   if(a==='my-init-filter'){myInitFilter=btn.dataset.filter;render();return;}
   if(a==='clear-search'){okrSearchQuery='';render();return;}
   if(a==='clear-refl-search'){reflSearchQuery='';render();return;}
