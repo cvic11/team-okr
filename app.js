@@ -742,6 +742,33 @@ async function loadStandupRange(startOrDays,end){
   const{data}=await sb.from('standup_entries').select('*').eq('team_id',tid).gte('date',start).lte('date',end);
   return data||[];
 }
+// v14 — "최근 한 일" 자동 집계: 과거 N일 스탠드업 자동 로드
+let _recentStandupsLoadedFor=null;
+async function ensureRecentStandupsLoaded(viewing,days){
+  if(!sb||!state.currentTeamId)return;
+  const key=`${state.currentTeamId}-${viewing}-${days||7}`;
+  if(_recentStandupsLoadedFor===key)return;
+  _recentStandupsLoadedFor=key;
+  const tid=state.currentTeamId;
+  const sd=new Date(viewing);sd.setDate(sd.getDate()-(days||7));
+  const start=`${sd.getFullYear()}-${String(sd.getMonth()+1).padStart(2,'0')}-${String(sd.getDate()).padStart(2,'0')}`;
+  try{
+    const{data}=await sb.from('standup_entries').select('*').eq('team_id',tid).gte('date',start).lt('date',viewing);
+    (data||[]).forEach(en=>{
+      const d=en.date;
+      if(!state.standups[d])state.standups[d]={headline:'',entries:{}};
+      if(!state.standups[d].entries[en.member_id])state.standups[d].entries[en.member_id]={yesterday:en.yesterday||'',today:en.today||'',blockers:en.blockers||'',helper_member_id:en.helper_member_id||'',helper_name:en.helper_name||'',support_type:en.support_type||'',support_detail:en.support_detail||''};
+    });
+    if(currentView==='today')render();
+  }catch(e){console.warn('[recent] load fail',e);}
+}
+function formatRecentDateLabel(d){
+  const dow=['일','월','화','수','목','금','토'][new Date(d+'T00:00:00').getDay()];
+  const t=todayKey();
+  if(d===shiftDate(t,-1))return`어제 (${d.slice(5).replace('-','/')} ${dow})`;
+  if(d===shiftDate(t,-2))return`그제 (${d.slice(5).replace('-','/')} ${dow})`;
+  return`${d.slice(5).replace('-','/')} ${dow}`;
+}
 async function loadIDLRange(start,end){
   const{data}=await sb.from('initiative_daily_logs').select('*').gte('date',start).lte('date',end);
   return data||[];
@@ -862,6 +889,8 @@ function renderHeader(){
 
 function renderToday(){
   const date=viewingDate;const isToday=date===todayKey();
+  // v14 — 최근 7일 스탠드업 백그라운드 로드 (비동기)
+  try{ensureRecentStandupsLoaded(date,7);}catch(e){}
   const standup=state.standups[date]||{headline:'',entries:{}};
   const allKR=[];state.objectives.forEach(o=>o.keyResults.forEach(k=>allKR.push({...k,objId:o.id})));
   const overall=allKR.length?Math.round(allKR.reduce((s,k)=>s+pct(k.current,k.target),0)/allKR.length):0;
@@ -1957,7 +1986,45 @@ init();
         : '';
       const hasAny=yDone.length>0;
       const clearBtn=hasAny?`<button data-act="krl-clear-all-yesterday" data-mid="${mid}" style="background:transparent;border:none;cursor:pointer;color:var(--text-soft);font-size:10.5px;padding:2px 6px;border-radius:5px;font-weight:600;text-decoration:underline;text-underline-offset:2px;" title="어제 체크된 Initiative 해제 + 추가 작업 모두 삭제">모두 비우기</button>`:'';
-      return '<div class="field"><div class="field-label"><span class="field-dot"></span><span class="field-name">최근 한 일</span>'+(hasAny?'<span style="font-size:10.5px;color:var(--text-soft);margin-left:auto;font-weight:600;">최근 완료 작업</span>':'')+clearBtn+'</div>'+summaryHtml+renderTaskListBlock(mid,'yesterday','추가 작업')+'</div>';
+      // v14 — 과거 7일 "오늘 할 일" 자동 집계 (실제 최근 작성한 내용)
+      let recentHtml='';
+      try{
+        const st=getState();const viewing=getViewingDate();
+        if(st&&viewing){
+          const allKR=collectAllKR();
+          const krMap={};allKR.forEach(k=>{krMap[k.id]=k;});
+          const recent=[];
+          for(let i=1;i<=7;i++){
+            const d=window.shiftDate?window.shiftDate(viewing,-i):(()=>{const x=new Date(viewing);x.setDate(x.getDate()-i);return `${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,'0')}-${String(x.getDate()).padStart(2,'0')}`;})();
+            const e=st.standups&&st.standups[d]&&st.standups[d].entries&&st.standups[d].entries[mid];
+            if(!e)continue;
+            const parsed=parseTasksField(e.today||'');
+            const hasTask=parsed.tasks&&parsed.tasks.length>0;
+            const hasLegacy=parsed.legacy&&parsed.legacy.trim();
+            if(hasTask||hasLegacy)recent.push({date:d,tasks:parsed.tasks||[],legacy:parsed.legacy||''});
+          }
+          if(recent.length>0){
+            const fmtDate=window.formatRecentDateLabel||(d=>d);
+            recentHtml='<div class="krl-recent" style="margin-bottom:8px;background:#FFFDF2;border:1px solid #F5C76A;border-radius:8px;padding:10px 12px;">'+
+              '<div style="font-size:11px;color:#946800;font-weight:700;margin-bottom:8px;letter-spacing:.3px;">📅 최근 7일 작성 내역 (자동 집계)</div>'+
+              recent.map(r=>{
+                const dateLabel=fmtDate(r.date);
+                const tasksHtml=r.tasks.map(t=>{
+                  const krInfo=t.k?krMap[t.k]:null;
+                  const krChip=krInfo?'<span style="font-size:10px;background:#EEEAFE;color:#6241F5;padding:1px 7px;border-radius:999px;font-weight:700;margin-right:5px;white-space:nowrap;">'+esc(krInfo.title.slice(0,16))+(krInfo.title.length>16?'…':'')+'</span>':'';
+                  return '<div style="font-size:12.5px;color:'+(t.d?'var(--text-soft)':'var(--text)')+';line-height:1.55;padding:2px 0;'+(t.d?'text-decoration:line-through;':'')+'">'+(t.d?'✓ ':'• ')+krChip+esc((t.t||'').slice(0,300))+'</div>';
+                }).join('');
+                const legacyHtml=r.legacy&&r.legacy.trim()?'<div style="font-size:12.5px;color:var(--text);line-height:1.55;padding:2px 0;white-space:pre-wrap;">'+esc(r.legacy)+'</div>':'';
+                return '<div style="margin-bottom:8px;padding-bottom:6px;border-bottom:1px dashed #F5E0A8;">'+
+                  '<div style="font-size:11px;color:#946800;font-weight:700;margin-bottom:3px;">'+dateLabel+'</div>'+
+                  tasksHtml+legacyHtml+
+                '</div>';
+              }).join('')+
+            '</div>';
+          }
+        }
+      }catch(err){console.warn('[recent] render fail',err);}
+      return '<div class="field"><div class="field-label"><span class="field-dot"></span><span class="field-name">최근 한 일</span>'+(hasAny?'<span style="font-size:10.5px;color:var(--text-soft);margin-left:auto;font-weight:600;">최근 완료 작업</span>':'')+clearBtn+'</div>'+recentHtml+summaryHtml+renderTaskListBlock(mid,'yesterday','추가 작업')+'</div>';
     };
     const _origRenderToday=window.renderToday;
     window.renderToday=function(){return _origRenderToday.apply(this,arguments);}; // v10 — 분포 차트 호출 제거
