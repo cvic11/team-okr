@@ -1094,9 +1094,9 @@ function renderBlockerSection(mid,e){
   const hasAnyContent=has||!!(e.helper_member_id||e.helper_name||e.support_type||e.support_detail);
   const editable=canEditAs(mid);const ro=editable?'':' readonly';const dis=editable?'':' disabled';const tip=editable?'':' title="본인이 작성한 항목만 수정할 수 있습니다"';
   const clearBtn=(hasAnyContent&&editable)?`<button data-act="clear-blocker" data-mid="${mid}" style="background:transparent;border:none;cursor:pointer;color:var(--text-soft);font-size:10.5px;padding:2px 6px;border-radius:5px;font-weight:600;text-decoration:underline;text-underline-offset:2px;" title="막힘과 도움 요청 모두 지우기">지우기</button>`:'';
-  return `<div class="field"><div class="field-label"><span class="field-dot ${accent}"></span><span class="field-name ${accent}">막힘 / 도움 필요</span>${clearBtn}<button class="reality-toggle ${(e.helper_member_id||e.helper_name||e.support_type||e.support_detail)?'has-content':''}" style="margin-left:auto;" data-act="toggle-reality" data-key="${helperKey}">${helpOpen?'도움요청 ▴':'도움요청 ▾'}</button></div>
+  return `<div class="field"><div class="field-label"><span class="field-dot ${accent}"></span><span class="field-name ${accent}">막힘 / 도움 필요</span>${clearBtn}<button class="reality-toggle ${(e.helper_member_id||e.helper_name||e.support_type||e.support_detail)?'has-content':''}" style="margin-left:auto;" data-act="toggle-reality" data-key="${helperKey}" data-reality-btn="${helperKey}">${helpOpen?'도움요청 ▴':'도움요청 ▾'}</button></div>
     <textarea class="field-input blocker-input" rows="5" data-autogrow placeholder="현실적인 어려움과 도움이 필요한게 있나요?" data-field="standup" data-fieldname="blockers" data-mid="${mid}" data-date="${viewingDate}"${ro}${tip}>${esc(e.blockers||'')}</textarea>
-    ${helpOpen?`<div class="reality-box" style="margin-top:6px;padding:8px 10px;">
+    <div class="reality-box" data-reality-box="${helperKey}" style="margin-top:6px;padding:8px 10px;display:${helpOpen?'block':'none'};">
       <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:6px;">
         <span style="font-size:10.5px;font-weight:700;color:var(--text-soft);">누구에게:</span>
         <select class="rt-input" style="font-size:11.5px;padding:3px 7px;" data-field="helper-member" data-mid="${mid}"${dis}>
@@ -1110,7 +1110,7 @@ function renderBlockerSection(mid,e){
         ${SUPPORT_TYPES.map(t=>`<button class="btn-mode" style="${e.support_type===t?'background:var(--primary-soft);color:var(--primary);font-weight:600;':''}padding:2px 8px;font-size:11px;" data-act="set-support-type" data-mid="${mid}" data-type="${esc(t)}"${dis}${tip}>${esc(t)}</button>`).join('')}
       </div>
       <textarea class="reality-input" rows="2" placeholder="구체적으로 어떤 도움이 필요한가요?" data-field="support-detail" data-mid="${mid}"${ro}${tip}>${esc(e.support_detail||'')}</textarea>
-    </div>`:''}</div>`;
+    </div></div>`;
 }
 function renderField(l,f,mid,v,ph,acc){const cls=acc?`accent-${acc}`:'';return `<div class="field"><div class="field-label"><span class="field-dot ${cls}"></span><span class="field-name ${cls}">${esc(l)}</span></div><textarea class="field-input" rows="4" placeholder="${esc(ph)}" data-field="standup" data-fieldname="${f}" data-mid="${mid}" data-date="${viewingDate}">${esc(v||'')}</textarea></div>`;}
 function activeRoutinesForDate(date){const dt=new Date(date+'T00:00:00');const dow=dt.getDay()===0?7:dt.getDay();const dom=dt.getDate();return state.routines.filter(r=>{if(r.active===false)return false;if(r.frequency==='daily')return true;if(r.frequency==='weekdays')return dow>=1&&dow<=5;if(r.frequency==='weekly'||r.frequency==='custom'){return(r.days_of_week||[]).includes(dow);}if(r.frequency==='monthly')return r.day_of_month===dom;return false;});}
@@ -1519,7 +1519,20 @@ document.addEventListener('click',async e=>{
   if(a==='toggle-obj'){const oid=btn.dataset.oid;expanded.has(oid)?expanded.delete(oid):expanded.add(oid);render();return;}
   if(a==='toggle-kr'){const k=btn.dataset.krid;krExpanded.has(k)?krExpanded.delete(k):krExpanded.add(k);render();return;}
   if(a==='toggle-kr-menu'){const k=btn.dataset.krid;krMenuOpen.has(k)?krMenuOpen.delete(k):krMenuOpen.add(k);render();return;}
-  if(a==='toggle-reality'){const k=btn.dataset.key;realityOpen.has(k)?realityOpen.delete(k):realityOpen.add(k);render();return;}
+  if(a==='toggle-reality'){
+    const k=btn.dataset.key;
+    const wasOpen=realityOpen.has(k);
+    wasOpen?realityOpen.delete(k):realityOpen.add(k);
+    // v14 — helper:* (도움요청) 토글은 로컬 DOM만 갱신 → 깜빡임 방지
+    if(k&&k.startsWith('helper:')){
+      const box=document.querySelector(`[data-reality-box="${k}"]`);
+      const tBtn=document.querySelector(`[data-reality-btn="${k}"]`);
+      if(box)box.style.display=wasOpen?'none':'block';
+      if(tBtn)tBtn.textContent=wasOpen?'도움요청 ▾':'도움요청 ▴';
+      return;
+    }
+    render();return;
+  }
   if(a==='cycle-conf'){const et=btn.dataset.etype,eid=btn.dataset.eid;const order=['high','mid','low'];let nx=null,old=null,saveFn=null,label='';
     if(et==='objective'){const o=state.objectives.find(x=>x.id===eid);if(!o)return;nx=order[(order.indexOf(o.confidence||'mid')+1)%3];old=o.confidence;o.confidence=nx;saveObjective(o);label=o.title;}
     else if(et==='kr'){let oid=null,kr=null;state.objectives.forEach(o=>o.keyResults.forEach(k=>{if(k.id===eid){oid=o.id;kr=k;}}));if(!kr)return;nx=order[(order.indexOf(kr.confidence||'mid')+1)%3];old=kr.confidence;kr.confidence=nx;saveKR(oid,kr);label=kr.title;}
@@ -1550,7 +1563,26 @@ document.addEventListener('click',async e=>{
     checks.forEach(el=>{if(el.tagName==='BUTTON'){el.classList.toggle('checked',!cur);el.innerHTML=!cur?I.check:'';}else if(el.tagName==='SPAN'){el.style.textDecoration=!cur?'line-through':'';el.style.color=!cur?'var(--text-soft)':'';}});
     return;
   }
-  if(a==='set-support-type'){const mid=btn.dataset.mid;const type=btn.dataset.type;const e=ensureStandup(viewingDate);if(!e.entries[mid])e.entries[mid]={yesterday:'',today:'',blockers:'',helper_member_id:'',helper_name:'',support_type:'',support_detail:''};const old=e.entries[mid].support_type;e.entries[mid].support_type=(old===type)?'':type;saveEntry(viewingDate,mid,'support_type',e.entries[mid].support_type);render();return;}
+  if(a==='set-support-type'){
+    const mid=btn.dataset.mid;const type=btn.dataset.type;
+    const ensure=ensureStandup(viewingDate);
+    if(!ensure.entries[mid])ensure.entries[mid]={yesterday:'',today:'',blockers:'',helper_member_id:'',helper_name:'',support_type:'',support_detail:''};
+    const old=ensure.entries[mid].support_type;
+    const next=(old===type)?'':type;
+    ensure.entries[mid].support_type=next;
+    saveEntry(viewingDate,mid,'support_type',next);
+    // v14 — 칩만 로컬 갱신 → 전체 render() 회피로 깜빡임 방지
+    const grp=btn.parentElement;
+    if(grp){
+      grp.querySelectorAll('[data-act="set-support-type"][data-mid="'+mid+'"]').forEach(b=>{
+        const isActive=b.dataset.type===next;
+        b.style.background=isActive?'var(--primary-soft)':'';
+        b.style.color=isActive?'var(--primary)':'';
+        b.style.fontWeight=isActive?'600':'';
+      });
+    }
+    return;
+  }
   if(a==='clear-blocker'){
     const mid=btn.dataset.mid;
     if(!confirm('막힘과 도움 요청을 모두 지울까요?'))return;
