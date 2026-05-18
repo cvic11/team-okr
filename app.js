@@ -862,6 +862,7 @@ function render(){
   else if(currentView==='okr')html+=renderOKR();
   else if(currentView==='routines')html+=renderRoutinesView();
   else if(currentView==='eval')html+=renderEval();
+  else if(currentView==='wbs')html+=renderWBS();
   else html+=renderManage();
   html+='</main>';
   const t=currentTeam();
@@ -884,7 +885,7 @@ function render(){
 function renderHeader(){
   const t=currentTeam();const ini=teamInitial(t?.name);const col=teamColor(t);
   const tm=state.teams.map(x=>`<div class="team-menu-item ${x.id===state.currentTeamId?'active':''}" data-act="switch-team" data-tid="${x.id}"><span style="width:14px;height:14px;border-radius:4px;background:${teamColor(x)};display:inline-block;"></span><span style="flex:1;">${esc(x.name)}</span><span style="font-size:11px;color:var(--text-soft);">${esc(x.quarter)}</span></div>`).join('');
-  return `<header class="app-header"><div class="hdr-inner"><div style="display:flex;align-items:center;gap:8px;position:relative;"><div class="brand" data-act="goto-home"><div class="brand-mark" style="background:${col};">${esc(ini)}</div><div class="brand-meta"><div class="brand-title">${esc(t?t.name:'팀')} OKR <button class="team-switch" data-act="toggle-team-menu">${state.teams.length>1?'전환 ▾':'팀 ▾'}</button></div><div class="brand-sub">${esc(t?t.quarter:'')} · 일일 스프린트</div></div></div><div class="team-menu" id="team-menu">${tm}<div class="team-menu-divider"></div><div class="team-menu-add" data-act="add-team">${I.plus} 새 팀 추가</div></div></div><nav class="tabs"><span id="conn-dot" class="conn-dot ${connStatus}">${connStatus==='online'?'실시간 연결됨':connStatus==='connecting'?'연결 중':'오프라인'}</span><button class="btn-mode" data-act="open-self-picker" title="본인 변경" style="font-size:11px;">${selfMember()?'👤 '+esc(selfMember().name):isObserver()?'관찰자':'본인 선택'}</button>${selfMember()?renderHelpBell():''}<span class="tab-divider"></span><button class="tab ${currentView==='today'?'active':''}" data-act="view" data-view="today">${I.cal} 오늘</button><button class="tab ${currentView==='dashboard'?'active':''}" data-act="view" data-view="dashboard">📊 대시보드</button><button class="tab ${currentView==='okr'?'active':''}" data-act="view" data-view="okr">${I.target} OKR</button><button class="tab ${currentView==='routines'?'active':''}" data-act="view" data-view="routines">${I.loop} 루틴</button><button class="tab ${currentView==='eval'?'active':''}" data-act="view" data-view="eval">${I.star} 회고</button><button class="tab ${currentView==='manage'?'active':''}" data-act="view" data-view="manage">${I.cog} 관리</button><span class="tab-divider"></span><button class="btn-mode" data-act="present">${presentMode?I.collapse:I.expand} ${presentMode?'일반':'발표'}</button><button class="btn-mode" data-act="toggle-dark" title="다크 모드">${isDark()?'☀️':'🌙'}</button></nav></div></header>`;
+  return `<header class="app-header"><div class="hdr-inner"><div style="display:flex;align-items:center;gap:8px;position:relative;"><div class="brand" data-act="goto-home"><div class="brand-mark" style="background:${col};">${esc(ini)}</div><div class="brand-meta"><div class="brand-title">${esc(t?t.name:'팀')} OKR <button class="team-switch" data-act="toggle-team-menu">${state.teams.length>1?'전환 ▾':'팀 ▾'}</button></div><div class="brand-sub">${esc(t?t.quarter:'')} · 일일 스프린트</div></div></div><div class="team-menu" id="team-menu">${tm}<div class="team-menu-divider"></div><div class="team-menu-add" data-act="add-team">${I.plus} 새 팀 추가</div></div></div><nav class="tabs"><span id="conn-dot" class="conn-dot ${connStatus}">${connStatus==='online'?'실시간 연결됨':connStatus==='connecting'?'연결 중':'오프라인'}</span><button class="btn-mode" data-act="open-self-picker" title="본인 변경" style="font-size:11px;">${selfMember()?'👤 '+esc(selfMember().name):isObserver()?'관찰자':'본인 선택'}</button>${selfMember()?renderHelpBell():''}<span class="tab-divider"></span><button class="tab ${currentView==='today'?'active':''}" data-act="view" data-view="today">${I.cal} 오늘</button><button class="tab ${currentView==='dashboard'?'active':''}" data-act="view" data-view="dashboard">📊 대시보드</button><button class="tab ${currentView==='okr'?'active':''}" data-act="view" data-view="okr">${I.target} OKR</button><button class="tab ${currentView==='wbs'?'active':''}" data-act="view" data-view="wbs">🗓️ WBS</button><button class="tab ${currentView==='routines'?'active':''}" data-act="view" data-view="routines">${I.loop} 루틴</button><button class="tab ${currentView==='eval'?'active':''}" data-act="view" data-view="eval">${I.star} 회고</button><button class="tab ${currentView==='manage'?'active':''}" data-act="view" data-view="manage">${I.cog} 관리</button><span class="tab-divider"></span><button class="btn-mode" data-act="present">${presentMode?I.collapse:I.expand} ${presentMode?'일반':'발표'}</button><button class="btn-mode" data-act="toggle-dark" title="다크 모드">${isDark()?'☀️':'🌙'}</button></nav></div></header>`;
 }
 
 function renderToday(){
@@ -1321,6 +1322,158 @@ function renderPerfCard(m){
   return `<div class="perf-card"><div class="perf-head"><div class="avatar" style="background:${m.color};">${esc(m.name.slice(0,1).toUpperCase())}</div><div><div class="perf-name">${esc(m.name)}</div><div class="perf-role">${esc(m.role||'')}</div></div></div><div class="perf-stats"><div class="perf-stat"><div class="perf-stat-label">담당 KR</div><div class="perf-stat-value" style="color:${progressColor(a.krAvg)};">${a.krs}<span style="font-size:12px;color:var(--text-soft);font-weight:500;">개 · ${a.krAvg}%</span></div></div><div class="perf-stat"><div class="perf-stat-label">이니셔티브</div><div class="perf-stat-value">${a.initsDone}<span style="font-size:12px;color:var(--text-soft);font-weight:500;">/${a.inits} 완료</span></div></div></div><div class="perf-meta">담당 Objective: ${a.okrs}개 (평균 ${a.okrAvg}%) · 막힌 Init: ${a.initsBlocked}건</div><div class="perf-actions"><button class="btn btn-soft" data-act="open-reflection" data-etype="member" data-eid="${m.id}" data-period="mid">중간 회고 ${mid?'✓':''}</button><button class="btn btn-primary" data-act="open-reflection" data-etype="member" data-eid="${m.id}" data-period="final">최종 회고 ${fin?'✓':''}</button></div></div>`;
 }
 
+// ============================================================
+// v15 — WBS / 간트 차트 탭
+// ============================================================
+function parseQuarterRange(qStr){
+  const t=todayKey();
+  if(!qStr)return{start:shiftDate(t,-45),end:shiftDate(t,45)};
+  const m=String(qStr).match(/(\d{4})\s*Q\s*([1-4])/i);
+  if(!m)return{start:shiftDate(t,-45),end:shiftDate(t,45)};
+  const year=parseInt(m[1]),q=parseInt(m[2]);
+  const sm=(q-1)*3+1,em=sm+2;
+  const start=`${year}-${String(sm).padStart(2,'0')}-01`;
+  const lastDay=new Date(year,em,0).getDate();
+  const end=`${year}-${String(em).padStart(2,'0')}-${String(lastDay).padStart(2,'0')}`;
+  return{start,end};
+}
+function daysBetween(a,b){return Math.round((new Date(b+'T00:00:00')-new Date(a+'T00:00:00'))/86400000);}
+function renderWBS(){
+  const t=currentTeam();
+  const range=parseQuarterRange(t?.quarter);
+  const startD=range.start,endD=range.end;
+  const totalDays=daysBetween(startD,endD)+1;
+  const todayD=todayKey();
+  const todayOffset=Math.max(0,Math.min(totalDays,daysBetween(startD,todayD)));
+  // px per day — 화면 폭에 맞춰 자동
+  const pxPerDay=10;
+  const timelineW=totalDays*pxPerDay;
+
+  // 월/주 헤더 빌드
+  let monthHeader='',weekHeader='';
+  const startDate=new Date(startD+'T00:00:00');
+  // 월 헤더 — 각 달의 시작일에 라벨
+  const months={};
+  for(let i=0;i<totalDays;i++){
+    const d=new Date(startDate);d.setDate(d.getDate()+i);
+    const key=`${d.getFullYear()}-${d.getMonth()+1}`;
+    if(!months[key])months[key]={offset:i,label:`${d.getMonth()+1}월`,year:d.getFullYear()};
+    months[key].width=(i-months[key].offset+1);
+  }
+  Object.values(months).forEach(m=>{
+    monthHeader+=`<div style="position:absolute;left:${m.offset*pxPerDay}px;width:${m.width*pxPerDay}px;top:0;height:28px;border-right:1px solid #E5E5E8;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:var(--text);background:#F4F4F5;">${m.year}년 ${m.label}</div>`;
+  });
+  // 주 헤더 — 매주 월요일 표시
+  for(let i=0;i<totalDays;i++){
+    const d=new Date(startDate);d.setDate(d.getDate()+i);
+    const dow=d.getDay();
+    if(dow===1||i===0){
+      const dd=`${d.getMonth()+1}/${d.getDate()}`;
+      weekHeader+=`<div style="position:absolute;left:${i*pxPerDay}px;top:28px;height:24px;font-size:10px;color:var(--text-soft);padding-left:3px;border-left:1px solid #EDEDEE;width:${pxPerDay*7}px;display:flex;align-items:center;">${dd}</div>`;
+    }
+    // 주말 음영
+    if(dow===0||dow===6){
+      weekHeader+=`<div style="position:absolute;left:${i*pxPerDay}px;top:52px;width:${pxPerDay}px;bottom:0;background:rgba(0,0,0,.02);pointer-events:none;z-index:0;"></div>`;
+    }
+  }
+
+  // 데이터 행 빌드
+  const rows=[];
+  const expandSet=window._wbsCollapsed||(window._wbsCollapsed=new Set());
+  state.objectives.forEach(o=>{
+    const objKRs=o.keyResults||[];
+    const krDues=objKRs.map(k=>k.dueDate).filter(Boolean).sort();
+    const objEnd=krDues.length>0?krDues[krDues.length-1]:endD;
+    const objAvg=objKRs.length?Math.round(objKRs.reduce((s,k)=>s+pct(k.current,k.target),0)/objKRs.length):0;
+    rows.push({type:'O',id:o.id,label:o.title||'(Objective)',level:0,start:startD,end:objEnd,owner:o.ownerId,progress:objAvg,confidence:o.confidence});
+    if(expandSet.has('O:'+o.id))return; // 접힘
+    objKRs.forEach(k=>{
+      const krP=pct(k.current,k.target);
+      rows.push({type:'KR',id:k.id,label:k.title||'(KR)',level:1,start:startD,end:k.dueDate||endD,owner:k.ownerId,progress:krP,confidence:k.confidence,objId:o.id});
+      if(expandSet.has('KR:'+k.id))return;
+      (k.initiatives||[]).forEach(i=>{
+        rows.push({type:'I',id:i.id,label:i.title||'(Initiative)',level:2,start:startD,end:i.dueDate||endD,owner:i.ownerId,status:i.status||'todo',objId:o.id,krId:k.id,confidence:i.confidence});
+      });
+    });
+  });
+
+  // 좌측 라벨 + 우측 바 한 줄씩 그리기
+  let labelsHtml='',barsHtml='';
+  const ROW_H=34;
+  rows.forEach((r,idx)=>{
+    const owner=state.members.find(m=>m.id===r.owner);
+    const ownerChip=owner?`<span class="kr-strip-owner" style="font-size:10px;padding:1px 6px;">${esc(owner.name)}</span>`:'';
+    const lvIndent=r.level*16+8;
+    let icon='',badge='';
+    if(r.type==='O'){icon='🎯';badge=`<span style="background:#FFE9A8;color:#946800;font-size:9px;padding:1px 6px;border-radius:999px;font-weight:700;">O</span>`;}
+    else if(r.type==='KR'){icon='📌';badge=`<span style="background:#EEEAFE;color:#6241F5;font-size:9px;padding:1px 6px;border-radius:999px;font-weight:700;">KR</span>`;}
+    else{icon='⚡';badge=`<span style="background:#D9CFFB;color:#3A2670;font-size:9px;padding:1px 6px;border-radius:999px;font-weight:700;">Init</span>`;}
+    const canCollapse=r.type==='O'||r.type==='KR';
+    const collapseKey=r.type+':'+r.id;
+    const isCollapsed=expandSet.has(collapseKey);
+    const toggleBtn=canCollapse?`<button class="btn-icon" data-act="wbs-toggle" data-key="${collapseKey}" style="padding:0 4px;font-size:10px;flex-shrink:0;">${isCollapsed?'▶':'▼'}</button>`:`<span style="display:inline-block;width:14px;"></span>`;
+    labelsHtml+=`<div class="wbs-label-row" style="height:${ROW_H}px;display:flex;align-items:center;gap:6px;padding:0 10px 0 ${lvIndent}px;border-bottom:1px solid #F4F4F5;font-size:${r.type==='O'?'13':r.type==='KR'?'12.5':'12'}px;${r.type==='O'?'background:#FFFDF2;font-weight:700;':r.type==='KR'?'font-weight:600;':''}">${toggleBtn}<span style="flex-shrink:0;">${icon}</span>${badge}<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${esc(r.label)}">${esc(r.label)}</span>${ownerChip}</div>`;
+
+    // 바 위치
+    const sOff=Math.max(0,daysBetween(startD,r.start));
+    const eOff=Math.min(totalDays-1,daysBetween(startD,r.end));
+    const bw=Math.max(pxPerDay,(eOff-sOff+1)*pxPerDay);
+    const bl=sOff*pxPerDay;
+    // 색
+    let bg='#A8A8B0',fg='white',label='';
+    if(r.type==='O'){bg='linear-gradient(90deg,#FFCE5B,#FFB02E)';fg='#3D2F00';label=`${r.progress}%`;}
+    else if(r.type==='KR'){
+      const col=progressColor(r.progress);
+      bg=`linear-gradient(90deg,${col},${col}dd)`;fg='white';label=`${r.progress}%`;
+    }
+    else{
+      const stCol={todo:'#A8A8B0',doing:'#6241F5',done:'#30AB62',blocked:'#E5484D'};
+      bg=stCol[r.status]||'#A8A8B0';fg='white';
+      label=r.status==='done'?'완료':r.status==='blocked'?'막힘':r.status==='doing'?'진행':'';
+    }
+    const overdue=isOverdue(r.end,r.status);
+    const dueLabel=r.end&&r.end!==endD?` · ~${dueShort(r.end)}${overdue&&r.type==='I'?'·지연':''}`:'';
+    barsHtml+=`<div class="wbs-bar-row" style="height:${ROW_H}px;position:relative;border-bottom:1px solid #F4F4F5;">
+      <div class="wbs-bar" data-act="wbs-jump" data-type="${r.type}" data-id="${r.id}" data-oid="${r.objId||r.id}" data-krid="${r.krId||(r.type==='KR'?r.id:'')}" style="position:absolute;left:${bl}px;top:5px;width:${bw}px;height:24px;background:${bg};color:${fg};border-radius:5px;display:flex;align-items:center;padding:0 8px;font-size:10.5px;font-weight:700;cursor:pointer;box-shadow:0 1px 2px rgba(0,0,0,.1);overflow:hidden;white-space:nowrap;text-overflow:ellipsis;${overdue&&r.type==='I'?'border:1.5px solid #B71D24;':''}" title="${esc(r.label)}${dueLabel}">${label?esc(label):esc(r.label).slice(0,30)}</div>
+    </div>`;
+  });
+
+  if(rows.length===0){
+    return `<div style="margin-bottom:14px;"><h2 style="font-weight:800;font-size:23px;margin:0;">WBS · 간트 차트</h2><div style="font-size:13px;color:var(--text-soft);margin-top:2px;">Objective → KR → Initiative 일정 한판 보기</div></div><div class="empty">OKR 탭에서 Objective와 KR을 먼저 추가하세요.</div>`;
+  }
+
+  return `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px;">
+    <div><h2 style="font-weight:800;font-size:23px;margin:0;">WBS · 간트 차트</h2><div style="font-size:13px;color:var(--text-soft);margin-top:2px;">${esc(t?.quarter||'')} · ${range.start.slice(5).replace('-','/')} ~ ${range.end.slice(5).replace('-','/')} (총 ${totalDays}일)</div></div>
+    <div style="display:flex;gap:6px;align-items:center;font-size:11.5px;color:var(--text-soft);flex-wrap:wrap;">
+      <span style="display:inline-flex;align-items:center;gap:4px;"><span style="width:12px;height:10px;border-radius:3px;background:linear-gradient(90deg,#FFCE5B,#FFB02E);"></span>Objective</span>
+      <span style="display:inline-flex;align-items:center;gap:4px;"><span style="width:12px;height:10px;border-radius:3px;background:#6241F5;"></span>KR</span>
+      <span style="display:inline-flex;align-items:center;gap:4px;"><span style="width:12px;height:10px;border-radius:3px;background:#6241F5;"></span>진행</span>
+      <span style="display:inline-flex;align-items:center;gap:4px;"><span style="width:12px;height:10px;border-radius:3px;background:#30AB62;"></span>완료</span>
+      <span style="display:inline-flex;align-items:center;gap:4px;"><span style="width:12px;height:10px;border-radius:3px;background:#E5484D;"></span>막힘</span>
+      <span style="display:inline-flex;align-items:center;gap:4px;"><span style="width:12px;height:10px;border-radius:3px;background:#A8A8B0;"></span>할 일</span>
+      <span style="display:inline-flex;align-items:center;gap:6px;margin-left:4px;"><span style="display:inline-block;width:2px;height:14px;background:var(--warning);"></span>오늘</span>
+    </div>
+  </div>
+  <div class="wbs-container" style="display:grid;grid-template-columns:340px 1fr;gap:0;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:white;">
+    <div class="wbs-labels-col" style="border-right:1px solid var(--line);background:white;">
+      <div style="height:52px;background:#F4F4F5;border-bottom:1px solid var(--line);display:flex;align-items:center;padding:0 12px;font-size:12px;font-weight:700;color:var(--text);">항목 (${rows.length}건)</div>
+      ${labelsHtml}
+    </div>
+    <div class="wbs-timeline-col" style="overflow-x:auto;position:relative;">
+      <div style="position:relative;width:${timelineW}px;min-width:100%;">
+        <div style="position:relative;height:52px;background:#F4F4F5;border-bottom:1px solid var(--line);">${monthHeader}${weekHeader}</div>
+        <div style="position:relative;">${barsHtml}
+          <div style="position:absolute;left:${todayOffset*pxPerDay}px;top:0;bottom:0;width:2px;background:var(--warning);z-index:5;pointer-events:none;box-shadow:0 0 4px rgba(229,72,77,.5);"></div>
+          <div style="position:absolute;left:${todayOffset*pxPerDay-14}px;top:-20px;background:var(--warning);color:white;font-size:10px;font-weight:700;padding:1px 5px;border-radius:3px;z-index:6;">오늘</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div style="font-size:11.5px;color:var(--text-soft);margin-top:8px;line-height:1.55;">
+    💡 막대 클릭 → 해당 항목으로 점프 / ▶▼ 클릭 → 하위 항목 접기·펼치기 / Initiative 마감 지연 시 빨간 테두리
+  </div>`;
+}
+
 function renderManage(){
   const t=currentTeam();
   return `<section class="card"><div class="section-head" style="margin-bottom:14px;"><span class="section-title">현재 팀 정보</span><span class="section-meta">· 헤더에서 다른 팀으로 전환 가능</span></div><div class="manage-grid"><label><span class="labeled-label">팀 이름</span><input class="labeled-input" data-field="team-name" value="${esc(t?.name||'')}" /></label><label><span class="labeled-label">분기</span><input class="labeled-input" data-field="team-quarter" value="${esc(t?.quarter||'')}" /></label></div>${state.teams.length>1?`<div style="margin-top:12px;"><button class="btn btn-danger" data-act="del-team">이 팀 삭제 (모든 데이터 함께)</button></div>`:''}</section><section class="card"><div class="section-head" style="margin-bottom:14px;justify-content:space-between;"><span class="section-title">팀원 (${state.members.length})</span><button class="btn btn-soft" data-act="add-member">${I.plus} 팀원 추가</button></div><div style="font-size:11px;color:var(--text-soft);margin-bottom:8px;">⋮⋮ 핸들 잡고 드래그로 순서 변경 — 변경된 순서는 모든 팀원에게 동일하게 보입니다</div>${state.members.map(m=>`<div class="member-row" data-mem-id="${m.id}" draggable="true" data-drag-type="member"><span class="drag-handle member-handle" title="드래그로 순서 변경">⋮⋮</span><input type="color" class="member-color" data-field="member-color" data-mid="${m.id}" value="${m.color}" /><input class="member-name-input" data-field="member-name" data-mid="${m.id}" value="${esc(m.name)}" /><input class="member-role-input" data-field="member-role" data-mid="${m.id}" placeholder="역할" value="${esc(m.role||'')}" /><button class="btn-icon" data-act="del-member" data-mid="${m.id}">${I.trash}</button></div>`).join('')}</section><section class="card"><div class="section-head" style="margin-bottom:14px;"><span class="section-title">모든 팀</span></div>${state.teams.map(t=>`<div class="member-row"><span style="width:18px;height:18px;border-radius:5px;background:${teamColor(t)};display:inline-block;"></span><span style="flex:1;font-weight:600;font-size:13.5px;">${esc(t.name)}</span><span style="font-size:11.5px;color:var(--text-soft);">${esc(t.quarter)}</span>${t.id===state.currentTeamId?'<span class="today-tag">현재</span>':`<button class="btn btn-ghost" data-act="switch-team" data-tid="${t.id}">전환</button>`}</div>`).join('')}</section>`;
@@ -1540,6 +1693,22 @@ document.addEventListener('click',async e=>{
   if(a==='date-today'){viewingDate=todayKey();render();return;}
   if(a==='toggle-obj'){const oid=btn.dataset.oid;expanded.has(oid)?expanded.delete(oid):expanded.add(oid);render();return;}
   if(a==='toggle-kr'){const k=btn.dataset.krid;krCollapsed.has(k)?krCollapsed.delete(k):krCollapsed.add(k);render();return;}
+  // v15 — WBS 간트
+  if(a==='wbs-toggle'){const key=btn.dataset.key;const set=window._wbsCollapsed||(window._wbsCollapsed=new Set());set.has(key)?set.delete(key):set.add(key);render();return;}
+  if(a==='wbs-jump'){
+    const type=btn.dataset.type;const id=btn.dataset.id;
+    currentView='okr';
+    if(type==='O'){expanded.add(id);}
+    else if(type==='KR'){expanded.add(btn.dataset.oid);krCollapsed.delete(id);}
+    else if(type==='I'){expanded.add(btn.dataset.oid);krCollapsed.delete(btn.dataset.krid);}
+    render();
+    setTimeout(()=>{
+      const sel=type==='O'?`[data-obj-id="${id}"]`:type==='KR'?`[data-kr-id="${id}"]`:`[data-init-id="${id}"]`;
+      const el=document.querySelector(sel);
+      if(el){el.scrollIntoView({behavior:'smooth',block:'center'});el.style.transition='background .8s';el.style.background='#FFF8DC';setTimeout(()=>el.style.background='',1500);}
+    },150);
+    return;
+  }
   if(a==='toggle-kr-menu'){const k=btn.dataset.krid;krMenuOpen.has(k)?krMenuOpen.delete(k):krMenuOpen.add(k);render();return;}
   if(a==='toggle-reality'){
     const k=btn.dataset.key;
