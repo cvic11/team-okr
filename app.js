@@ -1004,6 +1004,25 @@ function renderInlineKRRow(kr,oid){
   const p=pct(kr.current,kr.target);
   const o=state.members.find(m=>m.id===kr.ownerId);
   const overdue=isOverdue(kr.dueDate);
+  const inits=kr.initiatives||[];
+  // v15 — Initiative 인라인 표시 (메인 화면 상단 OKR 패널)
+  const initsHtml=inits.length>0?`
+    <div class="kr-init-inline" style="margin-top:8px;padding:6px 10px;background:#FAFAFB;border-left:3px solid #D9CFFB;border-radius:0 6px 6px 0;">
+      <div style="font-size:10px;color:var(--text-soft);font-weight:700;letter-spacing:.3px;margin-bottom:4px;">⚡ INITIATIVES · ${inits.length}건</div>
+      ${inits.map(i=>{
+        const st=i.status||'todo';
+        const stColors={todo:{bg:'#F4F4F5',fg:'#737373'},doing:{bg:'#EEEAFE',fg:'#6241F5'},done:{bg:'#E6F6EE',fg:'#30AB62'},blocked:{bg:'#FCE8E9',fg:'#E5484D'}};
+        const sc=stColors[st]||stColors.todo;
+        const iOwn=state.members.find(m=>m.id===i.ownerId);
+        const iOver=isOverdue(i.dueDate,st);
+        return `<div style="display:flex;align-items:center;gap:6px;padding:3px 0;font-size:12px;line-height:1.45;">
+          <span style="font-size:10px;padding:1px 7px;border-radius:999px;background:${sc.bg};color:${sc.fg};font-weight:700;flex-shrink:0;white-space:nowrap;">${STATUS_LABELS[st]}</span>
+          <span style="flex:1;min-width:0;color:${st==='done'?'var(--text-soft)':'var(--text)'};${st==='done'?'text-decoration:line-through;':''};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${esc(i.title||'')}">${esc(i.title||'(제목 없음)')}</span>
+          ${iOwn?`<span style="font-size:10.5px;color:var(--text-soft);font-weight:600;flex-shrink:0;">${esc(iOwn.name)}</span>`:''}
+          ${i.dueDate?`<span style="font-size:10px;color:${iOver?'var(--warning)':'var(--text-soft)'};font-weight:600;flex-shrink:0;">${dueShort(i.dueDate)}${iOver?'·지연':''}</span>`:''}
+        </div>`;
+      }).join('')}
+    </div>`:'';
   return `<div class="kr-inline-row" data-kr-id="${kr.id}" style="padding:10px 0;border-bottom:1px solid #F4F4F5;">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap;">
       <span style="font-size:13.5px;font-weight:700;color:var(--text);flex:1;min-width:120px;line-height:1.4;">${esc(kr.title||'(제목 없음)')}</span>
@@ -1018,6 +1037,7 @@ function renderInlineKRRow(kr,oid){
       ${kr.dueDate?`<span style="font-size:11px;color:${overdue?'var(--warning)':'var(--text-soft)'};font-weight:600;margin-left:auto;">${dueShort(kr.dueDate)}${overdue?' · 지연':''}</span>`:'<span style="margin-left:auto;"></span>'}
     </div>
     <div class="progress-track" data-kr-bar-wrap style="margin-top:7px;height:6px;border-radius:3px;background:#F0F0F2;overflow:hidden;"><div class="progress-fill" data-kr-bar style="width:${p}%;height:100%;background:${progressColor(p)};transition:width .2s;"></div></div>
+    ${initsHtml}
   </div>`;
 }
 function renderObjectivePanel(o,slotIdx){
@@ -1906,7 +1926,13 @@ init();
   }
   function collectAllKR(){
     const list=[];const st=getState();if(!st||!st.objectives)return list;
-    st.objectives.forEach(o=>{(o.keyResults||[]).forEach(k=>{list.push({id:k.id,title:k.title||'(제목 없는 KR)',objTitle:o.title||'(이름 없는 Objective)'});});});
+    st.objectives.forEach(o=>{(o.keyResults||[]).forEach(k=>{list.push({id:k.id,title:k.title||'(제목 없는 KR)',objTitle:o.title||'(이름 없는 Objective)',initiatives:(k.initiatives||[]).map(i=>({id:i.id,title:i.title||'(제목 없는 Initiative)',krId:k.id,status:i.status||'todo'}))});});});
+    return list;
+  }
+  // v15 — Initiative 포함 평탄화된 옵션 목록 (값 prefix로 KR/Init 구분)
+  function collectAllInit(){
+    const list=[];const st=getState();if(!st||!st.objectives)return list;
+    st.objectives.forEach(o=>{(o.keyResults||[]).forEach(k=>{(k.initiatives||[]).forEach(i=>{list.push({id:i.id,title:i.title||'(제목 없는 Initiative)',krId:k.id,krTitle:k.title||'(KR)',objTitle:o.title||'(O)',status:i.status||'todo'});});});});
     return list;
   }
   function getMemberTasks(mid,kind){
@@ -1939,28 +1965,58 @@ init();
   }
   function autoGrow(el){if(!el)return;el.style.height='auto';el.style.height=(el.scrollHeight+2)+'px';}
   function autoGrowAll(){document.querySelectorAll('textarea[data-krl-autogrow]').forEach(autoGrow);}
+  // v15 — selectedId는 "kr:{id}", "init:{id}" 또는 bare {id}(legacy=KR) 형식 지원
+  function normalizeSel(selectedId){
+    if(!selectedId)return{type:'',id:''};
+    const s=String(selectedId);
+    if(s.startsWith('kr:'))return{type:'kr',id:s.slice(3)};
+    if(s.startsWith('init:'))return{type:'init',id:s.slice(5)};
+    return{type:'kr',id:s}; // 레거시 호환
+  }
   function buildKROptions(selectedId,allKR){
-    let html='<option value=""'+(selectedId?'':' selected')+'>운영 (KR 무관)</option>';
+    const sel=normalizeSel(selectedId);
+    let html='<option value=""'+(!sel.id?' selected':'')+'>운영 (KR 무관)</option>';
     if(allKR.length===0){
       const st=getState();let msg='— 데이터 로딩 중 —';
       if(!st)msg='⚠ state 접근 불가';
       else if(!st.objectives||st.objectives.length===0)msg='— OKR 탭에서 Objective를 먼저 추가하세요 —';
       else {const withKR=st.objectives.filter(o=>(o.keyResults||[]).length>0);if(withKR.length===0)msg='— 각 Objective에 KR을 추가하세요 —';}
       html+='<option disabled>'+msg+'</option>';
-      if(selectedId)html+='<option value="'+escapeHtml(selectedId)+'" selected>● 이전 선택 유지</option>';
+      if(sel.id)html+='<option value="'+escapeHtml(selectedId)+'" selected>● 이전 선택 유지</option>';
       return html;
     }
     const order=[];const groups={};
     allKR.forEach(k=>{const ot=k.objTitle||'(미분류)';if(!groups[ot]){groups[ot]=[];order.push(ot);}groups[ot].push(k);});
-    order.forEach(ot=>{const label=ot.length>45?ot.slice(0,45)+'…':ot;html+='<optgroup label="'+escapeHtml(label)+'">';groups[ot].forEach(k=>{const title=k.title.length>45?k.title.slice(0,45)+'…':k.title;html+='<option value="'+escapeHtml(k.id)+'"'+(selectedId===k.id?' selected':'')+'>'+escapeHtml(title)+'</option>';});html+='</optgroup>';});
+    order.forEach(ot=>{
+      const label=ot.length>45?ot.slice(0,45)+'…':ot;
+      html+='<optgroup label="'+escapeHtml(label)+'">';
+      groups[ot].forEach(k=>{
+        const title=k.title.length>40?k.title.slice(0,40)+'…':k.title;
+        const krVal='kr:'+k.id;
+        const isSel=sel.type==='kr'&&sel.id===k.id;
+        html+='<option value="'+escapeHtml(krVal)+'"'+(isSel?' selected':'')+'>📌 KR · '+escapeHtml(title)+'</option>';
+        // Initiative들도 같은 optgroup 안에 자식으로 표시
+        (k.initiatives||[]).forEach(i=>{
+          const itTitle=i.title.length>36?i.title.slice(0,36)+'…':i.title;
+          const initVal='init:'+i.id;
+          const isInitSel=sel.type==='init'&&sel.id===i.id;
+          html+='<option value="'+escapeHtml(initVal)+'"'+(isInitSel?' selected':'')+'>  ↳ ⚡ '+escapeHtml(itTitle)+'</option>';
+        });
+      });
+      html+='</optgroup>';
+    });
     return html;
   }
   function renderTaskRowHtml(task,mid,kind){
     const allKR=collectAllKR();
     const krInfo=task.k?allKR.find(k=>k.id===task.k):null;
-    const tagBg=krInfo?'#EEEAFE':'#F4F4F5';
-    const tagFg=krInfo?'#6241F5':'#737373';
-    const tagBorder=krInfo?'#D9CFFB':'var(--line)';
+    // v15 — Initiative 우선 색 적용
+    const initInfo=task.i?collectAllInit().find(x=>x.id===task.i):null;
+    const tagBg=initInfo?'#D9CFFB':(krInfo?'#EEEAFE':'#F4F4F5');
+    const tagFg=initInfo?'#3A2670':(krInfo?'#6241F5':'#737373');
+    const tagBorder=initInfo?'#B5A0F0':(krInfo?'#D9CFFB':'var(--line)');
+    // select 초기 value — kr:/init: prefix 사용
+    const selValue=initInfo?('init:'+task.i):(krInfo?('kr:'+task.k):'');
     const editable=(typeof canEditAs==='function')?canEditAs(mid):true;
     const ro=editable?'':' readonly';
     const dis=editable?'':' disabled';
@@ -1971,7 +2027,7 @@ init();
       // 1행 — KR 선택 + 삭제
       '<div style="display:flex;align-items:center;gap:8px;width:100%;">'+
         '<select data-krl-field="task-kr" data-mid="'+mid+'" data-kind="'+kind+'" data-tid="'+task.id+'" style="font-size:12px;padding:6px 10px;background:'+tagBg+';color:'+tagFg+';font-weight:700;border:1px solid '+tagBorder+';border-radius:999px;outline:none;cursor:pointer;font-family:inherit;max-width:100%;flex:0 1 auto;" title="클릭하여 KR 선택"'+dis+'>'+
-        buildKROptions(task.k,allKR)+'</select>'+
+        buildKROptions(selValue,allKR)+'</select>'+
         '<span style="flex:1;"></span>'+
         (editable?'<button data-act="krl-del-task" data-mid="'+mid+'" data-kind="'+kind+'" data-tid="'+task.id+'" style="padding:4px 8px;background:none;border:1px solid transparent;border-radius:6px;cursor:pointer;color:var(--text-soft);font-size:13px;line-height:1;flex-shrink:0;" title="이 작업 삭제">✕</button>':'')+
       '</div>'+
@@ -2057,6 +2113,7 @@ init();
         if(st&&viewing){
           const allKR=collectAllKR();
           const krMap={};allKR.forEach(k=>{krMap[k.id]=k;});
+          const initMap={};collectAllInit().forEach(i=>{initMap[i.id]=i;});
           const recent=[];
           for(let i=1;i<=7;i++){
             const d=window.shiftDate?window.shiftDate(viewing,-i):(()=>{const x=new Date(viewing);x.setDate(x.getDate()-i);return `${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,'0')}-${String(x.getDate()).padStart(2,'0')}`;})();
@@ -2076,8 +2133,12 @@ init();
               recent.map(r=>{
                 const dateLabel=fmtDate(r.date);
                 const tasksHtml=r.tasks.map(t=>{
+                  const initInfo=t.i?initMap[t.i]:null;
                   const krInfo=t.k?krMap[t.k]:null;
-                  const krChip=krInfo?'<span style="font-size:10px;background:#EEEAFE;color:#6241F5;padding:1px 7px;border-radius:999px;font-weight:700;margin-right:5px;white-space:nowrap;">'+esc(krInfo.title.slice(0,16))+(krInfo.title.length>16?'…':'')+'</span>':'';
+                  const tagChip=initInfo
+                    ?'<span style="font-size:10px;background:#D9CFFB;color:#3A2670;padding:1px 7px;border-radius:999px;font-weight:700;margin-right:5px;white-space:nowrap;">⚡ '+esc(initInfo.title.slice(0,14))+(initInfo.title.length>14?'…':'')+'</span>'
+                    :(krInfo?'<span style="font-size:10px;background:#EEEAFE;color:#6241F5;padding:1px 7px;border-radius:999px;font-weight:700;margin-right:5px;white-space:nowrap;">📌 '+esc(krInfo.title.slice(0,14))+(krInfo.title.length>14?'…':'')+'</span>':'');
+                  const krChip=tagChip;
                   // 체크박스: 담당자 본인이면 클릭 가능 버튼, 아니면 plain 표시
                   let checkHtml;
                   if(ownerEditable){
@@ -2111,7 +2172,7 @@ init();
   }
   applyPatches();
   // 드롭다운 열리는 순간 최신 state로 옵션 재생성
-  document.addEventListener('mousedown',function(e){const sel=e.target.closest('select[data-krl-field="task-kr"]');if(!sel)return;const cur=sel.value;const allKR=collectAllKR();sel.innerHTML=buildKROptions(cur,allKR);},true);
+  document.addEventListener('mousedown',function(e){const sel=e.target.closest('select[data-krl-field="task-kr"]');if(!sel)return;const cur=sel.value;sel.innerHTML=buildKROptions(cur,collectAllKR());},true);
   document.addEventListener('focusin',function(e){const sel=e.target;if(sel.tagName!=='SELECT'||sel.dataset.krlField!=='task-kr')return;sel.innerHTML=buildKROptions(sel.value,collectAllKR());},true);
   document.addEventListener('click',function(e){
     const btn=e.target.closest('[data-act]');if(!btn)return;
@@ -2190,9 +2251,29 @@ init();
     const mid=el.dataset.mid,kind=el.dataset.kind,tid=el.dataset.tid;
     const data=getMemberTasks(mid,kind);
     const t=data.tasks.find(x=>x.id===tid);if(!t)return;
-    t.k=el.value||'';updateMemberTasks(mid,kind,data.legacy,data.tasks);
-    const hasKR=!!t.k;
-    el.style.background=hasKR?'#EEEAFE':'#F4F4F5';el.style.color=hasKR?'#6241F5':'#737373';el.style.borderColor=hasKR?'#D9CFFB':'var(--line)';
+    // v15 — "kr:..." 또는 "init:..." 형식 처리
+    const val=el.value||'';
+    if(val.startsWith('init:')){
+      const initId=val.slice(5);
+      // 부모 KR id 찾기
+      const all=collectAllInit();const found=all.find(x=>x.id===initId);
+      t.k=found?found.krId:'';
+      t.i=initId;
+    }else if(val.startsWith('kr:')){
+      t.k=val.slice(3);
+      t.i='';
+    }else if(val){
+      // 레거시 호환: bare id = KR
+      t.k=val;t.i='';
+    }else{
+      t.k='';t.i='';
+    }
+    updateMemberTasks(mid,kind,data.legacy,data.tasks);
+    const isInit=!!t.i;const hasKR=!!t.k;
+    // 칩 색 — Initiative는 좀 더 진한 보라, KR은 연한 보라
+    if(isInit){el.style.background='#D9CFFB';el.style.color='#3A2670';el.style.borderColor='#B5A0F0';}
+    else if(hasKR){el.style.background='#EEEAFE';el.style.color='#6241F5';el.style.borderColor='#D9CFFB';}
+    else{el.style.background='#F4F4F5';el.style.color='#737373';el.style.borderColor='var(--line)';}
     scheduleDistributionUpdate();
   });
   document.addEventListener('focusin',function(e){const el=e.target;if(el.tagName==='TEXTAREA'&&el.dataset.krlField==='task-text'){el.style.background='white';el.style.borderColor='#6241F5';}});
