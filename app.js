@@ -1533,6 +1533,38 @@ document.addEventListener('click',async e=>{
     }
     render();return;
   }
+  // v14 — "최근 한 일"에서 담당자 본인이 과거 작업을 ✓ 체크 가능
+  if(a==='recent-toggle-task'){
+    const mid=btn.dataset.mid;const date=btn.dataset.date;const tid=btn.dataset.tid;
+    if(!canEditAs(mid)){showToast('본인 항목만 체크 가능',true);return;}
+    const entry=state.standups[date]?.entries?.[mid];
+    if(!entry){showToast('데이터를 찾을 수 없습니다',true);return;}
+    // 파싱 — JSON 또는 평문
+    const raw=entry.today||'';
+    let parsed={legacy:'',tasks:[]};
+    if(raw.trim().startsWith('{')&&raw.indexOf('"_krlv":1')>0){
+      try{const p=JSON.parse(raw);parsed={legacy:p.legacy||'',tasks:Array.isArray(p.tasks)?p.tasks:[]};}catch(e){}
+    }else parsed.legacy=raw;
+    const task=(parsed.tasks||[]).find(x=>x.id===tid);
+    if(!task){showToast('작업을 찾을 수 없습니다',true);return;}
+    task.d=!task.d;
+    // 재직렬화
+    const newText=parsed.tasks.length>0?JSON.stringify({_krlv:1,legacy:parsed.legacy||'',tasks:parsed.tasks}):(parsed.legacy||'');
+    entry.today=newText;
+    saveEntry(date,mid,'today',newText);
+    // 로컬 UI 갱신 (전체 render 회피 → 깜빡임 없음)
+    btn.classList.toggle('checked',task.d);
+    btn.textContent=task.d?'✓':'';
+    const row=btn.closest('.recent-task-row');
+    if(row){
+      const txt=row.querySelector('.recent-task-text');
+      if(txt){
+        txt.style.color=task.d?'var(--text-soft)':'var(--text)';
+        txt.style.textDecoration=task.d?'line-through':'';
+      }
+    }
+    return;
+  }
   if(a==='cycle-conf'){const et=btn.dataset.etype,eid=btn.dataset.eid;const order=['high','mid','low'];let nx=null,old=null,saveFn=null,label='';
     if(et==='objective'){const o=state.objectives.find(x=>x.id===eid);if(!o)return;nx=order[(order.indexOf(o.confidence||'mid')+1)%3];old=o.confidence;o.confidence=nx;saveObjective(o);label=o.title;}
     else if(et==='kr'){let oid=null,kr=null;state.objectives.forEach(o=>o.keyResults.forEach(k=>{if(k.id===eid){oid=o.id;kr=k;}}));if(!kr)return;nx=order[(order.indexOf(kr.confidence||'mid')+1)%3];old=kr.confidence;kr.confidence=nx;saveKR(oid,kr);label=kr.title;}
@@ -2037,14 +2069,26 @@ init();
           }
           if(recent.length>0){
             const fmtDate=window.formatRecentDateLabel||(d=>d);
+            // v14 — 담당자(본인) 여부 확인: 본인은 다음 날에도 체크박스 토글 가능
+            const ownerEditable=(typeof canEditAs==='function')&&canEditAs(mid);
             recentHtml='<div class="krl-recent" style="margin-bottom:8px;background:#FFFDF2;border:1px solid #F5C76A;border-radius:8px;padding:10px 12px;">'+
-              '<div style="font-size:11px;color:#946800;font-weight:700;margin-bottom:8px;letter-spacing:.3px;">📅 최근 7일 작성 내역 (자동 집계)</div>'+
+              '<div style="font-size:11px;color:#946800;font-weight:700;margin-bottom:8px;letter-spacing:.3px;">📅 최근 7일 작성 내역 (담당자 본인은 ✓ 체크 가능)</div>'+
               recent.map(r=>{
                 const dateLabel=fmtDate(r.date);
                 const tasksHtml=r.tasks.map(t=>{
                   const krInfo=t.k?krMap[t.k]:null;
                   const krChip=krInfo?'<span style="font-size:10px;background:#EEEAFE;color:#6241F5;padding:1px 7px;border-radius:999px;font-weight:700;margin-right:5px;white-space:nowrap;">'+esc(krInfo.title.slice(0,16))+(krInfo.title.length>16?'…':'')+'</span>':'';
-                  return '<div style="font-size:12.5px;color:'+(t.d?'var(--text-soft)':'var(--text)')+';line-height:1.55;padding:2px 0;'+(t.d?'text-decoration:line-through;':'')+'">'+(t.d?'✓ ':'• ')+krChip+esc((t.t||'').slice(0,300))+'</div>';
+                  // 체크박스: 담당자 본인이면 클릭 가능 버튼, 아니면 plain 표시
+                  let checkHtml;
+                  if(ownerEditable){
+                    checkHtml='<button class="rt-check '+(t.d?'checked':'')+'" style="width:16px;height:16px;border-width:1.5px;border-radius:4px;flex-shrink:0;margin-top:2px;margin-right:6px;display:inline-flex;align-items:center;justify-content:center;font-size:11px;padding:0;line-height:1;" data-act="recent-toggle-task" data-mid="'+mid+'" data-date="'+r.date+'" data-tid="'+t.id+'" title="이 작업 완료 토글">'+(t.d?'✓':'')+'</button>';
+                  }else{
+                    checkHtml='<span style="display:inline-block;width:16px;text-align:center;margin-right:4px;color:'+(t.d?'var(--growth)':'var(--text-soft)')+';">'+(t.d?'✓':'•')+'</span>';
+                  }
+                  return '<div class="recent-task-row" data-recent-tid="'+t.id+'" data-recent-mid="'+mid+'" data-recent-date="'+r.date+'" style="font-size:12.5px;line-height:1.55;padding:3px 0;display:flex;align-items:flex-start;">'+
+                    checkHtml+
+                    '<span class="recent-task-text" style="flex:1;color:'+(t.d?'var(--text-soft)':'var(--text)')+';'+(t.d?'text-decoration:line-through;':'')+'">'+krChip+esc((t.t||'').slice(0,300))+'</span>'+
+                  '</div>';
                 }).join('');
                 const legacyHtml=r.legacy&&r.legacy.trim()?'<div style="font-size:12.5px;color:var(--text);line-height:1.55;padding:2px 0;white-space:pre-wrap;">'+esc(r.legacy)+'</div>':'';
                 return '<div style="margin-bottom:8px;padding-bottom:6px;border-bottom:1px dashed #F5E0A8;">'+
