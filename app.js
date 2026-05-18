@@ -346,7 +346,32 @@ function startObserverLogoutWatcher(){
   },30000);
 }
 function canEditOKR(){return isAdmin()||selfIsObserver();} // 옵저버도 시도 가능 (DB 저장 안 됨)
-function canEditInit(init){const s=selfMember();if(!s)return false;if(s.isAdmin||s.isObserver)return true;return !!(init&&init.ownerId===s.id);}
+// v16 — Initiative 다중 담당자 + 팀 전원 지원
+function getInitOwnerIds(init){
+  if(!init)return[];
+  const oid=init.ownerId||'';
+  if(!oid)return[];
+  if(oid==='__team_all__')return state.members.filter(m=>!m.isObserver).map(m=>m.id);
+  return oid.split(',').map(s=>s.trim()).filter(Boolean);
+}
+function isInitTeamAll(init){return !!(init&&init.ownerId==='__team_all__');}
+function initOwnersDisplay(init){
+  if(!init||!init.ownerId)return{text:'담당 미지정',color:'var(--text-soft)',isTeamAll:false};
+  if(init.ownerId==='__team_all__')return{text:'👥 팀 전원',color:'var(--primary)',isTeamAll:true};
+  const ids=getInitOwnerIds(init);
+  const names=ids.map(id=>state.members.find(x=>x.id===id)?.name).filter(Boolean);
+  if(names.length===0)return{text:'담당 미지정',color:'var(--text-soft)',isTeamAll:false};
+  if(names.length===1)return{text:names[0],color:'var(--text)',isTeamAll:false};
+  if(names.length===2)return{text:names.join(', '),color:'var(--text)',isTeamAll:false};
+  return{text:names[0]+' +'+(names.length-1)+'명',color:'var(--text)',isTeamAll:false};
+}
+function canEditInit(init){
+  const s=selfMember();if(!s)return false;
+  if(s.isAdmin||s.isObserver)return true;
+  if(!init)return false;
+  const owners=getInitOwnerIds(init);
+  return owners.includes(s.id);
+}
 // 옵저버는 모든 DB 쓰기 우회 — 화면에서만 동작
 function isObserverMode(){return selfIsObserver();}
 function roAttr(memberId){return canEditAs(memberId)?'':'readonly';}
@@ -677,7 +702,9 @@ async function loadStandup(date){
 function getMemberInitiatives(mid){
   const list=[];
   state.objectives.forEach(o=>o.keyResults.forEach(k=>k.initiatives.forEach(i=>{
-    if(i.ownerId===mid && i.status!=='done') list.push({...i,krId:k.id,krTitle:k.title});
+    // v16 — 다중 담당자 + 팀 전원 지원
+    const owners=getInitOwnerIds(i);
+    if(owners.includes(mid) && i.status!=='done') list.push({...i,krId:k.id,krTitle:k.title});
   })));
   return list;
 }
@@ -703,13 +730,24 @@ function findInitiative(iid){let f=null;state.objectives.forEach(o=>o.keyResults
 // SELF IDENTIFICATION (본인 식별)
 // ============================================================
 function openSelfPicker(){
-  const opts=state.members.map(m=>{const hasPin=!!m.pin_hash;const authed=isPinAuthValid(m.id);return `<button class="btn btn-ghost" style="justify-content:flex-start;padding:10px 14px;font-size:13.5px;width:100%;" data-act="set-self" data-mid="${m.id}"><span style="width:22px;height:22px;border-radius:999px;background:${m.color};color:white;display:inline-grid;place-items:center;font-weight:700;font-size:11px;margin-right:10px;">${esc(m.name.slice(0,1).toUpperCase())}</span><span style="flex:1;text-align:left;font-weight:600;">${esc(m.name)}</span><span style="font-size:11px;color:var(--text-soft);margin-right:6px;">${esc(m.role||'')}</span>${hasPin?(authed?'<span style="font-size:10px;color:var(--growth);font-weight:700;">🔓 인증됨</span>':'<span style="font-size:10px;color:var(--text-soft);">🔐 PIN</span>'):'<span style="font-size:10px;color:var(--amber);">PIN 미설정</span>'}</button>`;}).join('');
+  // v16 — 옵저버 계정(은 picker에서 숨김 (별도 "옵저버 계정" 진입 버튼 제공)
+  const teamMembers=state.members.filter(m=>!m.isObserver);
+  const observerMembers=state.members.filter(m=>m.isObserver);
+  const opts=teamMembers.map(m=>{const hasPin=!!m.pin_hash;const authed=isPinAuthValid(m.id);return `<button class="btn btn-ghost" style="justify-content:flex-start;padding:10px 14px;font-size:13.5px;width:100%;" data-act="set-self" data-mid="${m.id}"><span style="width:22px;height:22px;border-radius:999px;background:${m.color};color:white;display:inline-grid;place-items:center;font-weight:700;font-size:11px;margin-right:10px;">${esc(m.name.slice(0,1).toUpperCase())}</span><span style="flex:1;text-align:left;font-weight:600;">${esc(m.name)}</span><span style="font-size:11px;color:var(--text-soft);margin-right:6px;">${esc(m.role||'')}</span>${hasPin?(authed?'<span style="font-size:10px;color:var(--growth);font-weight:700;">🔓 인증됨</span>':'<span style="font-size:10px;color:var(--text-soft);">🔐 PIN</span>'):'<span style="font-size:10px;color:var(--amber);">PIN 미설정</span>'}</button>`;}).join('');
+  // v16 — "팀 전원" 버튼: 누구도 본인 아닌 채로 전체 데이터 열람 (PIN 불필요)
+  const teamAllBtn=`<button class="btn btn-ghost" style="width:100%;padding:12px 14px;font-size:13.5px;justify-content:flex-start;background:linear-gradient(135deg,#F4F0FF,#FFFFFF);border:1px solid var(--primary-soft);" data-act="set-self" data-mid="__observer__">
+    <span style="width:22px;height:22px;border-radius:6px;background:var(--primary);color:white;display:inline-grid;place-items:center;font-weight:700;font-size:11px;margin-right:10px;">👥</span>
+    <span style="flex:1;text-align:left;"><span style="font-weight:700;color:var(--primary);">팀 전원 (열람 모드)</span><span style="font-size:11px;color:var(--text-soft);margin-left:6px;">— 본인 데이터 입력 없이 전체 열람</span></span>
+  </button>`;
+  // 옵저버 계정 진입 — 작은 부가 옵션
+  const observerBtns=observerMembers.length>0?observerMembers.map(m=>{const hasPin=!!m.pin_hash;return `<button class="btn-mode" style="padding:6px 10px;font-size:11px;color:var(--text-soft);" data-act="set-self" data-mid="${m.id}" title="옵저버 계정 — PIN 필요">🔐 ${esc(m.name)} (옵저버)${hasPin?'':' · PIN 미설정'}</button>`;}).join(' '):'';
   showModal(`
     <div class="modal-head"><div class="modal-title">진입 — 사용자 식별</div></div>
     <div class="modal-body">
       <div style="font-size:12.5px;color:var(--text-soft);margin-bottom:14px;line-height:1.55;">본인을 선택하시면 <b>오늘의 진입 브리핑</b>과 <b>담당 Initiative 체크리스트</b>가 본인 데이터 중심으로 구성됩니다. 헤더에서 언제든 변경 가능합니다.</div>
       <div style="display:flex;flex-direction:column;gap:6px;">${opts||'<div style="font-size:13px;color:var(--text-soft);text-align:center;padding:20px;">팀원이 등록되지 않았습니다. 관리 탭에서 추가 후 다시 진입하십시오.</div>'}</div>
-      <div style="border-top:1px solid var(--line);margin-top:14px;padding-top:14px;"><button class="btn btn-ghost" style="width:100%;padding:10px 14px;font-size:13px;" data-act="set-self" data-mid="__observer__">관찰자 모드 — 본인 데이터 입력 없이 열람만</button></div>
+      <div style="border-top:1px solid var(--line);margin-top:14px;padding-top:14px;">${teamAllBtn}</div>
+      ${observerBtns?`<div style="margin-top:10px;padding-top:10px;border-top:1px dashed var(--line);"><div style="font-size:10.5px;color:var(--text-soft);margin-bottom:4px;">옵저버 계정 (1시간 자동 로그아웃, 기록 안 남음)</div>${observerBtns}</div>`:''}
     </div>
   `);
 }
@@ -749,7 +787,7 @@ function renderBriefingMerged(self,date,standup){
   // 본인 활동
   let topLine='';
   if(self){const a=memberAnalytics(self.id);topLine=`담당 KR ${a.krs}건 · 평균 진척 ${a.krAvg}% · 담당 Initiative ${a.inits}건 (완료 ${a.initsDone}, 막힘 ${a.initsBlocked})`;}
-  else{topLine='관찰자 모드 — 본인 데이터 입력 없이 열람 중';}
+  else{topLine='팀 전원 (열람 모드) — 본인 데이터 입력 없이 전체 열람 중';}
   const items=[
     ['헤드라인', headlineDone?'✓':'미작성', headlineDone, 'headline'],
     ['스탠드업', `${memDone}/${memCnt}`, memCnt===0||memDone===memCnt, 'standup'],
@@ -973,7 +1011,7 @@ function render(){
 function renderHeader(){
   const t=currentTeam();const ini=teamInitial(t?.name);const col=teamColor(t);
   const tm=state.teams.map(x=>`<div class="team-menu-item ${x.id===state.currentTeamId?'active':''}" data-act="switch-team" data-tid="${x.id}"><span style="width:14px;height:14px;border-radius:4px;background:${teamColor(x)};display:inline-block;"></span><span style="flex:1;">${esc(x.name)}</span><span style="font-size:11px;color:var(--text-soft);">${esc(x.quarter)}</span></div>`).join('');
-  return `<header class="app-header"><div class="hdr-inner"><div style="display:flex;align-items:center;gap:8px;position:relative;"><div class="brand" data-act="goto-home"><div class="brand-mark" style="background:${col};">${esc(ini)}</div><div class="brand-meta"><div class="brand-title">${esc(t?t.name:'팀')} OKR <button class="team-switch" data-act="toggle-team-menu">${state.teams.length>1?'전환 ▾':'팀 ▾'}</button></div><div class="brand-sub">${esc(t?t.quarter:'')} · 일일 스프린트</div></div></div><div class="team-menu" id="team-menu">${tm}<div class="team-menu-divider"></div><div class="team-menu-add" data-act="add-team">${I.plus} 새 팀 추가</div></div></div><nav class="tabs"><span id="conn-dot" class="conn-dot ${connStatus}">${connStatus==='online'?'실시간 연결됨':connStatus==='connecting'?'연결 중':'오프라인'}</span><button class="btn-mode" data-act="open-self-picker" title="본인 변경" style="font-size:11px;">${selfMember()?'👤 '+esc(selfMember().name):isObserver()?'관찰자':'본인 선택'}</button>${selfMember()?renderHelpBell():''}<span class="tab-divider"></span><button class="tab ${currentView==='today'?'active':''}" data-act="view" data-view="today">${I.cal} 오늘</button><button class="tab ${currentView==='dashboard'?'active':''}" data-act="view" data-view="dashboard">📊 대시보드</button><button class="tab ${currentView==='okr'?'active':''}" data-act="view" data-view="okr">${I.target} OKR</button><button class="tab ${currentView==='wbs'?'active':''}" data-act="view" data-view="wbs">🗓️ WBS</button><button class="tab ${currentView==='routines'?'active':''}" data-act="view" data-view="routines">${I.loop} 루틴</button><button class="tab ${currentView==='eval'?'active':''}" data-act="view" data-view="eval">${I.star} 회고</button><button class="tab ${currentView==='manage'?'active':''}" data-act="view" data-view="manage">${I.cog} 관리${isAdmin()?' · 관리자':''}</button><span class="tab-divider"></span><button class="btn-mode" data-act="present">${presentMode?I.collapse:I.expand} ${presentMode?'일반':'발표'}</button><button class="btn-mode" data-act="toggle-dark" title="다크 모드">${isDark()?'☀️':'🌙'}</button></nav></div></header>`;
+  return `<header class="app-header"><div class="hdr-inner"><div style="display:flex;align-items:center;gap:8px;position:relative;"><div class="brand" data-act="goto-home"><div class="brand-mark" style="background:${col};">${esc(ini)}</div><div class="brand-meta"><div class="brand-title">${esc(t?t.name:'팀')} OKR <button class="team-switch" data-act="toggle-team-menu">${state.teams.length>1?'전환 ▾':'팀 ▾'}</button></div><div class="brand-sub">${esc(t?t.quarter:'')} · 일일 스프린트</div></div></div><div class="team-menu" id="team-menu">${tm}<div class="team-menu-divider"></div><div class="team-menu-add" data-act="add-team">${I.plus} 새 팀 추가</div></div></div><nav class="tabs"><span id="conn-dot" class="conn-dot ${connStatus}">${connStatus==='online'?'실시간 연결됨':connStatus==='connecting'?'연결 중':'오프라인'}</span><button class="btn-mode" data-act="open-self-picker" title="본인 변경" style="font-size:11px;">${selfMember()?'👤 '+esc(selfMember().name):isObserver()?'👥 팀 전원':'본인 선택'}</button>${selfMember()?renderHelpBell():''}<span class="tab-divider"></span><button class="tab ${currentView==='today'?'active':''}" data-act="view" data-view="today">${I.cal} 오늘</button><button class="tab ${currentView==='dashboard'?'active':''}" data-act="view" data-view="dashboard">📊 대시보드</button><button class="tab ${currentView==='okr'?'active':''}" data-act="view" data-view="okr">${I.target} OKR</button><button class="tab ${currentView==='wbs'?'active':''}" data-act="view" data-view="wbs">🗓️ WBS</button><button class="tab ${currentView==='routines'?'active':''}" data-act="view" data-view="routines">${I.loop} 루틴</button><button class="tab ${currentView==='eval'?'active':''}" data-act="view" data-view="eval">${I.star} 회고</button><button class="tab ${currentView==='manage'?'active':''}" data-act="view" data-view="manage">${I.cog} 관리${isAdmin()?' · 관리자':''}</button><span class="tab-divider"></span><button class="btn-mode" data-act="present">${presentMode?I.collapse:I.expand} ${presentMode?'일반':'발표'}</button><button class="btn-mode" data-act="toggle-dark" title="다크 모드">${isDark()?'☀️':'🌙'}</button></nav></div></header>`;
 }
 
 function renderToday(){
@@ -1102,14 +1140,15 @@ function renderInlineKRRow(kr,oid){
         const st=i.status||'todo';
         const stColors={doing:{bg:'#EEEAFE',fg:'#6241F5'},done:{bg:'#E6F6EE',fg:'#30AB62'},blocked:{bg:'#FCE8E9',fg:'#E5484D'}};
         const sc=stColors[st];
-        const iOwn=state.members.find(m=>m.id===i.ownerId);
+        // v16 — 다중 담당자 표시
+        const ownDisp=initOwnersDisplay(i);
         const iOver=isOverdue(i.dueDate,st);
         // v15 — '할 일'(todo) 상태는 칩 숨김 (중복 표현 제거)
         const chip=sc?`<span style="font-size:10px;padding:1px 7px;border-radius:999px;background:${sc.bg};color:${sc.fg};font-weight:700;flex-shrink:0;white-space:nowrap;">${STATUS_LABELS[st]}</span>`:'';
         return `<div style="display:flex;align-items:center;gap:6px;padding:3px 0;font-size:12px;line-height:1.45;">
           ${chip}
           <span style="flex:1;min-width:0;color:${st==='done'?'var(--text-soft)':'var(--text)'};${st==='done'?'text-decoration:line-through;':''};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${esc(i.title||'')}">${esc(i.title||'(제목 없음)')}</span>
-          ${iOwn?`<span style="font-size:10.5px;color:var(--text-soft);font-weight:600;flex-shrink:0;">${esc(iOwn.name)}</span>`:''}
+          ${i.ownerId?`<span style="font-size:10.5px;color:${ownDisp.color};font-weight:600;flex-shrink:0;">${esc(ownDisp.text)}</span>`:''}
           ${i.dueDate?`<span style="font-size:10px;color:${iOver?'var(--warning)':'var(--text-soft)'};font-weight:600;flex-shrink:0;">${dueShort(i.dueDate)}${iOver?'·지연':''}</span>`:''}
         </div>`;
       }).join('')}
@@ -1382,7 +1421,62 @@ function renderInitiative(krId,init){
   const done=init.status==='done';
   // v15 — 완료 체크박스 (status='done' 토글)
   const checkBtn=`<button class="rt-check ${done?'checked':''}" style="width:20px;height:20px;border-width:2px;border-radius:5px;flex-shrink:0;" data-act="toggle-init-done" data-krid="${krId}" data-iid="${init.id}"${initDis}${initTip} title="완료 체크">${done?'✓':''}</button>`;
-  return `<div class="init-row" data-init-id="${init.id}" draggable="${initEdit?'true':'false'}" data-drag-type="init" data-drag-parent="${krId}"><span class="drag-handle" style="font-size:11px;${initEdit?'':'opacity:.3;'}" title="드래그로 순서 변경">⋮⋮</span>${checkBtn}<select class="init-status ${init.status||'todo'}" data-field="init-status" data-krid="${krId}" data-iid="${init.id}"${initDis}>${Object.entries(STATUS_LABELS).map(([k,v])=>`<option value="${k}" ${init.status===k?'selected':''}>${v}</option>`).join('')}</select><input class="init-title-input" data-field="init-title" data-krid="${krId}" data-iid="${init.id}" value="${esc(init.title)}" placeholder="구체 액션 (예: AI 어시스턴트 MVP 개발 / 가맹점주 인터뷰 30건 / 경쟁사 매출 분석)"${initRo}${initTip} style="${done?'text-decoration:line-through;color:var(--text-soft);':''}" /><select class="kr-owner-select" data-field="init-owner" data-krid="${krId}" data-iid="${init.id}" style="font-size:11px;"${initDis}><option value="">담당</option>${state.members.map(m=>`<option value="${m.id}" ${init.ownerId===m.id?'selected':''}>${esc(m.name)}</option>`).join('')}</select><label style="font-size:10px;color:var(--text-soft);">시작<input type="date" class="init-due" data-field="init-start" data-krid="${krId}" data-iid="${init.id}" value="${init.startDate||''}"${initRo}${initTip} style="font-size:11px;margin-left:3px;width:120px;" /></label><label style="font-size:10px;color:var(--text-soft);">마감<input type="date" class="init-due ${isOverdue(init.dueDate,init.status)?'overdue':''}" data-field="init-due" data-krid="${krId}" data-iid="${init.id}" value="${init.dueDate||''}"${initRo}${initTip} style="font-size:11px;margin-left:3px;width:120px;" /></label>${renderConfChip('initiative',init.id,init.confidence||'mid')}<button class="reality-toggle ${hr?'has-content':''}" data-act="toggle-reality" data-key="${rk}">${ro?'R ▴':'R ▾'}</button><button class="btn-icon" data-act="show-history" data-etype="initiative" data-eid="${init.id}" title="이력">${I.clock}</button>${initEdit?`<button class="btn-icon" data-act="del-init" data-krid="${krId}" data-iid="${init.id}">${I.x}</button>`:''}${ro?`<div style="width:100%;">${renderRealityBox('initiative',init.id,init.realityBlocker,init.realityHelp)}</div>`:''}</div>`;
+  // v16 — 담당자: 다중 + 팀 전원 지원 (버튼 + 모달)
+  const od=initOwnersDisplay(init);
+  const ownerBtn=`<button class="kr-owner-select" data-act="open-init-owners" data-krid="${krId}" data-iid="${init.id}" style="font-size:11px;padding:4px 9px;background:${od.isTeamAll?'#EEEAFE':'white'};color:${od.color};border:1px solid var(--line);border-radius:5px;cursor:pointer;font-family:inherit;font-weight:600;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"${initDis} title="담당자 선택 (다중 가능, 팀 전원도 가능)">${esc(od.text)} ▾</button>`;
+  return `<div class="init-row" data-init-id="${init.id}" draggable="${initEdit?'true':'false'}" data-drag-type="init" data-drag-parent="${krId}"><span class="drag-handle" style="font-size:11px;${initEdit?'':'opacity:.3;'}" title="드래그로 순서 변경">⋮⋮</span>${checkBtn}<select class="init-status ${init.status||'todo'}" data-field="init-status" data-krid="${krId}" data-iid="${init.id}"${initDis}>${Object.entries(STATUS_LABELS).map(([k,v])=>`<option value="${k}" ${init.status===k?'selected':''}>${v}</option>`).join('')}</select><input class="init-title-input" data-field="init-title" data-krid="${krId}" data-iid="${init.id}" value="${esc(init.title)}" placeholder="구체 액션 (예: AI 어시스턴트 MVP 개발 / 가맹점주 인터뷰 30건 / 경쟁사 매출 분석)"${initRo}${initTip} style="${done?'text-decoration:line-through;color:var(--text-soft);':''}" />${ownerBtn}<label style="font-size:10px;color:var(--text-soft);">시작<input type="date" class="init-due" data-field="init-start" data-krid="${krId}" data-iid="${init.id}" value="${init.startDate||''}"${initRo}${initTip} style="font-size:11px;margin-left:3px;width:120px;" /></label><label style="font-size:10px;color:var(--text-soft);">마감<input type="date" class="init-due ${isOverdue(init.dueDate,init.status)?'overdue':''}" data-field="init-due" data-krid="${krId}" data-iid="${init.id}" value="${init.dueDate||''}"${initRo}${initTip} style="font-size:11px;margin-left:3px;width:120px;" /></label>${renderConfChip('initiative',init.id,init.confidence||'mid')}<button class="reality-toggle ${hr?'has-content':''}" data-act="toggle-reality" data-key="${rk}">${ro?'R ▴':'R ▾'}</button><button class="btn-icon" data-act="show-history" data-etype="initiative" data-eid="${init.id}" title="이력">${I.clock}</button>${initEdit?`<button class="btn-icon" data-act="del-init" data-krid="${krId}" data-iid="${init.id}">${I.x}</button>`:''}${ro?`<div style="width:100%;">${renderRealityBox('initiative',init.id,init.realityBlocker,init.realityHelp)}</div>`:''}</div>`;
+}
+// v16 — Initiative 담당자 선택 모달 (다중 + 팀 전원)
+function openInitOwnersPicker(krId,iid){
+  let init=null,krTitle='';
+  state.objectives.forEach(o=>o.keyResults.forEach(k=>{
+    if(k.id===krId){krTitle=k.title;init=k.initiatives.find(i=>i.id===iid);}
+  }));
+  if(!init)return;
+  const isTeamAll=init.ownerId==='__team_all__';
+  const currentIds=isTeamAll?[]:getInitOwnerIds(init);
+  const memberList=state.members.filter(m=>!m.isObserver).map(m=>{
+    const checked=isTeamAll||currentIds.includes(m.id);
+    return `<label class="init-owner-row" style="display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:6px;cursor:pointer;border:1px solid transparent;background:${checked?'#F4F0FF':'transparent'};">
+      <input type="checkbox" data-mid="${m.id}" ${checked?'checked':''} ${isTeamAll?'disabled':''} style="width:16px;height:16px;cursor:${isTeamAll?'not-allowed':'pointer'};" />
+      <span style="width:24px;height:24px;border-radius:999px;background:${m.color};color:white;font-weight:700;font-size:11px;display:inline-grid;place-items:center;">${esc(m.name.slice(0,1).toUpperCase())}</span>
+      <span style="flex:1;font-weight:600;font-size:13px;">${esc(m.name)}</span>
+      <span style="font-size:11px;color:var(--text-soft);">${esc(m.role||'')}</span>
+    </label>`;
+  }).join('');
+  showModal(`
+    <div class="modal-head"><div class="modal-title">담당자 선택</div></div>
+    <div class="modal-body">
+      <div style="font-size:12px;color:var(--text-soft);margin-bottom:6px;line-height:1.55;">Initiative: <b style="color:var(--text);">${esc(init.title||'(제목 없음)')}</b><br/>KR: ${esc(krTitle||'')}</div>
+      <label style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:linear-gradient(135deg,#F4F0FF,#FFFFFF);border:1px solid var(--primary-soft);border-radius:8px;margin:12px 0;cursor:pointer;">
+        <input type="checkbox" id="init-owner-team-all" ${isTeamAll?'checked':''} style="width:18px;height:18px;cursor:pointer;" />
+        <span style="font-weight:700;color:var(--primary);font-size:14px;">👥 팀 전원 (전체 공동 담당)</span>
+      </label>
+      <div style="font-size:11px;color:var(--text-soft);margin-bottom:6px;">또는 개별 담당자 (복수 선택 가능):</div>
+      <div id="init-owners-list" style="display:flex;flex-direction:column;gap:4px;${isTeamAll?'opacity:.5;pointer-events:none;':''}">${memberList}</div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" data-act="close-modal">취소</button>
+      <button class="btn btn-soft" data-act="save-init-owners" data-krid="${krId}" data-iid="${iid}" data-clear="1">담당 미지정</button>
+      <button class="btn btn-primary" data-act="save-init-owners" data-krid="${krId}" data-iid="${iid}">저장</button>
+    </div>
+  `);
+  setTimeout(()=>{
+    const teamAllCb=document.getElementById('init-owner-team-all');
+    if(teamAllCb){
+      teamAllCb.addEventListener('change',()=>{
+        const on=teamAllCb.checked;
+        const listEl=document.getElementById('init-owners-list');
+        if(listEl){
+          listEl.style.opacity=on?'.5':'1';
+          listEl.style.pointerEvents=on?'none':'auto';
+          listEl.querySelectorAll('input[type="checkbox"]').forEach(cb=>{
+            cb.disabled=on;if(on)cb.checked=true;
+          });
+        }
+      });
+    }
+  },50);
 }
 function renderConfChip(et,eid,lv){const l=lv||'mid';return `<span class="conf-chip ${l}" data-act="cycle-conf" data-etype="${et}" data-eid="${eid}" title="${esc(CONF_HINTS[l])} (클릭하여 변경)">${CONF_LABELS[l]}</span>`;}
 function renderRealityBox(et,eid,b,h){return `<div class="reality-box"><div class="reality-row"><div class="reality-label">현실적 어려움</div><textarea class="reality-input" rows="2" placeholder="지금 막혀 있는 점은?" data-field="reality-blocker" data-etype="${et}" data-eid="${eid}">${esc(b||'')}</textarea></div><div class="reality-row"><div class="reality-label">지원 요청</div><textarea class="reality-input" rows="2" placeholder="어떤 지원이 있으면 풀릴까요? (사람·예산·의사결정 등)" data-field="reality-help" data-etype="${et}" data-eid="${eid}">${esc(h||'')}</textarea></div></div>`;}
@@ -1400,7 +1494,11 @@ function memberAnalytics(mid){
     if(o.ownerId===mid){okrs++;const a=o.keyResults.length?o.keyResults.reduce((s,k)=>s+pct(k.current,k.target),0)/o.keyResults.length:0;okrSum+=a;confSum+=cMap[o.confidence||'mid'];confCnt++;}
     o.keyResults.forEach(k=>{
       if(k.ownerId===mid){krs++;krSum+=pct(k.current,k.target);confSum+=cMap[k.confidence||'mid'];confCnt++;}
-      k.initiatives.forEach(i=>{if(i.ownerId===mid){inits++;if(i.status==='done')initsDone++;if(i.status==='blocked')initsBlocked++;confSum+=cMap[i.confidence||'mid'];confCnt++;}});
+      k.initiatives.forEach(i=>{
+        // v16 — 다중 담당자 + 팀 전원 지원
+        const owners=getInitOwnerIds(i);
+        if(owners.includes(mid)){inits++;if(i.status==='done')initsDone++;if(i.status==='blocked')initsBlocked++;confSum+=cMap[i.confidence||'mid'];confCnt++;}
+      });
     });
   });
   return{okrs,okrAvg:okrs?Math.round(okrSum/okrs):0,krs,krAvg:krs?Math.round(krSum/krs):0,inits,initsDone,initsBlocked,confAvg:confCnt?(confSum/confCnt):0};
@@ -1543,8 +1641,9 @@ function renderWBS(){
   let labelsHtml='',barsHtml='';
   const ROW_H=34;
   rows.forEach((r,idx)=>{
-    const owner=state.members.find(m=>m.id===r.owner);
-    const ownerChip=owner?`<span class="kr-strip-owner" style="font-size:10px;padding:1px 6px;">${esc(owner.name)}</span>`:'';
+    // v16 — 다중 담당자 + 팀 전원 지원
+    const ownerName=r.owner?memberName(r.owner):'';
+    const ownerChip=ownerName&&ownerName!=='-'?`<span class="kr-strip-owner" style="font-size:10px;padding:1px 6px;${r.owner==='__team_all__'?'background:var(--primary-soft);color:var(--primary);':''}">${esc(ownerName)}</span>`:'';
     const lvIndent=r.level*16+8;
     // v15 — Objective별 hue를 라벨 좌측에 컬러 바로 적용
     const labelHue=HUES[r.objIdx%HUES.length];
@@ -1833,7 +1932,15 @@ async function openReflection(entityType,entityId,period,opts){
   window._reviewOpts={preset,start,end,entityType,entityId,period};
 }
 
-function memberName(id){return id?(state.members.find(m=>m.id===id)?.name||'-'):'-';}
+function memberName(id){
+  if(!id)return '-';
+  // v16 — '__team_all__' 또는 콤마 분리된 다중 ID 지원
+  if(id==='__team_all__')return '팀 전원';
+  if(String(id).indexOf(',')>=0){
+    return id.split(',').map(x=>x.trim()).map(x=>state.members.find(m=>m.id===x)?.name||'?').join(', ');
+  }
+  return state.members.find(m=>m.id===id)?.name||'-';
+}
 
 function exportExcel(){
   if(typeof XLSX==='undefined'){showToast('Excel 라이브러리 로딩 실패',true);return;}
@@ -2042,6 +2149,36 @@ document.addEventListener('click',async e=>{
     saveMember(m);
     logChange('member',m.id,'update','is_admin',!m.isAdmin,m.isAdmin,m.name);
     render();
+    return;
+  }
+  // v16 — Initiative 담당자 선택 (다중 + 팀 전원)
+  if(a==='open-init-owners'){
+    const krid=btn.dataset.krid,iid=btn.dataset.iid;
+    let init=null;state.objectives.forEach(o=>o.keyResults.forEach(k=>{if(k.id===krid)init=k.initiatives.find(i=>i.id===iid);}));
+    if(!init){showToast('Initiative를 찾을 수 없습니다',true);return;}
+    if(!canEditInit(init)){showToast('본인 담당 또는 관리자만 변경 가능',true);return;}
+    openInitOwnersPicker(krid,iid);
+    return;
+  }
+  if(a==='save-init-owners'){
+    const krid=btn.dataset.krid,iid=btn.dataset.iid;
+    let init=null;state.objectives.forEach(o=>o.keyResults.forEach(k=>{if(k.id===krid)init=k.initiatives.find(i=>i.id===iid);}));
+    if(!init)return;
+    if(!canEditInit(init)){showToast('변경 권한 없음',true);return;}
+    if(btn.dataset.clear){
+      init.ownerId='';
+    }else{
+      const teamAllEl=document.getElementById('init-owner-team-all');
+      if(teamAllEl&&teamAllEl.checked){
+        init.ownerId='__team_all__';
+      }else{
+        const checked=[...document.querySelectorAll('#init-owners-list input[type="checkbox"]:checked')].map(cb=>cb.dataset.mid).filter(Boolean);
+        init.ownerId=checked.join(',');
+      }
+    }
+    saveInitiative(krid,init);
+    logChange('initiative',iid,'update','owners','',init.ownerId||'(없음)',init.title);
+    closeModal();render();
     return;
   }
   // v15 — Initiative 완료 체크박스 (OKR 탭)
