@@ -2567,36 +2567,47 @@ init();
     });
     return html;
   }
-  function renderTaskRowHtml(task,mid,kind){
+  // v16 — 그룹화된 작업 행 (KR/Init 칩은 상위 그룹 헤더에 한 번만 표시 → 행 자체는 간결)
+  function renderTaskRowGrouped(task,mid,kind){
     const allKR=collectAllKR();
-    const krInfo=task.k?allKR.find(k=>k.id===task.k):null;
-    // v15 — Initiative 우선 색 적용
     const initInfo=task.i?collectAllInit().find(x=>x.id===task.i):null;
-    const tagBg=initInfo?'#D9CFFB':(krInfo?'#EEEAFE':'#F4F4F5');
-    const tagFg=initInfo?'#3A2670':(krInfo?'#6241F5':'#737373');
-    const tagBorder=initInfo?'#B5A0F0':(krInfo?'#D9CFFB':'var(--line)');
-    // select 초기 value — kr:/init: prefix 사용
+    const krInfo=task.k?allKR.find(k=>k.id===task.k):null;
     const selValue=initInfo?('init:'+task.i):(krInfo?('kr:'+task.k):'');
     const editable=(typeof canEditAs==='function')?canEditAs(mid):true;
     const ro=editable?'':' readonly';
     const dis=editable?'':' disabled';
     const tip=editable?'':' title="본인이 작성한 항목만 수정할 수 있습니다"';
-    const textStyle='width:100%;padding:11px 13px;border:1px solid var(--line);border-radius:6px;background:#FAFAFA;outline:none;font-size:13.5px;line-height:1.6;font-family:inherit;color:var(--text);resize:none;overflow:hidden;min-height:72px;box-sizing:border-box;'+(task.d?'text-decoration:line-through;color:var(--text-soft);':'');
-    // v14 — 2행 구조: 위 = KR 칩 + 삭제, 아래 = 체크 + 본문 (꽉 차게)
-    return '<div class="krl-task-row" data-tid="'+task.id+'" data-mid="'+mid+'" data-kind="'+kind+'" style="display:flex;flex-direction:column;gap:6px;padding:10px 0;border-bottom:1px dashed #F0F0F2;">'+
-      // 1행 — KR 선택 + 삭제
-      '<div style="display:flex;align-items:center;gap:8px;width:100%;">'+
-        '<select data-krl-field="task-kr" data-mid="'+mid+'" data-kind="'+kind+'" data-tid="'+task.id+'" style="font-size:12px;padding:6px 10px;background:'+tagBg+';color:'+tagFg+';font-weight:700;border:1px solid '+tagBorder+';border-radius:999px;outline:none;cursor:pointer;font-family:inherit;max-width:100%;flex:0 1 auto;" title="클릭하여 KR 선택"'+dis+'>'+
-        buildKROptions(selValue,allKR)+'</select>'+
-        '<span style="flex:1;"></span>'+
-        (editable?'<button data-act="krl-del-task" data-mid="'+mid+'" data-kind="'+kind+'" data-tid="'+task.id+'" style="padding:4px 8px;background:none;border:1px solid transparent;border-radius:6px;cursor:pointer;color:var(--text-soft);font-size:13px;line-height:1;flex-shrink:0;" title="이 작업 삭제">✕</button>':'')+
-      '</div>'+
-      // 2행 — 체크박스 + 본문 (꽉 차게)
-      '<div style="display:flex;align-items:flex-start;gap:8px;width:100%;">'+
-        '<button class="rt-check '+(task.d?'checked':'')+'" style="width:20px;height:20px;border-width:2px;border-radius:5px;flex-shrink:0;margin-top:10px;" data-act="krl-toggle-task" data-mid="'+mid+'" data-kind="'+kind+'" data-tid="'+task.id+'"'+dis+tip+'>'+(task.d?'✓':'')+'</button>'+
-        '<textarea data-krl-field="task-text" data-krl-autogrow data-mid="'+mid+'" data-kind="'+kind+'" data-tid="'+task.id+'" rows="3" placeholder="할일 내용을 적어주세요 (여러 줄 가능)" style="'+textStyle+'"'+ro+tip+'>'+escapeHtml(task.t||'')+'</textarea>'+
-      '</div>'+
+    const textStyle='width:100%;padding:9px 12px;border:1px solid var(--line);border-radius:6px;background:#FAFAFA;outline:none;font-size:13.5px;line-height:1.6;font-family:inherit;color:var(--text);resize:none;overflow:hidden;min-height:60px;box-sizing:border-box;'+(task.d?'text-decoration:line-through;color:var(--text-soft);':'');
+    return '<div class="krl-task-row" data-tid="'+task.id+'" data-mid="'+mid+'" data-kind="'+kind+'" style="display:flex;align-items:flex-start;gap:6px;padding:6px 0;border-bottom:1px dashed #F0F0F2;">'+
+      '<button class="rt-check '+(task.d?'checked':'')+'" style="width:18px;height:18px;border-width:1.5px;border-radius:4px;flex-shrink:0;margin-top:9px;" data-act="krl-toggle-task" data-mid="'+mid+'" data-kind="'+kind+'" data-tid="'+task.id+'"'+dis+tip+'>'+(task.d?'✓':'')+'</button>'+
+      '<textarea data-krl-field="task-text" data-krl-autogrow data-mid="'+mid+'" data-kind="'+kind+'" data-tid="'+task.id+'" rows="2" placeholder="할일 내용을 적어주세요" style="'+textStyle+'"'+ro+tip+'>'+escapeHtml(task.t||'')+'</textarea>'+
+      '<select data-krl-field="task-kr" data-mid="'+mid+'" data-kind="'+kind+'" data-tid="'+task.id+'" style="font-size:10.5px;padding:5px 7px;background:white;color:var(--text-soft);border:1px solid var(--line);border-radius:5px;outline:none;cursor:pointer;font-family:inherit;width:32px;text-indent:-9999px;flex-shrink:0;margin-top:6px;" title="KR/Initiative 변경"'+dis+'>'+
+      buildKROptions(selValue,allKR)+'</select>'+
+      (editable?'<button data-act="krl-del-task" data-mid="'+mid+'" data-kind="'+kind+'" data-tid="'+task.id+'" style="padding:4px 6px;margin-top:6px;background:none;border:1px solid transparent;border-radius:5px;cursor:pointer;color:var(--text-soft);font-size:12px;flex-shrink:0;line-height:1;" title="이 작업 삭제">✕</button>':'')+
       '</div>';
+  }
+  // 호환성 — 기존 호출은 그룹 헤더가 없는 단독 행 (예: krl-add-task 후 신규 행 추가)
+  function renderTaskRowHtml(task,mid,kind){return renderTaskRowGrouped(task,mid,kind);}
+  // v16 — KR/Init별로 작업 그룹화
+  function groupTasksByLink(tasks){
+    const order=[],groups=new Map();
+    tasks.forEach(t=>{
+      const key=t.i?'init:'+t.i:(t.k?'kr:'+t.k:'none');
+      if(!groups.has(key)){groups.set(key,[]);order.push(key);}
+      groups.get(key).push(t);
+    });
+    return{order,groups};
+  }
+  function renderTaskGroupHead(key){
+    let icon='⚪',title='운영 (KR 무관)',bg='#F4F4F5',fg='#737373',border='#E5E5E8';
+    if(key.startsWith('kr:')){
+      const kr=collectAllKR().find(k=>k.id===key.slice(3));
+      if(kr){icon='📌';title=kr.title||'(제목 없는 KR)';bg='#EEEAFE';fg='#6241F5';border='#D9CFFB';}
+    }else if(key.startsWith('init:')){
+      const init=collectAllInit().find(x=>x.id===key.slice(5));
+      if(init){icon='⚡';title=init.title||'(제목 없는 Initiative)';bg='#D9CFFB';fg='#3A2670';border='#B5A0F0';}
+    }
+    return{icon,title,bg,fg,border};
   }
   function renderTaskListBlock(mid,kind,label){
     const data=getMemberTasks(mid,kind);
@@ -2605,14 +2616,30 @@ init();
     const editable=(typeof canEditAs==='function')?canEditAs(mid):true;
     const dis=editable?'':' disabled';
     const tip=editable?'':' title="본인이 작성한 항목만 수정할 수 있습니다"';
-    return '<div class="krl-block" data-krl-block="'+mid+':'+kind+'" style="background:white;border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin-top:8px;">'+
+    // v16 — KR/Init별 그룹화
+    const{order,groups}=groupTasksByLink(tasks);
+    const groupsHtml=order.map(key=>{
+      const gTasks=groups.get(key);
+      const h=renderTaskGroupHead(key);
+      return '<div class="krl-group" data-group-key="'+escapeHtml(key)+'" style="margin-bottom:8px;border:1px solid '+h.border+';border-radius:7px;overflow:hidden;background:white;">'+
+        '<div class="krl-group-head" style="background:'+h.bg+';color:'+h.fg+';padding:5px 10px;font-size:11.5px;font-weight:700;display:flex;align-items:center;gap:6px;">'+
+          '<span style="flex-shrink:0;">'+h.icon+'</span>'+
+          '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+escapeHtml(h.title)+'">'+escapeHtml(h.title)+'</span>'+
+          '<span style="font-size:10px;opacity:.75;flex-shrink:0;">'+gTasks.length+'건</span>'+
+        '</div>'+
+        '<div class="krl-group-tasks" style="padding:2px 10px;">'+
+          gTasks.map(t=>renderTaskRowGrouped(t,mid,kind)).join('')+
+        '</div>'+
+      '</div>';
+    }).join('');
+    return '<div class="krl-block" data-krl-block="'+mid+':'+kind+'" style="background:#FAFAFB;border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin-top:8px;">'+
       '<div class="krl-block-head" data-krl-head="'+mid+':'+kind+'" style="font-size:12px;color:var(--text-soft);font-weight:600;margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">'+
         (tasks.length>0?'<span style="display:inline-flex;align-items:center;gap:6px;">'+escapeHtml(label)+'<span class="krl-count" style="font-size:11px;color:var(--text-soft);font-weight:600;">'+tasks.length+'건</span></span>':'<span></span>')+
         '<span class="krl-right" style="display:inline-flex;align-items:center;gap:6px;">'+
           (editable?'<button data-act="krl-add-task" data-mid="'+mid+'" data-kind="'+kind+'" style="padding:4px 10px;font-size:11px;color:#6241F5;background:#EEEAFE;border:1px dashed #D9CFFB;border-radius:5px;cursor:pointer;font-weight:700;font-family:inherit;line-height:1.4;"'+dis+tip+'>＋ '+addLabel+'</button>':'')+
         '</span>'+
       '</div>'+
-      '<div class="krl-tasks" data-krl-tasks="'+mid+':'+kind+'">'+tasks.map(t=>renderTaskRowHtml(t,mid,kind)).join('')+'</div>'+
+      '<div class="krl-tasks" data-krl-tasks="'+mid+':'+kind+'">'+groupsHtml+'</div>'+
       (legacy?'<div class="krl-legacy" data-krl-legacy="'+mid+':'+kind+'" style="font-size:12.5px;color:var(--text);background:#FFF8E1;border:1px dashed #E5B340;border-radius:6px;padding:8px 10px;margin-top:6px;line-height:1.55;"><div style="font-size:10.5px;font-weight:700;color:#946800;margin-bottom:3px;">기존 평문 메모</div>'+escapeHtml(legacy)+'<br><button data-act="krl-clear-legacy" data-mid="'+mid+'" data-kind="'+kind+'" style="margin-top:5px;font-size:11px;color:#6241F5;background:none;border:none;cursor:pointer;padding:0;font-weight:700;">이 메모 정리 →</button></div>':'')+
       '</div>';
   }
@@ -2689,29 +2716,43 @@ init();
               '<div style="font-size:11px;color:#946800;font-weight:700;margin-bottom:8px;letter-spacing:.3px;">📅 최근 7일 작성 내역 (담당자 본인은 ✓ 체크 가능)</div>'+
               recent.map(r=>{
                 const dateLabel=fmtDate(r.date);
-                const tasksHtml=r.tasks.map(t=>{
-                  const initInfo=t.i?initMap[t.i]:null;
-                  const krInfo=t.k?krMap[t.k]:null;
-                  const tagChip=initInfo
-                    ?'<span style="font-size:10px;background:#D9CFFB;color:#3A2670;padding:1px 7px;border-radius:999px;font-weight:700;margin-right:5px;white-space:nowrap;">⚡ '+esc(initInfo.title.slice(0,14))+(initInfo.title.length>14?'…':'')+'</span>'
-                    :(krInfo?'<span style="font-size:10px;background:#EEEAFE;color:#6241F5;padding:1px 7px;border-radius:999px;font-weight:700;margin-right:5px;white-space:nowrap;">📌 '+esc(krInfo.title.slice(0,14))+(krInfo.title.length>14?'…':'')+'</span>':'');
-                  const krChip=tagChip;
-                  // 체크박스: 담당자 본인이면 클릭 가능 버튼, 아니면 plain 표시
-                  let checkHtml;
-                  if(ownerEditable){
-                    checkHtml='<button class="rt-check '+(t.d?'checked':'')+'" style="width:16px;height:16px;border-width:1.5px;border-radius:4px;flex-shrink:0;margin-top:2px;margin-right:6px;display:inline-flex;align-items:center;justify-content:center;font-size:11px;padding:0;line-height:1;" data-act="recent-toggle-task" data-mid="'+mid+'" data-date="'+r.date+'" data-tid="'+t.id+'" title="이 작업 완료 토글">'+(t.d?'✓':'')+'</button>';
-                  }else{
-                    checkHtml='<span style="display:inline-block;width:16px;text-align:center;margin-right:4px;color:'+(t.d?'var(--growth)':'var(--text-soft)')+';">'+(t.d?'✓':'•')+'</span>';
+                // v16 — 날짜 내에서 KR/Init별 그룹화
+                const tGroups=new Map();const tOrder=[];
+                (r.tasks||[]).forEach(t=>{
+                  const key=t.i?'init:'+t.i:(t.k?'kr:'+t.k:'none');
+                  if(!tGroups.has(key)){tGroups.set(key,[]);tOrder.push(key);}
+                  tGroups.get(key).push(t);
+                });
+                const groupedTasksHtml=tOrder.map(key=>{
+                  const gTasks=tGroups.get(key);
+                  // 그룹 헤더
+                  let icon='⚪',title='운영 (KR 무관)',bg='#F5F5F6',fg='#737373';
+                  if(key.startsWith('init:')){
+                    const init=initMap[key.slice(5)];
+                    if(init){icon='⚡';title=init.title;bg='#D9CFFB';fg='#3A2670';}
+                  }else if(key.startsWith('kr:')){
+                    const kr=krMap[key.slice(3)];
+                    if(kr){icon='📌';title=kr.title;bg='#EEEAFE';fg='#6241F5';}
                   }
-                  return '<div class="recent-task-row" data-recent-tid="'+t.id+'" data-recent-mid="'+mid+'" data-recent-date="'+r.date+'" style="font-size:12.5px;line-height:1.55;padding:3px 0;display:flex;align-items:flex-start;">'+
-                    checkHtml+
-                    '<span class="recent-task-text" style="flex:1;color:'+(t.d?'var(--text-soft)':'var(--text)')+';'+(t.d?'text-decoration:line-through;':'')+'">'+krChip+esc((t.t||'').slice(0,300))+'</span>'+
-                  '</div>';
+                  const head=`<div style="display:inline-flex;align-items:center;gap:4px;background:${bg};color:${fg};padding:2px 8px;border-radius:999px;font-size:10px;font-weight:700;margin-bottom:3px;"><span>${icon}</span><span style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${esc(title)}">${esc(title)}</span><span style="opacity:.7;">${gTasks.length}</span></div>`;
+                  const taskItems=gTasks.map(t=>{
+                    let checkHtml;
+                    if(ownerEditable){
+                      checkHtml='<button class="rt-check '+(t.d?'checked':'')+'" style="width:16px;height:16px;border-width:1.5px;border-radius:4px;flex-shrink:0;margin-top:2px;margin-right:6px;display:inline-flex;align-items:center;justify-content:center;font-size:11px;padding:0;line-height:1;" data-act="recent-toggle-task" data-mid="'+mid+'" data-date="'+r.date+'" data-tid="'+t.id+'" title="이 작업 완료 토글">'+(t.d?'✓':'')+'</button>';
+                    }else{
+                      checkHtml='<span style="display:inline-block;width:16px;text-align:center;margin-right:4px;color:'+(t.d?'var(--growth)':'var(--text-soft)')+';">'+(t.d?'✓':'•')+'</span>';
+                    }
+                    return '<div class="recent-task-row" data-recent-tid="'+t.id+'" data-recent-mid="'+mid+'" data-recent-date="'+r.date+'" style="font-size:12.5px;line-height:1.55;padding:2px 0 2px 8px;display:flex;align-items:flex-start;">'+
+                      checkHtml+
+                      '<span class="recent-task-text" style="flex:1;color:'+(t.d?'var(--text-soft)':'var(--text)')+';'+(t.d?'text-decoration:line-through;':'')+'">'+esc((t.t||'').slice(0,300))+'</span>'+
+                    '</div>';
+                  }).join('');
+                  return `<div style="margin-bottom:6px;">${head}${taskItems}</div>`;
                 }).join('');
                 const legacyHtml=r.legacy&&r.legacy.trim()?'<div style="font-size:12.5px;color:var(--text);line-height:1.55;padding:2px 0;white-space:pre-wrap;">'+esc(r.legacy)+'</div>':'';
-                return '<div style="margin-bottom:8px;padding-bottom:6px;border-bottom:1px dashed #F5E0A8;">'+
-                  '<div style="font-size:11px;color:#946800;font-weight:700;margin-bottom:3px;">'+dateLabel+'</div>'+
-                  tasksHtml+legacyHtml+
+                return '<div style="margin-bottom:10px;padding-bottom:8px;border-bottom:1px dashed #F5E0A8;">'+
+                  '<div style="font-size:11px;color:#946800;font-weight:700;margin-bottom:5px;">'+dateLabel+'</div>'+
+                  groupedTasksHtml+legacyHtml+
                 '</div>';
               }).join('')+
             '</div>';
@@ -2769,8 +2810,19 @@ init();
       const newTask={id:newTaskId(),t:'',k:'',d:false};
       data.tasks.push(newTask);
       updateMemberTasks(mid,kind,data.legacy,data.tasks);
-      const container=document.querySelector('[data-krl-tasks="'+mid+':'+kind+'"]');
-      if(container){const tmp=document.createElement('div');tmp.innerHTML=renderTaskRowHtml(newTask,mid,kind);const newRow=tmp.firstElementChild;container.appendChild(newRow);updateCount(mid,kind,data.tasks.length);const ta=newRow.querySelector('textarea[data-krl-field="task-text"]');if(ta){ta.focus();autoGrow(ta);}}
+      // v16 — 그룹 구조 변경 가능 → 전체 블록 재렌더
+      const block=document.querySelector('[data-krl-block="'+mid+':'+kind+'"]');
+      if(block){
+        const tmp=document.createElement('div');
+        tmp.innerHTML=renderTaskListBlock(mid,kind,kind==='today'?'추가 할일':'추가 작업');
+        const newBlock=tmp.firstElementChild;
+        if(newBlock){block.replaceWith(newBlock);
+          setTimeout(()=>{
+            const ta=document.querySelector('textarea[data-krl-field="task-text"][data-tid="'+newTask.id+'"]');
+            if(ta){ta.focus();autoGrow(ta);}
+          },0);
+        }
+      }
       scheduleDistributionUpdate();
     }
     else if(a==='krl-toggle-task'){
@@ -2826,11 +2878,14 @@ init();
       t.k='';t.i='';
     }
     updateMemberTasks(mid,kind,data.legacy,data.tasks);
-    const isInit=!!t.i;const hasKR=!!t.k;
-    // 칩 색 — Initiative는 좀 더 진한 보라, KR은 연한 보라
-    if(isInit){el.style.background='#D9CFFB';el.style.color='#3A2670';el.style.borderColor='#B5A0F0';}
-    else if(hasKR){el.style.background='#EEEAFE';el.style.color='#6241F5';el.style.borderColor='#D9CFFB';}
-    else{el.style.background='#F4F4F5';el.style.color='#737373';el.style.borderColor='var(--line)';}
+    // v16 — 그룹화: KR 변경 시 작업이 다른 그룹으로 이동 → 블록 재렌더
+    const block=document.querySelector('[data-krl-block="'+mid+':'+kind+'"]');
+    if(block){
+      const tmp=document.createElement('div');
+      tmp.innerHTML=renderTaskListBlock(mid,kind,kind==='today'?'추가 할일':'추가 작업');
+      const newBlock=tmp.firstElementChild;
+      if(newBlock)block.replaceWith(newBlock);
+    }
     scheduleDistributionUpdate();
   });
   document.addEventListener('focusin',function(e){const el=e.target;if(el.tagName==='TEXTAREA'&&el.dataset.krlField==='task-text'){el.style.background='white';el.style.borderColor='#6241F5';}});
