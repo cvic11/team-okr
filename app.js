@@ -491,7 +491,7 @@ const GUIDES={
 const CONF_HINTS={high:'9/10 — 거의 확실. 야심 부족 가능성 (sandbag 신호)',mid:'5~7/10 — 적정 stretch. 시작 시점 권장 위치 (Wodtke 원칙)',low:'3/10 이하 — 위험 신호. 도움 요청 권장'};
 let currentView='today',viewingDate=todayKey(),presentMode=false;
 let presentMid=null; // v12 — 발표 모드에서 현재 표시 중인 팀원 id (날짜 변경해도 유지)
-let expanded=new Set(),krExpanded=new Set(),realityOpen=new Set(),krMenuOpen=new Set();
+let expanded=new Set(),krCollapsed=new Set(),realityOpen=new Set(),krMenuOpen=new Set();
 let okrSearchQuery='';
 let reflSearchQuery='';
 const DARK_KEY='team-okr-dark';
@@ -1011,12 +1011,14 @@ function renderInlineKRRow(kr,oid){
       <div style="font-size:10px;color:var(--text-soft);font-weight:700;letter-spacing:.3px;margin-bottom:4px;">⚡ INITIATIVES · ${inits.length}건</div>
       ${inits.map(i=>{
         const st=i.status||'todo';
-        const stColors={todo:{bg:'#F4F4F5',fg:'#737373'},doing:{bg:'#EEEAFE',fg:'#6241F5'},done:{bg:'#E6F6EE',fg:'#30AB62'},blocked:{bg:'#FCE8E9',fg:'#E5484D'}};
-        const sc=stColors[st]||stColors.todo;
+        const stColors={doing:{bg:'#EEEAFE',fg:'#6241F5'},done:{bg:'#E6F6EE',fg:'#30AB62'},blocked:{bg:'#FCE8E9',fg:'#E5484D'}};
+        const sc=stColors[st];
         const iOwn=state.members.find(m=>m.id===i.ownerId);
         const iOver=isOverdue(i.dueDate,st);
+        // v15 — '할 일'(todo) 상태는 칩 숨김 (중복 표현 제거)
+        const chip=sc?`<span style="font-size:10px;padding:1px 7px;border-radius:999px;background:${sc.bg};color:${sc.fg};font-weight:700;flex-shrink:0;white-space:nowrap;">${STATUS_LABELS[st]}</span>`:'';
         return `<div style="display:flex;align-items:center;gap:6px;padding:3px 0;font-size:12px;line-height:1.45;">
-          <span style="font-size:10px;padding:1px 7px;border-radius:999px;background:${sc.bg};color:${sc.fg};font-weight:700;flex-shrink:0;white-space:nowrap;">${STATUS_LABELS[st]}</span>
+          ${chip}
           <span style="flex:1;min-width:0;color:${st==='done'?'var(--text-soft)':'var(--text)'};${st==='done'?'text-decoration:line-through;':''};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${esc(i.title||'')}">${esc(i.title||'(제목 없음)')}</span>
           ${iOwn?`<span style="font-size:10.5px;color:var(--text-soft);font-weight:600;flex-shrink:0;">${esc(iOwn.name)}</span>`:''}
           ${i.dueDate?`<span style="font-size:10px;color:${iOver?'var(--warning)':'var(--text-soft)'};font-weight:600;flex-shrink:0;">${dueShort(i.dueDate)}${iOver?'·지연':''}</span>`:''}
@@ -1258,7 +1260,7 @@ function renderObjective(o,idx){
   return `<div class="obj-card" data-obj-id="${o.id}" draggable="true" data-drag-type="obj"><div class="obj-head"><span class="drag-handle" title="드래그로 순서 변경">⋮⋮</span><button class="obj-toggle btn-icon" data-act="toggle-obj" data-oid="${o.id}">${open?I.chevUp:I.chevDown}</button><div class="obj-body"><div class="obj-tags"><span class="tag-id">O${idx+1}</span>${guideHelp('objective')}<select class="tag-owner" data-field="obj-owner" data-oid="${o.id}"><option value="">담당 미지정</option>${state.members.map(m=>`<option value="${m.id}" ${o.ownerId===m.id?'selected':''}>${esc(m.name)}</option>`).join('')}</select>${renderConfChip('objective',o.id,o.confidence||'mid')}<button class="reality-toggle ${hr?'has-content':''}" data-act="toggle-reality" data-key="${rk}">${ro?'Reality ▴':'Reality ▾'}</button><button class="btn-icon" data-act="show-history" data-etype="objective" data-eid="${o.id}" title="이력">${I.clock}</button><button class="btn-icon" data-act="open-reflection" data-etype="objective" data-eid="${o.id}" data-period="final" title="회고 작성">${I.star}</button></div><input class="obj-title-input" data-field="obj-title" data-oid="${o.id}" value="${esc(o.title)}" placeholder="가슴 뛰는 도달점 (예: 편의점 창업 희망자들이 CU의 브리핑을 먼저 떠올리고 CU만을 희망한다)" /><input class="obj-desc-input" data-field="obj-desc" data-oid="${o.id}" placeholder="이 목표가 달성되었을 때 우리 팀·고객에게 어떤 변화가 있는가" value="${esc(o.description||'')}" />${ro?renderRealityBox('objective',o.id,o.realityBlocker,o.realityHelp):''}</div><div class="obj-avg-wrap"><div class="obj-avg-label">평균 진척</div><div class="obj-avg" data-obj-avg style="color:${progressColor(avg)};">${avg}%</div><div class="obj-actions"><button class="btn-icon" data-act="del-obj" data-oid="${o.id}" title="삭제">${I.trash}</button></div></div></div>${open?`<div class="obj-krs">${o.keyResults.length===0?`<div style="padding:14px 22px;">${renderGuideCard('kr')}</div>`:''}${o.keyResults.map((kr,ki)=>renderKR(o.id,kr,ki)).join('')}<div class="add-line"><button class="btn btn-soft" data-act="add-kr" data-oid="${o.id}">${I.plus} KR 추가</button>${o.keyResults.length>5?'<span style="font-size:11px;color:var(--warning);font-weight:600;margin-left:8px;align-self:center;">⚠ 권장 3~5개</span>':o.keyResults.length<3&&o.keyResults.length>0?'<span style="font-size:11px;color:var(--text-soft);margin-left:8px;align-self:center;">권장 3~5개 (현재 '+o.keyResults.length+'개)</span>':''}</div></div>`:''}</div>`;
 }
 function renderKR(oid,kr,idx){
-  const p=pct(kr.current,kr.target);const rk=`kr:${kr.id}`;const ro=realityOpen.has(rk);const hr=(kr.realityBlocker||kr.realityHelp);const ko=krExpanded.has(kr.id);
+  const p=pct(kr.current,kr.target);const rk=`kr:${kr.id}`;const ro=realityOpen.has(rk);const hr=(kr.realityBlocker||kr.realityHelp);const ko=!krCollapsed.has(kr.id);
   const mo=krMenuOpen.has(kr.id);
   const dueDisp=kr.dueDate?dueShort(kr.dueDate):'';
   const dueClr=isOverdue(kr.dueDate)?'var(--warning)':'var(--text-soft)';
@@ -1506,7 +1508,7 @@ document.addEventListener('click',async e=>{
     const oid=btn.dataset.oid,krid=btn.dataset.krid;
     currentView='okr';
     if(!expanded.has(oid))expanded.add(oid);
-    if(!krExpanded.has(krid))krExpanded.add(krid);
+    krCollapsed.delete(krid);
     render();
     setTimeout(()=>{const el=document.querySelector(`[data-kr-id="${krid}"]`);if(el){el.scrollIntoView({behavior:'smooth',block:'center'});el.style.transition='background .8s';el.style.background='#FFF8DC';setTimeout(()=>el.style.background='',1500);}},150);
     return;
@@ -1537,7 +1539,7 @@ document.addEventListener('click',async e=>{
   if(a==='date-shift'){viewingDate=shiftDate(viewingDate,parseInt(btn.dataset.delta));if(!state.standups[viewingDate]||!state.routineLogs[viewingDate]){dateLoading=true;render();await Promise.all([loadStandup(viewingDate),loadRoutineLogs(viewingDate)]);dateLoading=false;}render();return;}
   if(a==='date-today'){viewingDate=todayKey();render();return;}
   if(a==='toggle-obj'){const oid=btn.dataset.oid;expanded.has(oid)?expanded.delete(oid):expanded.add(oid);render();return;}
-  if(a==='toggle-kr'){const k=btn.dataset.krid;krExpanded.has(k)?krExpanded.delete(k):krExpanded.add(k);render();return;}
+  if(a==='toggle-kr'){const k=btn.dataset.krid;krCollapsed.has(k)?krCollapsed.delete(k):krCollapsed.add(k);render();return;}
   if(a==='toggle-kr-menu'){const k=btn.dataset.krid;krMenuOpen.has(k)?krMenuOpen.delete(k):krMenuOpen.add(k);render();return;}
   if(a==='toggle-reality'){
     const k=btn.dataset.key;
