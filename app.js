@@ -520,11 +520,11 @@ const GUIDES={
   objective:{title:'Objective — 분기 도달점의 정의',body:'KPI가 아니라 도달 후 변화의 모습. 짧고 외울 수 있어야(memorable) 팀이 따릅니다.',no:['"매출 10% 증가" — 결과 수치는 KR 자리'],yes:['"편의점 창업 희망자들이 CU의 브리핑을 먼저 떠올리고 CU만을 희망한다"','"GS25 대비 매출 2배 — 압도적 업계 1위 달성"'],check:'영감(Inspiring) · 정성(Qualitative) · 시간 제한 · 외울 수 있음 · 권장 1~3개/분기'},
   kr:{title:'Key Result — 달성 판정의 기준',body:'"So What?" 테스트 — 이 수치가 달성되면 누구에게 어떤 가치가 발생하는가. Output(산출물)이 아닌 Outcome(결과)을 측정하십시오.',no:['"본부 회의 5회 진행" — Output(작업)은 Initiative 자리','"보고서 3건 제출" — 산출물 ≠ 결과'],yes:['"매장당 평균 매출 GS25 대비 200%" — 시장 지위','"가맹문의 월 1,000건" — 시장 인식','"점주 NPS 70점" — 측정 가능한 결과'],check:'Outcome(산출물 X) · 정량 측정 · 70% 달성도 성공 · 권장 3~5개/O'},
   initiative:{title:'Initiative — KR 달성을 위한 액션',body:'KR이 "무엇을"이라면 Initiative는 "어떻게". 완료 후 KR 진척이 그려져야 합니다. (Initiative=Output이지만 KR=Outcome)',no:null,yes:null,check:'통제 가능 · 1~4주 단위 · KR과 직결'},
-  confidence:{title:'Confidence — 자신감 (Wodtke 원칙)',body:'OKR 시작 시점의 적정 위치는 "중". 매주 점검하며 변화 이유를 토의합니다.',no:['상(高)으로 시작 — 야심이 부족하다는 신호 (sandbagging)'],yes:['중(中)으로 시작 — 50~70% 확률, 적정 stretch'],check:'중(5~7/10) — 적정 · 상(9/10) — 너무 쉬움 · 하(3/10) — 위험·도움 요청'},
+  confidence:{title:'Confidence — 자신감 (Wodtke 원칙)',body:'OKR 시작 시점의 적정 위치는 "해볼만합니다". 매주 점검하며 변화 이유를 토의합니다.',no:['"자신있어요"로 시작 — 야심이 부족하다는 신호 (sandbagging)'],yes:['"해볼만합니다"로 시작 — 50~70% 확률, 적정 stretch'],check:'해볼만합니다 (5~7/10) — 적정 · 자신있어요 (9/10) — 너무 쉬움 · 쉽지 않아요 (3/10) — 도움 요청 필요'},
   cadence:{title:'운영 리듬 (Cadence)',body:'OKR은 한번 세우고 끝이 아닙니다. 정기 점검이 도구의 절반입니다.',no:null,yes:null,check:'매주 — Confidence 점검 + KR 진척 갱신 (10~15분) · 격주 — 1on1·막힘 점검 · 분기말 — 4질문 회고'},
   headline:{title:'오늘의 한 줄 — 회의 초점',body:'아침 스탠드업·본부 회의의 초점을 두괄식 한 문장으로. 모든 참석자가 회의 시작 전에 같은 그림을 보게 됩니다.',no:['"오늘 할 일들..." — 평면적 나열'],yes:['"가맹문의 KR 50% 돌파를 위해 인터뷰 결과 합의가 필요"','"AI MVP 시연 일정 확정"'],check:'두괄식 · 결론 · 의사결정 또는 합의 사항 명시'}
 };
-const CONF_HINTS={high:'9/10 — 거의 확실. 야심 부족 가능성 (sandbag 신호)',mid:'5~7/10 — 적정 stretch. 시작 시점 권장 위치 (Wodtke 원칙)',low:'3/10 이하 — 위험 신호. 도움 요청 권장'};
+const CONF_HINTS={high:'자신있어요 — 9/10. 달성 거의 확실 (야심 부족 신호일 수도)',mid:'해볼만합니다 — 5~7/10. 적정 stretch (Wodtke 원칙의 권장 위치)',low:'쉽지 않아요 — 3/10 이하. 도움·자원 요청 권장'};
 let currentView='today',viewingDate=todayKey(),presentMode=false;
 let presentMid=null; // v12 — 발표 모드에서 현재 표시 중인 팀원 id (날짜 변경해도 유지)
 let expanded=new Set(),krCollapsed=new Set(),realityOpen=new Set(),krMenuOpen=new Set();
@@ -1083,7 +1083,6 @@ function renderInlineKRRow(kr,oid){
   return `<div class="kr-inline-row" data-kr-id="${kr.id}" style="padding:10px 0;border-bottom:1px solid #F4F4F5;">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap;">
       <span style="font-size:13.5px;font-weight:700;color:var(--text);flex:1;min-width:120px;line-height:1.4;">${esc(kr.title||'(제목 없음)')}</span>
-      ${o?`<span class="kr-strip-owner" style="font-size:11px;">${esc(o.name)}</span>`:''}
       <span class="conf-chip ${kr.confidence||'mid'}" style="cursor:default;font-size:10.5px;padding:1px 7px;">${CONF_LABELS[kr.confidence||'mid']}</span>
     </div>
     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
@@ -1106,7 +1105,6 @@ function renderObjectivePanel(o,slotIdx){
     </section>`;
   }
   const krs=o.keyResults||[];
-  const owner=state.members.find(m=>m.id===o.ownerId);
   const objAvg=krs.length?Math.round(krs.reduce((s,k)=>s+pct(k.current,k.target),0)/krs.length):0;
   return `<section class="card" style="margin:0;display:flex;flex-direction:column;">
     <div class="section-head" style="align-items:flex-start;gap:8px;">
@@ -1114,7 +1112,7 @@ function renderObjectivePanel(o,slotIdx){
       <span class="section-title" style="line-height:1.45;flex:1;min-width:0;font-size:15px;">${esc(o.title||'(Objective 미작성)')}</span>
       <span style="font-size:11.5px;color:var(--text-soft);font-weight:600;flex-shrink:0;">평균 <strong style="color:${progressColor(objAvg)};font-size:13px;">${objAvg}%</strong></span>
     </div>
-    ${owner?`<div style="font-size:11px;color:var(--text-soft);margin-bottom:4px;">담당 ${esc(owner.name)} · KR ${krs.length}개</div>`:`<div style="font-size:11px;color:var(--text-soft);margin-bottom:4px;">KR ${krs.length}개</div>`}
+    <div style="font-size:11px;color:var(--text-soft);margin-bottom:4px;">KR ${krs.length}개</div>
     <div style="flex:1;">
       ${krs.length===0?'<div style="font-size:13px;color:var(--text-soft);padding:14px 0;text-align:center;">KR을 추가하세요.</div>':krs.map(k=>renderInlineKRRow(k,o.id)).join('')}
     </div>
@@ -1239,7 +1237,7 @@ function renderDashboard(){
   const overdueKR=allKR.filter(k=>isOverdue(k.dueDate)).length;
   const t=currentTeam();
   return `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px;">
-    <div><h2 style="font-weight:800;font-size:23px;margin:0;">📊 분기 대시보드</h2><div style="font-size:13px;color:var(--text-soft);margin-top:2px;">${esc(t?.name||'')} · ${esc(t?.quarter||'')} · 임원 보고용 한판</div></div>
+    <div><h2 style="font-weight:800;font-size:23px;margin:0;">📊 분기 대시보드</h2><div style="font-size:13px;color:var(--text-soft);margin-top:2px;">${esc(t?.name||'')} · ${esc(t?.quarter||'')}</div></div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;"><button class="btn btn-soft" data-act="export-excel">${I.download} Excel</button><button class="btn btn-ghost" data-act="print-report">${I.print} 리포트</button></div>
   </div>
   ${renderDashKPIs(overall,allKR.length,totalInits,doneInits,blockedInits,overdueKR)}
@@ -1275,7 +1273,7 @@ function renderDashConfidenceDonut(allKR){
   let off=0;const segs=[['high',counts.high,'#30AB62'],['mid',counts.mid,'#F59E0B'],['low',counts.low,'#E5484D']];
   const arcs=segs.filter(s=>s[1]>0).map(([k,c,col])=>{const len=(c/total)*C;const dasharray=`${len} ${C-len}`;const dashoffset=-off;off+=len;return `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${col}" stroke-width="${sw}" stroke-dasharray="${dasharray}" stroke-dashoffset="${dashoffset}" transform="rotate(-90 ${cx} ${cy})"/>`;}).join('');
   const ideal=counts.mid;const idealPct=Math.round((ideal/total)*100);
-  return `<div class="card"><div class="section-head"><span class="section-title">Confidence 분포 ${guideHelp('confidence')}</span><span class="section-meta">· 중(stretch)이 이상적</span></div><div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap;justify-content:center;"><svg width="160" height="160" viewBox="0 0 160 160">${arcs}<text x="${cx}" y="${cy-2}" text-anchor="middle" font-size="22" font-weight="800" fill="var(--text)">${idealPct}%</text><text x="${cx}" y="${cy+18}" text-anchor="middle" font-size="10" fill="var(--text-soft)">적정 stretch</text></svg><div style="display:flex;flex-direction:column;gap:8px;font-size:12.5px;"><div style="display:flex;align-items:center;gap:8px;"><span style="width:12px;height:12px;background:#30AB62;border-radius:3px;"></span><span style="color:var(--text-soft);">상 (sandbag 위험)</span><span style="font-weight:700;color:var(--growth);">${counts.high}</span></div><div style="display:flex;align-items:center;gap:8px;"><span style="width:12px;height:12px;background:#F59E0B;border-radius:3px;"></span><span style="color:var(--text-soft);">중 (적정)</span><span style="font-weight:700;color:var(--amber);">${counts.mid}</span></div><div style="display:flex;align-items:center;gap:8px;"><span style="width:12px;height:12px;background:#E5484D;border-radius:3px;"></span><span style="color:var(--text-soft);">하 (위험)</span><span style="font-weight:700;color:var(--warning);">${counts.low}</span></div></div></div>${counts.high>counts.mid+counts.low?`<div style="margin-top:10px;padding:8px 10px;background:var(--amber-soft);color:var(--amber);border-radius:6px;font-size:11.5px;line-height:1.5;">⚠ "상" 비율이 높습니다 — Sandbagging 신호일 수 있습니다 (KR 야심 부족)</div>`:''}</div>`;
+  return `<div class="card"><div class="section-head"><span class="section-title">Confidence 분포 ${guideHelp('confidence')}</span><span class="section-meta">· "해볼만합니다"가 이상적</span></div><div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap;justify-content:center;"><svg width="160" height="160" viewBox="0 0 160 160">${arcs}<text x="${cx}" y="${cy-2}" text-anchor="middle" font-size="22" font-weight="800" fill="var(--text)">${idealPct}%</text><text x="${cx}" y="${cy+18}" text-anchor="middle" font-size="10" fill="var(--text-soft)">적정 stretch</text></svg><div style="display:flex;flex-direction:column;gap:8px;font-size:12.5px;"><div style="display:flex;align-items:center;gap:8px;"><span style="width:12px;height:12px;background:#30AB62;border-radius:3px;"></span><span style="color:var(--text-soft);">자신있어요</span><span style="font-weight:700;color:var(--growth);">${counts.high}</span></div><div style="display:flex;align-items:center;gap:8px;"><span style="width:12px;height:12px;background:#F59E0B;border-radius:3px;"></span><span style="color:var(--text-soft);">해볼만합니다 (적정)</span><span style="font-weight:700;color:var(--amber);">${counts.mid}</span></div><div style="display:flex;align-items:center;gap:8px;"><span style="width:12px;height:12px;background:#E5484D;border-radius:3px;"></span><span style="color:var(--text-soft);">쉽지 않아요</span><span style="font-weight:700;color:var(--warning);">${counts.low}</span></div></div></div>${counts.high>counts.mid+counts.low?`<div style="margin-top:10px;padding:8px 10px;background:var(--amber-soft);color:var(--amber);border-radius:6px;font-size:11.5px;line-height:1.5;">💡 "자신있어요" 비율이 높습니다 — KR이 너무 쉬울 수 있어요 (야심 검토 권장)</div>`:''}</div>`;
 }
 function renderDashActivityHeatmap(){
   const cache=dashboardActivityCache.data;
