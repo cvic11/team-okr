@@ -322,6 +322,29 @@ window.addEventListener('beforeunload',()=>{
 // v15·v16 — 권한 모델
 function isAdmin(){const s=selfMember();return !!(s&&s.isAdmin);}
 function selfIsObserver(){const s=selfMember();return !!(s&&s.isObserver);}
+// v16 — 옵저버 1시간 자동 로그아웃 감시 (30초 간격)
+let _observerLogoutWatcher=null;
+function startObserverLogoutWatcher(){
+  if(_observerLogoutWatcher)return;
+  _observerLogoutWatcher=setInterval(()=>{
+    if(!state.selfId||state.selfId==='__observer__')return;
+    const m=state.members.find(x=>x.id===state.selfId);
+    if(!m||!m.isObserver)return;
+    // 1시간 만료 검사
+    if(!isPinAuthValid(state.selfId)){
+      // 강제 로그아웃
+      clearInterval(_observerLogoutWatcher);_observerLogoutWatcher=null;
+      try{
+        const o=JSON.parse(localStorage.getItem(PIN_AUTH_KEY)||'{}');delete o[state.selfId];
+        localStorage.setItem(PIN_AUTH_KEY,JSON.stringify(o));
+      }catch(e){}
+      state.selfId=null;
+      try{localStorage.removeItem(SELF_KEY);}catch(e){}
+      showToast('옵저버 세션 1시간 만료 — 자동 로그아웃되었습니다');
+      render();
+    }
+  },30000);
+}
 function canEditOKR(){return isAdmin()||selfIsObserver();} // 옵저버도 시도 가능 (DB 저장 안 됨)
 function canEditInit(init){const s=selfMember();if(!s)return false;if(s.isAdmin||s.isObserver)return true;return !!(init&&init.ownerId===s.id);}
 // 옵저버는 모든 DB 쓰기 우회 — 화면에서만 동작
@@ -415,7 +438,10 @@ function isPinAuthValid(memberId){
   try{
     const o=JSON.parse(localStorage.getItem(PIN_AUTH_KEY)||'{}');
     const a=o[memberId];if(!a)return false;
-    return (Date.now()-a)<PIN_AUTH_TTL;
+    // v16 — 옵저버는 1시간 후 자동 로그아웃 (PIN 재인증 강제)
+    const m=state.members&&state.members.find(x=>x.id===memberId);
+    const ttl=(m&&m.isObserver)?(60*60*1000):PIN_AUTH_TTL;
+    return (Date.now()-a)<ttl;
   }catch(e){return false;}
 }
 function setPinAuth(memberId){
@@ -912,14 +938,22 @@ function render(){
   else if(currentView==='routines')html+=renderRoutinesView();
   else if(currentView==='eval')html+=renderEval();
   else if(currentView==='wbs')html+=renderWBS();
-  else if(currentView==='adminpanel')html+=renderAdminPanel();
   else html+=renderManage();
   html+='</main>';
   const t=currentTeam();
   html+=`<footer class="app-footer"><span>실시간 동기화 · ${esc(t?t.name:'')} · ${esc(t?t.quarter:'')}</span><span style="margin-left:auto;"><button class="btn-mode" data-act="reset-config">설정 변경</button></span></footer>`;
-  // v16 — 옵저버 모드 시각 배너
+  // v16 — 옵저버 모드 시각 배너 + 1시간 자동 로그아웃 남은 시간
   if(typeof isObserverMode==='function'&&isObserverMode()){
-    html=`<div style="background:linear-gradient(90deg,#6B7280,#4B5563);color:white;font-size:12px;font-weight:700;padding:6px 16px;display:flex;align-items:center;justify-content:center;gap:8px;">👁️ 옵저버 모드 — 모든 변경 사항은 화면에서만 보이고 저장되지 않습니다 (기록 남기지 않음)</div>`+html;
+    let remainTxt='';
+    try{
+      const o=JSON.parse(localStorage.getItem(PIN_AUTH_KEY)||'{}');
+      const a=o[state.selfId];
+      if(a){
+        const remainMin=Math.max(0,Math.ceil((a+60*60*1000-Date.now())/60000));
+        remainTxt=` · 약 ${remainMin}분 후 자동 로그아웃`;
+      }
+    }catch(e){}
+    html=`<div style="background:linear-gradient(90deg,#6B7280,#4B5563);color:white;font-size:12px;font-weight:700;padding:6px 16px;display:flex;align-items:center;justify-content:center;gap:8px;">👁️ 옵저버 모드 — 변경 사항은 화면에서만 보이고 저장되지 않습니다${remainTxt}</div>`+html;
   }
   app.innerHTML=html;
   document.body.classList.toggle('present',presentMode);
@@ -939,7 +973,7 @@ function render(){
 function renderHeader(){
   const t=currentTeam();const ini=teamInitial(t?.name);const col=teamColor(t);
   const tm=state.teams.map(x=>`<div class="team-menu-item ${x.id===state.currentTeamId?'active':''}" data-act="switch-team" data-tid="${x.id}"><span style="width:14px;height:14px;border-radius:4px;background:${teamColor(x)};display:inline-block;"></span><span style="flex:1;">${esc(x.name)}</span><span style="font-size:11px;color:var(--text-soft);">${esc(x.quarter)}</span></div>`).join('');
-  return `<header class="app-header"><div class="hdr-inner"><div style="display:flex;align-items:center;gap:8px;position:relative;"><div class="brand" data-act="goto-home"><div class="brand-mark" style="background:${col};">${esc(ini)}</div><div class="brand-meta"><div class="brand-title">${esc(t?t.name:'팀')} OKR <button class="team-switch" data-act="toggle-team-menu">${state.teams.length>1?'전환 ▾':'팀 ▾'}</button></div><div class="brand-sub">${esc(t?t.quarter:'')} · 일일 스프린트</div></div></div><div class="team-menu" id="team-menu">${tm}<div class="team-menu-divider"></div><div class="team-menu-add" data-act="add-team">${I.plus} 새 팀 추가</div></div></div><nav class="tabs"><span id="conn-dot" class="conn-dot ${connStatus}">${connStatus==='online'?'실시간 연결됨':connStatus==='connecting'?'연결 중':'오프라인'}</span><button class="btn-mode" data-act="open-self-picker" title="본인 변경" style="font-size:11px;">${selfMember()?'👤 '+esc(selfMember().name):isObserver()?'관찰자':'본인 선택'}</button>${selfMember()?renderHelpBell():''}<span class="tab-divider"></span><button class="tab ${currentView==='today'?'active':''}" data-act="view" data-view="today">${I.cal} 오늘</button><button class="tab ${currentView==='dashboard'?'active':''}" data-act="view" data-view="dashboard">📊 대시보드</button><button class="tab ${currentView==='okr'?'active':''}" data-act="view" data-view="okr">${I.target} OKR</button><button class="tab ${currentView==='wbs'?'active':''}" data-act="view" data-view="wbs">🗓️ WBS</button><button class="tab ${currentView==='routines'?'active':''}" data-act="view" data-view="routines">${I.loop} 루틴</button><button class="tab ${currentView==='eval'?'active':''}" data-act="view" data-view="eval">${I.star} 회고</button><button class="tab ${currentView==='manage'?'active':''}" data-act="view" data-view="manage">${I.cog} 관리</button>${isAdmin()?`<button class="tab ${currentView==='adminpanel'?'active':''}" data-act="view" data-view="adminpanel">🛡️ 관리자</button>`:''}<span class="tab-divider"></span><button class="btn-mode" data-act="present">${presentMode?I.collapse:I.expand} ${presentMode?'일반':'발표'}</button><button class="btn-mode" data-act="toggle-dark" title="다크 모드">${isDark()?'☀️':'🌙'}</button></nav></div></header>`;
+  return `<header class="app-header"><div class="hdr-inner"><div style="display:flex;align-items:center;gap:8px;position:relative;"><div class="brand" data-act="goto-home"><div class="brand-mark" style="background:${col};">${esc(ini)}</div><div class="brand-meta"><div class="brand-title">${esc(t?t.name:'팀')} OKR <button class="team-switch" data-act="toggle-team-menu">${state.teams.length>1?'전환 ▾':'팀 ▾'}</button></div><div class="brand-sub">${esc(t?t.quarter:'')} · 일일 스프린트</div></div></div><div class="team-menu" id="team-menu">${tm}<div class="team-menu-divider"></div><div class="team-menu-add" data-act="add-team">${I.plus} 새 팀 추가</div></div></div><nav class="tabs"><span id="conn-dot" class="conn-dot ${connStatus}">${connStatus==='online'?'실시간 연결됨':connStatus==='connecting'?'연결 중':'오프라인'}</span><button class="btn-mode" data-act="open-self-picker" title="본인 변경" style="font-size:11px;">${selfMember()?'👤 '+esc(selfMember().name):isObserver()?'관찰자':'본인 선택'}</button>${selfMember()?renderHelpBell():''}<span class="tab-divider"></span><button class="tab ${currentView==='today'?'active':''}" data-act="view" data-view="today">${I.cal} 오늘</button><button class="tab ${currentView==='dashboard'?'active':''}" data-act="view" data-view="dashboard">📊 대시보드</button><button class="tab ${currentView==='okr'?'active':''}" data-act="view" data-view="okr">${I.target} OKR</button><button class="tab ${currentView==='wbs'?'active':''}" data-act="view" data-view="wbs">🗓️ WBS</button><button class="tab ${currentView==='routines'?'active':''}" data-act="view" data-view="routines">${I.loop} 루틴</button><button class="tab ${currentView==='eval'?'active':''}" data-act="view" data-view="eval">${I.star} 회고</button><button class="tab ${currentView==='manage'?'active':''}" data-act="view" data-view="manage">${I.cog} 관리${isAdmin()?' · 관리자':''}</button><span class="tab-divider"></span><button class="btn-mode" data-act="present">${presentMode?I.collapse:I.expand} ${presentMode?'일반':'발표'}</button><button class="btn-mode" data-act="toggle-dark" title="다크 모드">${isDark()?'☀️':'🌙'}</button></nav></div></header>`;
 }
 
 function renderToday(){
@@ -1579,7 +1613,9 @@ function renderManage(){
   const t=currentTeam();
   const meAdmin=isAdmin();
   const adminCnt=state.members.filter(m=>m.isAdmin).length;
-  return `<section class="card"><div class="section-head" style="margin-bottom:14px;"><span class="section-title">현재 팀 정보</span><span class="section-meta">· 헤더에서 다른 팀으로 전환 가능</span></div><div class="manage-grid"><label><span class="labeled-label">팀 이름</span><input class="labeled-input" data-field="team-name" value="${esc(t?.name||'')}" /></label><label><span class="labeled-label">분기</span><input class="labeled-input" data-field="team-quarter" value="${esc(t?.quarter||'')}" /></label></div>${state.teams.length>1?`<div style="margin-top:12px;"><button class="btn btn-danger" data-act="del-team">이 팀 삭제 (모든 데이터 함께)</button></div>`:''}</section><section class="card"><div class="section-head" style="margin-bottom:14px;justify-content:space-between;"><span class="section-title">팀원 (${state.members.length}) · 관리자 ${adminCnt}명</span><button class="btn btn-soft" data-act="add-member">${I.plus} 팀원 추가</button></div><div style="font-size:11.5px;color:var(--text-soft);margin-bottom:8px;line-height:1.55;">⋮⋮ 핸들 잡고 드래그로 순서 변경. <b>관리자</b>는 OKR(O·KR) 생성·수정·삭제 권한을 가집니다 — Initiative는 본인 또는 관리자가 수정 가능.${meAdmin?'':' <b style="color:var(--warning);">현재 본인은 일반 권한 — 관리자에게 권한 부여 요청</b>'}</div>${state.members.map(m=>`<div class="member-row" data-mem-id="${m.id}" draggable="true" data-drag-type="member"><span class="drag-handle member-handle" title="드래그로 순서 변경">⋮⋮</span><input type="color" class="member-color" data-field="member-color" data-mid="${m.id}" value="${m.color}" /><input class="member-name-input" data-field="member-name" data-mid="${m.id}" value="${esc(m.name)}" /><input class="member-role-input" data-field="member-role" data-mid="${m.id}" placeholder="역할" value="${esc(m.role||'')}" /><button class="btn-mode" data-act="toggle-admin" data-mid="${m.id}" style="${m.isAdmin?'background:var(--growth-soft);color:var(--growth);font-weight:700;':''}padding:4px 10px;font-size:11.5px;" title="${meAdmin?'클릭하여 관리자 권한 토글':'관리자만 변경 가능'}"${meAdmin?'':' disabled'}>${m.isAdmin?'🛡️ 관리자':'일반'}</button><button class="btn-icon" data-act="del-member" data-mid="${m.id}">${I.trash}</button></div>`).join('')}</section><section class="card"><div class="section-head" style="margin-bottom:14px;"><span class="section-title">모든 팀</span></div>${state.teams.map(t=>`<div class="member-row"><span style="width:18px;height:18px;border-radius:5px;background:${teamColor(t)};display:inline-block;"></span><span style="flex:1;font-weight:600;font-size:13.5px;">${esc(t.name)}</span><span style="font-size:11.5px;color:var(--text-soft);">${esc(t.quarter)}</span>${t.id===state.currentTeamId?'<span class="today-tag">현재</span>':`<button class="btn btn-ghost" data-act="switch-team" data-tid="${t.id}">전환</button>`}</div>`).join('')}</section>`;
+  // v16 — 관리자 전용 섹션 (탭 통합)
+  const adminPanel=meAdmin?renderAdminPanel():'';
+  return `${adminPanel}<section class="card"><div class="section-head" style="margin-bottom:14px;"><span class="section-title">현재 팀 정보</span><span class="section-meta">· 헤더에서 다른 팀으로 전환 가능</span></div><div class="manage-grid"><label><span class="labeled-label">팀 이름</span><input class="labeled-input" data-field="team-name" value="${esc(t?.name||'')}" /></label><label><span class="labeled-label">분기</span><input class="labeled-input" data-field="team-quarter" value="${esc(t?.quarter||'')}" /></label></div>${state.teams.length>1?`<div style="margin-top:12px;"><button class="btn btn-danger" data-act="del-team">이 팀 삭제 (모든 데이터 함께)</button></div>`:''}</section><section class="card"><div class="section-head" style="margin-bottom:14px;justify-content:space-between;"><span class="section-title">팀원 (${state.members.length}) · 관리자 ${adminCnt}명</span><button class="btn btn-soft" data-act="add-member">${I.plus} 팀원 추가</button></div><div style="font-size:11.5px;color:var(--text-soft);margin-bottom:8px;line-height:1.55;">⋮⋮ 핸들 잡고 드래그로 순서 변경. <b>관리자</b>는 OKR(O·KR) 생성·수정·삭제 권한을 가집니다 — Initiative는 본인 또는 관리자가 수정 가능.${meAdmin?'':' <b style="color:var(--warning);">현재 본인은 일반 권한 — 관리자에게 권한 부여 요청</b>'}</div>${state.members.map(m=>`<div class="member-row" data-mem-id="${m.id}" draggable="true" data-drag-type="member"><span class="drag-handle member-handle" title="드래그로 순서 변경">⋮⋮</span><input type="color" class="member-color" data-field="member-color" data-mid="${m.id}" value="${m.color}" /><input class="member-name-input" data-field="member-name" data-mid="${m.id}" value="${esc(m.name)}" /><input class="member-role-input" data-field="member-role" data-mid="${m.id}" placeholder="역할" value="${esc(m.role||'')}" /><button class="btn-mode" data-act="toggle-admin" data-mid="${m.id}" style="${m.isAdmin?'background:var(--growth-soft);color:var(--growth);font-weight:700;':''}padding:4px 10px;font-size:11.5px;" title="${meAdmin?'클릭하여 관리자 권한 토글':'관리자만 변경 가능'}"${meAdmin?'':' disabled'}>${m.isAdmin?'🛡️ 관리자':'일반'}</button><button class="btn-icon" data-act="del-member" data-mid="${m.id}">${I.trash}</button></div>`).join('')}</section><section class="card"><div class="section-head" style="margin-bottom:14px;"><span class="section-title">모든 팀</span></div>${state.teams.map(t=>`<div class="member-row"><span style="width:18px;height:18px;border-radius:5px;background:${teamColor(t)};display:inline-block;"></span><span style="flex:1;font-weight:600;font-size:13.5px;">${esc(t.name)}</span><span style="font-size:11.5px;color:var(--text-soft);">${esc(t.quarter)}</span>${t.id===state.currentTeamId?'<span class="today-tag">현재</span>':`<button class="btn btn-ghost" data-act="switch-team" data-tid="${t.id}">전환</button>`}</div>`).join('')}</section>`;
 }
 
 function updateBlockerUI(date,mid){if(date!==viewingDate)return;const s=state.standups[date]||{entries:{}};const e=s.entries[mid]||{};const has=!!(e.blockers&&e.blockers.trim());const c=document.querySelector(`[data-member-card="${mid}"]`);if(c){c.classList.toggle('has-blocker',has);let b=c.querySelector('.blocker-badge');if(has&&!b){const h=c.querySelector('.member-head');if(h){const sp=document.createElement('span');sp.className='blocker-badge';sp.innerHTML=`${I.alert} 막힘`;h.appendChild(sp);}}else if(!has&&b){b.remove();}}const cnt=Object.values(s.entries||{}).filter(en=>en?.blockers?.trim()).length;const st=document.querySelector('[data-blocker-stat]');if(st){st.textContent=cnt>0?`${cnt}건`:'없음';st.style.color=cnt>0?C.warning:C.growth;}}
@@ -1604,25 +1640,33 @@ function renderLoginWall(){
 }
 
 // ============================================================
-// v16 — 관리자 탭 (로그인 기록 · 비밀번호 관리 · 옵저버 추가)
+// v16 — 관리자 패널 (로그인 기록 · 비밀번호 관리 · 옵저버 추가)
+// 관리 탭 내부에 관리자 전용 섹션으로 통합
 // ============================================================
-let _adminCachedSessions=null,_adminLastFetch=0;
+let _adminCachedSessions=null,_adminLastFetch=0,_adminFetchInFlight=false,_adminFetchError=null;
 async function fetchAdminSessions(){
   if(_adminCachedSessions&&Date.now()-_adminLastFetch<15000)return _adminCachedSessions;
+  if(_adminFetchInFlight)return _adminCachedSessions||[];
+  _adminFetchInFlight=true;
   try{
-    const {data}=await sb.from('member_sessions').select('*').eq('team_id',state.currentTeamId).order('login_at',{ascending:false}).limit(200);
-    _adminCachedSessions=data||[];_adminLastFetch=Date.now();
+    const res=await sb.from('member_sessions').select('*').eq('team_id',state.currentTeamId).order('login_at',{ascending:false}).limit(200);
+    if(res.error)throw res.error;
+    _adminCachedSessions=res.data||[];_adminLastFetch=Date.now();_adminFetchError=null;
     return _adminCachedSessions;
-  }catch(e){return [];}
+  }catch(e){
+    _adminFetchError=e&&e.message||'세션 테이블 조회 실패 (v16_migration.sql 실행 필요)';
+    _adminCachedSessions=[];_adminLastFetch=Date.now();
+    return [];
+  }finally{_adminFetchInFlight=false;}
 }
 function renderAdminPanel(){
-  if(!isAdmin()){return `<div class="empty">관리자만 접근 가능합니다. <strong>관리</strong> 탭에서 관리자 권한을 받으세요.</div>`;}
-  // 비동기 fetch 트리거
-  fetchAdminSessions().then(()=>{
-    const el=document.getElementById('admin-sessions-body');
-    if(el&&currentView==='adminpanel')render();
-  });
+  if(!isAdmin())return '';
+  // 첫 진입 시 1회만 비동기 fetch — 무한 루프 방지
+  if(_adminCachedSessions===null&&!_adminFetchInFlight){
+    fetchAdminSessions().then(()=>{if(currentView==='manage')render();});
+  }
   const sessions=_adminCachedSessions||[];
+  const fetchErr=_adminFetchError;
   // 현재 활성 (5분 이내 활동)
   const now=Date.now();
   const active=sessions.filter(s=>s.last_active_at&&(now-new Date(s.last_active_at).getTime())<5*60000);
@@ -1666,9 +1710,11 @@ function renderAdminPanel(){
     </tr>`;
   }).join('');
   const hasObserver=state.members.some(m=>m.isObserver);
-  return `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px;">
-    <div><h2 style="font-weight:800;font-size:23px;margin:0;">🛡️ 관리자 패널</h2><div style="font-size:13px;color:var(--text-soft);margin-top:2px;">로그인 기록 · 머문 시간 · 비밀번호 관리</div></div>
-  </div>
+  const errBox=fetchErr?`<div style="background:var(--warning-soft);color:var(--warning);padding:10px 12px;border-radius:6px;font-size:12px;margin-bottom:10px;line-height:1.55;">⚠ 세션 기록을 불러올 수 없습니다 — <code>v16_migration.sql</code>을 Supabase에 먼저 실행해 주세요. <br><span style="font-size:11px;opacity:.8;">상세: ${esc(fetchErr)}</span></div>`:'';
+  return `<section class="card" style="margin-bottom:14px;background:linear-gradient(135deg,#FAF8FF 0%,#FFFFFF 100%);border:1px solid #E5DFFA;">
+    <div class="section-head"><span class="section-title">🛡️ 관리자 전용</span><span class="section-meta">· 로그인 기록 · 머문 시간 · 비밀번호 관리</span></div>
+    ${errBox}
+  </section>
   <section class="card" style="margin-bottom:14px;">
     <div class="section-head"><span class="section-title">📊 계정 현황 — ${state.members.length}명 (관리자 ${state.members.filter(m=>m.isAdmin).length} · 옵저버 ${state.members.filter(m=>m.isObserver).length} · 현재 활성 ${active.length})</span></div>
     <div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:13px;">
@@ -2133,7 +2179,7 @@ document.addEventListener('click',async e=>{
     if(p1!==p2){msg.textContent='두 PIN이 일치하지 않습니다';return;}
     msg.textContent='저장 중...';msg.style.color='var(--text-soft)';
     const ok=await setMemberPin(mid,p1);
-    if(ok){setSelfId(mid);setPinAuth(mid);startMemberSession();closeModal();showToast('PIN 등록 완료');render();refreshHelpBadge();}
+    if(ok){setSelfId(mid);setPinAuth(mid);startMemberSession();startObserverLogoutWatcher();closeModal();showToast('PIN 등록 완료');render();refreshHelpBadge();}
     else{msg.style.color='var(--warning)';msg.textContent='저장 실패. 다시 시도하세요';}
     return;
   }
@@ -2145,7 +2191,7 @@ document.addEventListener('click',async e=>{
     const lockUntil=parseInt(localStorage.getItem(lockKey)||'0');
     if(lockUntil>Date.now()){const remain=Math.ceil((lockUntil-Date.now())/60000);msg.textContent=`잠금 상태 — ${remain}분 후 재시도 가능`;return;}
     const ok=await verifyPin(mid,p);
-    if(ok){localStorage.removeItem(failKey);localStorage.removeItem(lockKey);setSelfId(mid);setPinAuth(mid);startMemberSession();closeModal();showToast('인증 완료');render();refreshHelpBadge();}
+    if(ok){localStorage.removeItem(failKey);localStorage.removeItem(lockKey);setSelfId(mid);setPinAuth(mid);startMemberSession();startObserverLogoutWatcher();closeModal();showToast('인증 완료');render();refreshHelpBadge();}
     else{
       const fails=parseInt(localStorage.getItem(failKey)||'0')+1;
       localStorage.setItem(failKey,String(fails));
@@ -2381,6 +2427,7 @@ async function init(){
         await fetchHelpRequests();
         render();
         startMemberSession();
+        startObserverLogoutWatcher();
         // v16 — 관리자라면 옵저버 PIN 자동 부트스트랩 (3962)
         if(m.isAdmin){
           state.members.filter(x=>x.isObserver&&!x.pin_hash).forEach(async ob=>{
