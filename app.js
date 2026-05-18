@@ -1117,16 +1117,16 @@ function renderInlineKRRow(kr,oid){
   return `<div class="kr-inline-row" data-kr-id="${kr.id}" style="padding:10px 0;border-bottom:1px solid #F4F4F5;">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap;">
       <span style="font-size:13.5px;font-weight:700;color:var(--text);flex:1;min-width:120px;line-height:1.4;">${esc(kr.title||'(제목 없음)')}</span>
-      <span class="conf-chip ${kr.confidence||'mid'}" style="cursor:default;font-size:10.5px;padding:1px 7px;">${CONF_LABELS[kr.confidence||'mid']}</span>
+      <span class="kr-strip-pct" data-kr-pct style="color:${progressColor(p)};font-weight:800;font-size:14px;flex-shrink:0;">${p}%</span>
+      <span class="conf-chip ${kr.confidence||'mid'}" style="cursor:default;font-size:10.5px;padding:1px 7px;flex-shrink:0;">${CONF_LABELS[kr.confidence||'mid']}</span>
     </div>
     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
       <input type="number" class="kr-num-input" data-field="kr-current" data-oid="${oid}" data-krid="${kr.id}" value="${kr.current}" title="현재값 입력" style="width:74px;font-size:14px;padding:6px 9px;font-weight:700;" />
       <span style="color:var(--text-soft);font-size:12px;">/</span>
       <span style="font-size:13px;color:var(--text-soft);font-weight:600;">${kr.target}${kr.unit?' '+esc(kr.unit):''}</span>
-      <span class="kr-strip-pct" data-kr-pct style="color:${progressColor(p)};font-weight:800;font-size:14px;margin-left:4px;">${p}%</span>
-      ${kr.dueDate?`<span style="font-size:11px;color:${overdue?'var(--warning)':'var(--text-soft)'};font-weight:600;margin-left:auto;">${dueShort(kr.dueDate)}${overdue?' · 지연':''}</span>`:'<span style="margin-left:auto;"></span>'}
+      <div class="progress-track" data-kr-bar-wrap style="flex:1;min-width:80px;height:6px;border-radius:3px;background:#F0F0F2;overflow:hidden;margin:0 4px;"><div class="progress-fill" data-kr-bar style="width:${p}%;height:100%;background:${progressColor(p)};transition:width .2s;"></div></div>
+      ${kr.dueDate?`<span style="font-size:11px;color:${overdue?'var(--warning)':'var(--text-soft)'};font-weight:600;flex-shrink:0;">${dueShort(kr.dueDate)}${overdue?' · 지연':''}</span>`:''}
     </div>
-    <div class="progress-track" data-kr-bar-wrap style="margin-top:7px;height:6px;border-radius:3px;background:#F0F0F2;overflow:hidden;"><div class="progress-fill" data-kr-bar style="width:${p}%;height:100%;background:${progressColor(p)};transition:width .2s;"></div></div>
     ${initsHtml}
   </div>`;
 }
