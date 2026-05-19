@@ -1854,37 +1854,9 @@ async function openHistory(et,eid){
 }
 function actionLabel(act,f){const fm={title:'제목',current:'진척',target:'목표값',unit:'단위',description:'설명',confidence:'자신감',reality_blocker:'어려움',reality_help:'지원요청',due_date:'마감일',status:'상태',owner_id:'담당자',name:'이름',quarter:'분기'};if(act==='create')return '생성';if(act==='delete')return '삭제';return `${fm[f]||f||'필드'} 변경`;}
 function formatTs(ts){if(!ts)return '';const d=new Date(ts);return `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;}
-function showModal(h){
-  let b=document.getElementById('modal-back');
-  if(!b){
-    b=document.createElement('div');
-    b.id='modal-back';
-    b.className='modal-back';
-    // 인라인 백업 스타일 — 원본 CSS가 적용되지 않을 때도 보이도록
-    b.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;z-index:200;padding:20px;';
-    document.body.appendChild(b);
-    b.addEventListener('click',e=>{if(e.target===b)closeModal();});
-  }
-  let m=document.getElementById('modal');
-  if(!m){
-    m=document.createElement('div');
-    m.id='modal';
-    m.className='modal';
-    m.style.cssText='background:white;border-radius:14px;max-width:560px;width:100%;max-height:90vh;overflow:auto;box-shadow:0 12px 40px rgba(0,0,0,.18);';
-    b.appendChild(m);
-  }
-  // 로그인 가드(z-index:100) 위에 확실히 표시
-  b.style.zIndex='200';
-  b.style.display='flex';
-  m.innerHTML=h;
-  b.classList.add('show');
-}
-function closeModal(){
-  const b=document.getElementById('modal-back');
-  if(!b)return;
-  b.classList.remove('show');
-  b.style.display='none';
-}
+function showModal(h){const b=document.getElementById('modal-back');document.getElementById('modal').innerHTML=h;b.classList.add('show');}
+function closeModal(){document.getElementById('modal-back').classList.remove('show');}
+
 async function openReview(entityIdOrMid,period,opts){
   // 호환: 옛 호출(openReview(mid,period))은 entity_type='member'로 처리
   const o=opts||{};
@@ -2551,28 +2523,29 @@ function updateBrand(){const t=currentTeam();if(!t)return;const tt=document.quer
 async function init(){
   const cfg=getConfig();if(!cfg){renderSetup();return;}
   const r=await tryConnect(cfg.url,cfg.key);if(!r.ok){renderSetup('연결 실패: '+r.msg);return;}
-  // v16 — 옵저버 모드에서 모든 DB 쓰기 우회하는 Proxy
+  // v16 — 옵저버 모드에서만 DB 쓰기 우회. 일반 모드에선 raw client 그대로 사용 (안전)
   const rawSb=r.client;
+  function makeDummyBuilder(){
+    const dummyRes={data:null,error:null};
+    const handler={get(_,prop){
+      if(prop==='then')return (cb)=>Promise.resolve(dummyRes).then(cb);
+      if(prop==='catch')return (cb)=>Promise.resolve(dummyRes).catch(cb);
+      if(prop==='finally')return (cb)=>Promise.resolve(dummyRes).finally(cb);
+      if(prop===Symbol.toPrimitive)return()=>dummyRes;
+      // 체인 호환 — 어떤 메서드든 자기 자신을 반환
+      return (..._a)=>proxy;
+    }};
+    const proxy=new Proxy({},handler);
+    return proxy;
+  }
   sb=new Proxy(rawSb,{get(t,p){
     if(p==='from'){
       return (tbl)=>{
-        const b=t.from(tbl);
-        ['insert','update','upsert','delete'].forEach(op=>{
-          const orig=b[op]?b[op].bind(b):null;
-          if(!orig)return;
-          b[op]=(...args)=>{
-            if(typeof isObserverMode==='function'&&isObserverMode()){
-              // 옵저버 — DB 쓰기 우회. 빌더 체인 호환 위해 Promise + 메서드 더미 반환
-              const dummy={data:null,error:null};
-              const builder={data:null,error:null,select:()=>builder,eq:()=>builder,then:(cb)=>Promise.resolve(dummy).then(cb)};
-              builder[Symbol.toPrimitive]=()=>dummy;
-              // 일반 await 호환 — 자체가 Promise처럼 동작
-              return Promise.resolve(dummy);
-            }
-            return orig(...args);
-          };
-        });
-        return b;
+        // 옵저버일 때만 더미 빌더 반환. 그 외엔 raw 그대로
+        if(typeof isObserverMode==='function'&&isObserverMode()){
+          return makeDummyBuilder();
+        }
+        return t.from(tbl);
       };
     }
     return t[p];
