@@ -730,24 +730,18 @@ function findInitiative(iid){let f=null;state.objectives.forEach(o=>o.keyResults
 // SELF IDENTIFICATION (본인 식별)
 // ============================================================
 function openSelfPicker(){
-  // v16 — 옵저버 계정(은 picker에서 숨김 (별도 "옵저버 계정" 진입 버튼 제공)
+  // v16 — 팀원 + 옵저버(이름 "옵저버"로 표시) 만. "팀 전원 열람 모드" 제거
   const teamMembers=state.members.filter(m=>!m.isObserver);
   const observerMembers=state.members.filter(m=>m.isObserver);
   const opts=teamMembers.map(m=>{const hasPin=!!m.pin_hash;const authed=isPinAuthValid(m.id);return `<button class="btn btn-ghost" style="justify-content:flex-start;padding:10px 14px;font-size:13.5px;width:100%;" data-act="set-self" data-mid="${m.id}"><span style="width:22px;height:22px;border-radius:999px;background:${m.color};color:white;display:inline-grid;place-items:center;font-weight:700;font-size:11px;margin-right:10px;">${esc(m.name.slice(0,1).toUpperCase())}</span><span style="flex:1;text-align:left;font-weight:600;">${esc(m.name)}</span><span style="font-size:11px;color:var(--text-soft);margin-right:6px;">${esc(m.role||'')}</span>${hasPin?(authed?'<span style="font-size:10px;color:var(--growth);font-weight:700;">🔓 인증됨</span>':'<span style="font-size:10px;color:var(--text-soft);">🔐 PIN</span>'):'<span style="font-size:10px;color:var(--amber);">PIN 미설정</span>'}</button>`;}).join('');
-  // v16 — "팀 전원" 버튼: 누구도 본인 아닌 채로 전체 데이터 열람 (PIN 불필요)
-  const teamAllBtn=`<button class="btn btn-ghost" style="width:100%;padding:12px 14px;font-size:13.5px;justify-content:flex-start;background:linear-gradient(135deg,#F4F0FF,#FFFFFF);border:1px solid var(--primary-soft);" data-act="set-self" data-mid="__observer__">
-    <span style="width:22px;height:22px;border-radius:6px;background:var(--primary);color:white;display:inline-grid;place-items:center;font-weight:700;font-size:11px;margin-right:10px;">👥</span>
-    <span style="flex:1;text-align:left;"><span style="font-weight:700;color:var(--primary);">팀 전원 (열람 모드)</span><span style="font-size:11px;color:var(--text-soft);margin-left:6px;">— 본인 데이터 입력 없이 전체 열람</span></span>
-  </button>`;
-  // 옵저버 계정 진입 — 작은 부가 옵션
-  const observerBtns=observerMembers.length>0?observerMembers.map(m=>{const hasPin=!!m.pin_hash;return `<button class="btn-mode" style="padding:6px 10px;font-size:11px;color:var(--text-soft);" data-act="set-self" data-mid="${m.id}" title="옵저버 계정 — PIN 필요">🔐 ${esc(m.name)} (옵저버)${hasPin?'':' · PIN 미설정'}</button>`;}).join(' '):'';
+  // 옵저버 계정 — 이름 "옵저버"로 표시 (실제 저장된 이름 무관)
+  const observerBtns=observerMembers.length>0?observerMembers.map(m=>{const hasPin=!!m.pin_hash;return `<button class="btn btn-ghost" style="justify-content:flex-start;padding:10px 14px;font-size:13.5px;width:100%;background:#FAFAFB;" data-act="set-self" data-mid="${m.id}" title="옵저버 계정 — 1시간 자동 로그아웃 · 기록 남기지 않음"><span style="width:22px;height:22px;border-radius:999px;background:#7E8794;color:white;display:inline-grid;place-items:center;font-weight:700;font-size:11px;margin-right:10px;">👁</span><span style="flex:1;text-align:left;font-weight:600;color:var(--text-soft);">옵저버</span><span style="font-size:10px;color:var(--text-soft);">1시간 후 자동 로그아웃</span>${hasPin?'':'<span style="font-size:10px;color:var(--amber);margin-left:6px;">PIN 미설정</span>'}</button>`;}).join(''):'';
   showModal(`
     <div class="modal-head"><div class="modal-title">진입 — 사용자 식별</div></div>
     <div class="modal-body">
-      <div style="font-size:12.5px;color:var(--text-soft);margin-bottom:14px;line-height:1.55;">본인을 선택하시면 <b>오늘의 진입 브리핑</b>과 <b>담당 Initiative 체크리스트</b>가 본인 데이터 중심으로 구성됩니다. 헤더에서 언제든 변경 가능합니다.</div>
+      <div style="font-size:12.5px;color:var(--text-soft);margin-bottom:14px;line-height:1.55;">본인을 선택하고 PIN을 입력하세요. 헤더에서 언제든 다른 본인으로 전환 가능합니다.</div>
       <div style="display:flex;flex-direction:column;gap:6px;">${opts||'<div style="font-size:13px;color:var(--text-soft);text-align:center;padding:20px;">팀원이 등록되지 않았습니다. 관리 탭에서 추가 후 다시 진입하십시오.</div>'}</div>
-      <div style="border-top:1px solid var(--line);margin-top:14px;padding-top:14px;">${teamAllBtn}</div>
-      ${observerBtns?`<div style="margin-top:10px;padding-top:10px;border-top:1px dashed var(--line);"><div style="font-size:10.5px;color:var(--text-soft);margin-bottom:4px;">옵저버 계정 (1시간 자동 로그아웃, 기록 안 남음)</div>${observerBtns}</div>`:''}
+      ${observerBtns?`<div style="margin-top:12px;padding-top:12px;border-top:1px dashed var(--line);"><div style="font-size:10.5px;color:var(--text-soft);margin-bottom:6px;">옵저버 (열람 전용 · 변경 사항 저장 안 됨)</div><div style="display:flex;flex-direction:column;gap:4px;">${observerBtns}</div></div>`:''}
     </div>
   `);
 }
@@ -1011,7 +1005,7 @@ function render(){
 function renderHeader(){
   const t=currentTeam();const ini=teamInitial(t?.name);const col=teamColor(t);
   const tm=state.teams.map(x=>`<div class="team-menu-item ${x.id===state.currentTeamId?'active':''}" data-act="switch-team" data-tid="${x.id}"><span style="width:14px;height:14px;border-radius:4px;background:${teamColor(x)};display:inline-block;"></span><span style="flex:1;">${esc(x.name)}</span><span style="font-size:11px;color:var(--text-soft);">${esc(x.quarter)}</span></div>`).join('');
-  return `<header class="app-header"><div class="hdr-inner"><div style="display:flex;align-items:center;gap:8px;position:relative;"><div class="brand" data-act="goto-home"><div class="brand-mark" style="background:${col};">${esc(ini)}</div><div class="brand-meta"><div class="brand-title">${esc(t?t.name:'팀')} OKR <button class="team-switch" data-act="toggle-team-menu">${state.teams.length>1?'전환 ▾':'팀 ▾'}</button></div><div class="brand-sub">${esc(t?t.quarter:'')} · 일일 스프린트</div></div></div><div class="team-menu" id="team-menu">${tm}<div class="team-menu-divider"></div><div class="team-menu-add" data-act="add-team">${I.plus} 새 팀 추가</div></div></div><nav class="tabs"><span id="conn-dot" class="conn-dot ${connStatus}">${connStatus==='online'?'실시간 연결됨':connStatus==='connecting'?'연결 중':'오프라인'}</span><button class="btn-mode" data-act="open-self-picker" title="본인 변경" style="font-size:11px;">${selfMember()?'👤 '+esc(selfMember().name):isObserver()?'👥 팀 전원':'본인 선택'}</button>${selfMember()?renderHelpBell():''}<span class="tab-divider"></span><button class="tab ${currentView==='today'?'active':''}" data-act="view" data-view="today">${I.cal} 오늘</button><button class="tab ${currentView==='dashboard'?'active':''}" data-act="view" data-view="dashboard">📊 대시보드</button><button class="tab ${currentView==='okr'?'active':''}" data-act="view" data-view="okr">${I.target} OKR</button><button class="tab ${currentView==='wbs'?'active':''}" data-act="view" data-view="wbs">🗓️ WBS</button><button class="tab ${currentView==='routines'?'active':''}" data-act="view" data-view="routines">${I.loop} 루틴</button><button class="tab ${currentView==='eval'?'active':''}" data-act="view" data-view="eval">${I.star} 회고</button><button class="tab ${currentView==='manage'?'active':''}" data-act="view" data-view="manage">${I.cog} 관리${isAdmin()?' · 관리자':''}</button><span class="tab-divider"></span><button class="btn-mode" data-act="present">${presentMode?I.collapse:I.expand} ${presentMode?'일반':'발표'}</button><button class="btn-mode" data-act="toggle-dark" title="다크 모드">${isDark()?'☀️':'🌙'}</button></nav></div></header>`;
+  return `<header class="app-header"><div class="hdr-inner"><div style="display:flex;align-items:center;gap:8px;position:relative;"><div class="brand" data-act="goto-home"><div class="brand-mark" style="background:${col};">${esc(ini)}</div><div class="brand-meta"><div class="brand-title">${esc(t?t.name:'팀')} OKR <button class="team-switch" data-act="toggle-team-menu">${state.teams.length>1?'전환 ▾':'팀 ▾'}</button></div><div class="brand-sub">${esc(t?t.quarter:'')} · 일일 스프린트</div></div></div><div class="team-menu" id="team-menu">${tm}<div class="team-menu-divider"></div><div class="team-menu-add" data-act="add-team">${I.plus} 새 팀 추가</div></div></div><nav class="tabs"><span id="conn-dot" class="conn-dot ${connStatus}">${connStatus==='online'?'실시간 연결됨':connStatus==='connecting'?'연결 중':'오프라인'}</span><button class="btn-mode" data-act="open-self-picker" title="본인 변경" style="font-size:11px;">${selfMember()?(selfMember().isObserver?'👁 옵저버':'👤 '+esc(selfMember().name)):'본인 선택'}</button>${selfMember()?renderHelpBell():''}<span class="tab-divider"></span><button class="tab ${currentView==='today'?'active':''}" data-act="view" data-view="today">${I.cal} 오늘</button><button class="tab ${currentView==='dashboard'?'active':''}" data-act="view" data-view="dashboard">📊 대시보드</button><button class="tab ${currentView==='okr'?'active':''}" data-act="view" data-view="okr">${I.target} OKR</button><button class="tab ${currentView==='wbs'?'active':''}" data-act="view" data-view="wbs">🗓️ WBS</button><button class="tab ${currentView==='routines'?'active':''}" data-act="view" data-view="routines">${I.loop} 루틴</button><button class="tab ${currentView==='eval'?'active':''}" data-act="view" data-view="eval">${I.star} 회고</button><button class="tab ${currentView==='manage'?'active':''}" data-act="view" data-view="manage">${I.cog} 관리${isAdmin()?' · 관리자':''}</button><span class="tab-divider"></span><button class="btn-mode" data-act="present">${presentMode?I.collapse:I.expand} ${presentMode?'일반':'발표'}</button><button class="btn-mode" data-act="toggle-dark" title="다크 모드">${isDark()?'☀️':'🌙'}</button></nav></div></header>`;
 }
 
 function renderToday(){
@@ -1736,10 +1730,15 @@ function renderLoginWall(){
       <div style="font-size:13px;color:var(--text-soft);margin-bottom:24px;">${esc(t?.quarter||'')} · 일일 스프린트</div>
       <div style="font-size:13px;color:var(--text);font-weight:600;margin-bottom:6px;">🔐 보안 인증이 필요합니다</div>
       <div style="font-size:12px;color:var(--text-soft);margin-bottom:24px;line-height:1.55;">팀 데이터는 본인 확인 후에만 표시됩니다. 본인을 선택하고 PIN을 입력하세요.</div>
-      <button class="btn btn-primary" data-act="open-self-picker" style="font-size:14px;padding:11px 28px;width:100%;">본인 선택 → PIN 입력</button>
-      <div style="font-size:11px;color:var(--text-soft);margin-top:14px;line-height:1.55;">최초 진입 시 4자리 PIN을 설정하고, 24시간마다 재인증합니다.<br>인재개발팀 옵저버 계정은 별도 PIN(3962)로 제공됩니다.</div>
+      <button id="login-self-btn" class="btn btn-primary" data-act="open-self-picker" style="font-size:14px;padding:11px 28px;width:100%;cursor:pointer;">본인 선택 → PIN 입력</button>
+      <div style="font-size:11px;color:var(--text-soft);margin-top:14px;line-height:1.55;">최초 진입 시 4자리 PIN을 설정하고, 24시간마다 재인증합니다.</div>
     </div>
   </div>`;
+  // v16 — 직접 바인딩 (document-level 핸들러가 어떤 이유로 작동 안 할 때의 안전망)
+  const directBtn=document.getElementById('login-self-btn');
+  if(directBtn){
+    directBtn.onclick=function(ev){ev.preventDefault();ev.stopPropagation();try{openSelfPicker();}catch(e){console.error('[login] openSelfPicker fail',e);alert('로그인 모달 열기 실패: '+(e.message||e));}};
+  }
 }
 
 // ============================================================
@@ -1835,7 +1834,7 @@ function renderAdminPanel(){
   <section class="card" style="margin-bottom:14px;">
     <div class="section-head"><span class="section-title">⚙️ 빠른 작업</span></div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;padding:6px 0;">
-      ${hasObserver?'<span style="font-size:12px;color:var(--text-soft);padding:8px 12px;background:var(--growth-soft);color:var(--growth);border-radius:6px;">✓ 인재개발팀 옵저버 계정 등록됨</span>':'<button class="btn btn-primary" data-act="admin-add-observer">👁️ 인재개발팀 옵저버 추가 (PIN: 3962)</button>'}
+      ${hasObserver?'<span style="font-size:12px;color:var(--text-soft);padding:8px 12px;background:var(--growth-soft);color:var(--growth);border-radius:6px;">✓ 옵저버 계정 등록됨</span>':'<button class="btn btn-primary" data-act="admin-add-observer">👁️ 옵저버 계정 추가 (PIN: 3962, 1시간 자동 로그아웃)</button>'}
       <button class="btn btn-soft" data-act="admin-clear-sessions">🗑️ 30일 이상 된 세션 기록 정리</button>
       <button class="btn btn-soft" data-act="admin-refresh">🔄 세션 데이터 새로고침</button>
     </div>
@@ -2120,15 +2119,15 @@ document.addEventListener('click',async e=>{
     if(!isAdmin()){showToast('관리자만 가능',true);return;}
     if(state.members.some(m=>m.isObserver)){showToast('이미 옵저버 계정이 있습니다',true);return;}
     const i=state.members.length;
-    const obs={id:uid(),team_id:state.currentTeamId,name:'인재개발팀',role:'옵저버',color:'#7E8794',isObserver:true,isAdmin:false};
+    const obs={id:uid(),team_id:state.currentTeamId,name:'옵저버',role:'열람 전용',color:'#7E8794',isObserver:true,isAdmin:false};
     state.members.push(obs);
     render();
     const{error}=await sb.from('members').insert({id:obs.id,team_id:obs.team_id,name:obs.name,role:obs.role,color:obs.color,is_observer:true,is_admin:false,sort_order:i});
     if(error){showToast('생성 실패',true);state.members.pop();render();return;}
     // PIN '3962' 자동 설정
     await setMemberPin(obs.id,'3962');
-    logChange('member',obs.id,'create','','','인재개발팀 옵저버 (PIN 3962)','인재개발팀');
-    showToast('인재개발팀 옵저버 추가 완료 — PIN: 3962');render();return;
+    logChange('member',obs.id,'create','','','옵저버 (PIN 3962, 1시간 자동 로그아웃)','옵저버');
+    showToast('옵저버 계정 추가 완료 — PIN: 3962, 1시간 후 자동 로그아웃');render();return;
   }
   if(a==='admin-clear-sessions'){
     if(!isAdmin()){showToast('관리자만 가능',true);return;}
