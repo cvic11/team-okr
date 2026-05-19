@@ -1854,9 +1854,37 @@ async function openHistory(et,eid){
 }
 function actionLabel(act,f){const fm={title:'제목',current:'진척',target:'목표값',unit:'단위',description:'설명',confidence:'자신감',reality_blocker:'어려움',reality_help:'지원요청',due_date:'마감일',status:'상태',owner_id:'담당자',name:'이름',quarter:'분기'};if(act==='create')return '생성';if(act==='delete')return '삭제';return `${fm[f]||f||'필드'} 변경`;}
 function formatTs(ts){if(!ts)return '';const d=new Date(ts);return `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;}
-function showModal(h){const b=document.getElementById('modal-back');document.getElementById('modal').innerHTML=h;b.classList.add('show');}
-function closeModal(){document.getElementById('modal-back').classList.remove('show');}
-
+function showModal(h){
+  let b=document.getElementById('modal-back');
+  if(!b){
+    b=document.createElement('div');
+    b.id='modal-back';
+    b.className='modal-back';
+    // 인라인 백업 스타일 — 원본 CSS가 적용되지 않을 때도 보이도록
+    b.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;z-index:200;padding:20px;';
+    document.body.appendChild(b);
+    b.addEventListener('click',e=>{if(e.target===b)closeModal();});
+  }
+  let m=document.getElementById('modal');
+  if(!m){
+    m=document.createElement('div');
+    m.id='modal';
+    m.className='modal';
+    m.style.cssText='background:white;border-radius:14px;max-width:560px;width:100%;max-height:90vh;overflow:auto;box-shadow:0 12px 40px rgba(0,0,0,.18);';
+    b.appendChild(m);
+  }
+  // 로그인 가드(z-index:100) 위에 확실히 표시
+  b.style.zIndex='200';
+  b.style.display='flex';
+  m.innerHTML=h;
+  b.classList.add('show');
+}
+function closeModal(){
+  const b=document.getElementById('modal-back');
+  if(!b)return;
+  b.classList.remove('show');
+  b.style.display='none';
+}
 async function openReview(entityIdOrMid,period,opts){
   // 호환: 옛 호출(openReview(mid,period))은 entity_type='member'로 처리
   const o=opts||{};
