@@ -1720,19 +1720,22 @@ function updateBlockerUI(date,mid){if(date!==viewingDate)return;const s=state.st
 // ============================================================
 // v16 — 로그인 가드 화면 (인증 전에는 콘텐츠 차단)
 // ============================================================
-// v16 — 로그인 화면에 팀원 목록 직접 표시 (모달 의존 제거 → 클릭 무반응 문제 차단)
+// v16 — 로그인 화면에 팀원 목록 직접 표시 + 인라인 onclick (이벤트 위임/리스너 의존 X)
 function renderLoginWall(){
+  // 글로벌 노출 — 인라인 onclick에서 호출
+  try{window.attemptSelfChange=attemptSelfChange;window.openPinSetup=openPinSetup;window.openPinVerify=openPinVerify;}catch(e){}
   const t=currentTeam();const ini=teamInitial(t?.name);const col=teamColor(t);
   const app=document.getElementById('app');
   const teamMembers=(state.members||[]).filter(m=>!m.isObserver);
   const observerMembers=(state.members||[]).filter(m=>m.isObserver);
   const memberBtns=teamMembers.length>0?teamMembers.map(m=>{
     const hasPin=!!m.pin_hash;const authed=isPinAuthValid(m.id);
-    return `<button type="button" class="login-member-btn" data-act="set-self" data-mid="${esc(m.id)}" style="display:flex;align-items:center;gap:10px;width:100%;padding:11px 14px;background:white;border:1px solid var(--line);border-radius:8px;font-size:13.5px;cursor:pointer;font-family:inherit;text-align:left;transition:all .15s;margin-bottom:6px;"><span style="width:24px;height:24px;border-radius:999px;background:${m.color||'#6241F5'};color:white;display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:11px;flex-shrink:0;">${esc(m.name.slice(0,1).toUpperCase())}</span><span style="flex:1;font-weight:600;color:var(--text);">${esc(m.name)}</span><span style="font-size:11px;color:var(--text-soft);">${esc(m.role||'')}</span>${hasPin?(authed?'<span style="font-size:10px;color:var(--growth);font-weight:700;">🔓 인증됨</span>':'<span style="font-size:10px;color:var(--text-soft);">🔐 PIN</span>'):'<span style="font-size:10px;color:#F59E0B;">PIN 미설정</span>'}</button>`;
+    const safeId=String(m.id).replace(/'/g,"\\'");
+    return `<button type="button" onclick="window.__loginPick&&window.__loginPick('${safeId}')" style="display:flex;align-items:center;gap:10px;width:100%;padding:11px 14px;background:white;border:1px solid var(--line);border-radius:8px;font-size:13.5px;cursor:pointer;font-family:inherit;text-align:left;margin-bottom:6px;"><span style="width:24px;height:24px;border-radius:999px;background:${m.color||'#6241F5'};color:white;display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:11px;flex-shrink:0;">${esc(m.name.slice(0,1).toUpperCase())}</span><span style="flex:1;font-weight:600;color:var(--text);">${esc(m.name)}</span><span style="font-size:11px;color:var(--text-soft);">${esc(m.role||'')}</span>${hasPin?(authed?'<span style="font-size:10px;color:var(--growth);font-weight:700;">🔓 인증됨</span>':'<span style="font-size:10px;color:var(--text-soft);">🔐 PIN</span>'):'<span style="font-size:10px;color:#F59E0B;">PIN 미설정</span>'}</button>`;
   }).join(''):'<div style="font-size:12px;color:var(--text-soft);text-align:center;padding:16px;">팀원 데이터 로딩 중…</div>';
   const observerBtns=observerMembers.length>0?observerMembers.map(m=>{
-    const hasPin=!!m.pin_hash;
-    return `<button type="button" class="login-member-btn" data-act="set-self" data-mid="${esc(m.id)}" style="display:flex;align-items:center;gap:10px;width:100%;padding:9px 14px;background:#FAFAFB;border:1px solid var(--line);border-radius:8px;font-size:13px;cursor:pointer;font-family:inherit;text-align:left;margin-bottom:4px;"><span style="width:22px;height:22px;border-radius:999px;background:#7E8794;color:white;display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:11px;flex-shrink:0;">👁</span><span style="flex:1;font-weight:600;color:var(--text-soft);">옵저버</span><span style="font-size:10px;color:var(--text-soft);">1시간 자동 로그아웃</span>${hasPin?'':'<span style="font-size:10px;color:#F59E0B;margin-left:6px;">PIN 미설정</span>'}</button>`;
+    const hasPin=!!m.pin_hash;const safeId=String(m.id).replace(/'/g,"\\'");
+    return `<button type="button" onclick="window.__loginPick&&window.__loginPick('${safeId}')" style="display:flex;align-items:center;gap:10px;width:100%;padding:9px 14px;background:#FAFAFB;border:1px solid var(--line);border-radius:8px;font-size:13px;cursor:pointer;font-family:inherit;text-align:left;margin-bottom:4px;"><span style="width:22px;height:22px;border-radius:999px;background:#7E8794;color:white;display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:11px;flex-shrink:0;">👁</span><span style="flex:1;font-weight:600;color:var(--text-soft);">옵저버</span><span style="font-size:10px;color:var(--text-soft);">1시간 자동 로그아웃</span>${hasPin?'':'<span style="font-size:10px;color:#F59E0B;margin-left:6px;">PIN 미설정</span>'}</button>`;
   }).join(''):'';
   app.innerHTML=`<div id="login-wall" style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#F4F0FF 0%,#FAFAFA 100%);z-index:100;padding:20px;overflow-y:auto;">
     <div style="background:white;border-radius:16px;box-shadow:0 8px 32px rgba(0,0,0,.08);padding:36px 32px;max-width:460px;width:100%;">
@@ -1742,23 +1745,107 @@ function renderLoginWall(){
         <div style="font-size:12.5px;color:var(--text-soft);">${esc(t?.quarter||'')} · 일일 스프린트</div>
       </div>
       <div style="font-size:12.5px;color:var(--text);font-weight:600;margin-bottom:4px;">🔐 본인을 선택하세요</div>
-      <div style="font-size:11.5px;color:var(--text-soft);margin-bottom:14px;line-height:1.55;">선택 후 PIN을 입력하면 진입됩니다. 본인 확인 후에만 팀 데이터가 표시됩니다.</div>
+      <div style="font-size:11.5px;color:var(--text-soft);margin-bottom:14px;line-height:1.55;">선택 후 PIN을 입력하면 진입됩니다.</div>
       <div id="login-member-list">${memberBtns}</div>
       ${observerBtns?`<div style="margin-top:12px;padding-top:12px;border-top:1px dashed var(--line);"><div style="font-size:10.5px;color:var(--text-soft);margin-bottom:6px;">옵저버 (열람 전용 · 변경 사항 저장 안 됨)</div>${observerBtns}</div>`:''}
       <div style="font-size:10.5px;color:var(--text-soft);margin-top:16px;line-height:1.55;text-align:center;">최초 진입 시 4자리 PIN을 설정하고, 24시간마다 재인증합니다.</div>
     </div>
   </div>`;
-  // 직접 바인딩 — 인라인 onclick 없이도 작동
-  document.querySelectorAll('#login-wall .login-member-btn').forEach(b=>{
-    b.addEventListener('click',function(ev){
-      ev.preventDefault();ev.stopPropagation();
-      const mid=this.getAttribute('data-mid');
+  // v16 — 글로벌 진입 함수: 인라인 onclick에서 호출. 모달 의존 없이 직접 PIN 입력 화면으로 전환
+  window.__loginPick=function(mid){
+    try{
+      console.log('[login] pick',mid);
       if(!mid)return;
-      try{attemptSelfChange(mid);}catch(e){console.error('[login] attemptSelfChange fail',e);alert('로그인 실패: '+(e.message||e));}
-    });
-    b.addEventListener('mouseenter',function(){this.style.borderColor='var(--primary)';this.style.background='#FAFAFE';});
-    b.addEventListener('mouseleave',function(){this.style.borderColor='var(--line)';this.style.background=this.classList.contains('observer')?'#FAFAFB':'white';});
-  });
+      // PIN 미설정이면 등록 화면, 설정돼 있으면 입력 화면
+      const m=state.members.find(x=>x.id===mid);
+      if(!m){alert('팀원을 찾을 수 없습니다');return;}
+      if(!m.pin_hash){renderPinSetupInline(mid);}
+      else{renderPinVerifyInline(mid);}
+    }catch(e){console.error('[login] pick fail',e);alert('오류: '+(e.message||e));}
+  };
+}
+// v16 — PIN 등록 화면을 로그인 가드 안에 인라인으로 렌더 (모달 없이)
+function renderPinSetupInline(memberId){
+  const m=state.members.find(x=>x.id===memberId);if(!m){renderLoginWall();return;}
+  const t=currentTeam();const col=teamColor(t);
+  const app=document.getElementById('app');
+  app.innerHTML=`<div id="login-wall" style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#F4F0FF 0%,#FAFAFA 100%);z-index:100;padding:20px;overflow-y:auto;">
+    <div style="background:white;border-radius:16px;box-shadow:0 8px 32px rgba(0,0,0,.08);padding:36px 32px;max-width:420px;width:100%;">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px;"><div style="width:40px;height:40px;border-radius:999px;background:${m.color||'#6241F5'};color:white;font-weight:800;font-size:14px;display:flex;align-items:center;justify-content:center;">${esc(m.name.slice(0,1).toUpperCase())}</div><div><div style="font-weight:800;font-size:15px;">${esc(m.name)}</div><div style="font-size:11.5px;color:var(--text-soft);">PIN 최초 등록 (4자리)</div></div></div>
+      <div style="font-size:12px;color:var(--text-soft);margin-bottom:14px;line-height:1.55;">PIN을 처음 설정합니다. 다음 진입 시 본인 확인용으로 사용되며 24시간마다 재인증합니다.</div>
+      <div style="margin-bottom:10px;"><div style="font-size:11px;font-weight:700;color:var(--text-soft);margin-bottom:5px;">새 PIN</div><input id="inline-pin-new" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off" placeholder="••••" style="width:100%;font-size:22px;letter-spacing:8px;text-align:center;padding:11px;border:1px solid var(--line);border-radius:8px;font-family:'SF Mono',Monaco,Consolas,monospace;" /></div>
+      <div style="margin-bottom:10px;"><div style="font-size:11px;font-weight:700;color:var(--text-soft);margin-bottom:5px;">PIN 확인</div><input id="inline-pin-confirm" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off" placeholder="••••" style="width:100%;font-size:22px;letter-spacing:8px;text-align:center;padding:11px;border:1px solid var(--line);border-radius:8px;font-family:'SF Mono',Monaco,Consolas,monospace;" /></div>
+      <div id="inline-pin-msg" style="font-size:11.5px;color:var(--warning);min-height:18px;margin-bottom:10px;"></div>
+      <div style="display:flex;gap:6px;"><button type="button" onclick="window.__loginBack&&window.__loginBack()" style="flex:0 0 auto;padding:11px 18px;border:1px solid var(--line);background:white;border-radius:8px;cursor:pointer;font-size:13px;font-family:inherit;">뒤로</button><button type="button" onclick="window.__doPinSetup&&window.__doPinSetup('${String(memberId).replace(/'/g,"\\'")}')" style="flex:1;padding:11px;border:none;background:var(--primary);color:white;border-radius:8px;cursor:pointer;font-size:14px;font-weight:700;font-family:inherit;">등록</button></div>
+    </div>
+  </div>`;
+  window.__loginBack=function(){renderLoginWall();};
+  window.__doPinSetup=async function(mid){
+    const p1=document.getElementById('inline-pin-new')?.value||'';
+    const p2=document.getElementById('inline-pin-confirm')?.value||'';
+    const msg=document.getElementById('inline-pin-msg');
+    if(!/^[0-9]{4}$/.test(p1)){if(msg)msg.textContent='4자리 숫자만 입력 가능';return;}
+    if(p1!==p2){if(msg)msg.textContent='두 PIN이 일치하지 않습니다';return;}
+    if(msg){msg.textContent='저장 중...';msg.style.color='var(--text-soft)';}
+    try{
+      const ok=await setMemberPin(mid,p1);
+      if(ok){setSelfId(mid);setPinAuth(mid);try{startMemberSession();}catch(e){}try{startObserverLogoutWatcher();}catch(e){}initialized=true;render();try{refreshHelpBadge();}catch(e){}}
+      else{if(msg){msg.style.color='var(--warning)';msg.textContent='저장 실패. 다시 시도하세요';}}
+    }catch(e){console.error(e);if(msg){msg.style.color='var(--warning)';msg.textContent='오류: '+(e.message||e);}}
+  };
+  setTimeout(()=>{
+    const p1=document.getElementById('inline-pin-new'),p2=document.getElementById('inline-pin-confirm');
+    if(p1){p1.focus();p1.addEventListener('input',()=>{if(p1.value.length===4&&p2)p2.focus();});}
+    if(p2){p2.addEventListener('input',()=>{if(p2.value.length===4&&p1&&p1.value.length===4)window.__doPinSetup(memberId);});p2.addEventListener('keydown',ev=>{if(ev.key==='Enter')window.__doPinSetup(memberId);});}
+  },50);
+}
+// v16 — PIN 입력 화면 인라인
+function renderPinVerifyInline(memberId){
+  const m=state.members.find(x=>x.id===memberId);if(!m){renderLoginWall();return;}
+  const t=currentTeam();
+  const app=document.getElementById('app');
+  app.innerHTML=`<div id="login-wall" style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#F4F0FF 0%,#FAFAFA 100%);z-index:100;padding:20px;overflow-y:auto;">
+    <div style="background:white;border-radius:16px;box-shadow:0 8px 32px rgba(0,0,0,.08);padding:36px 32px;max-width:420px;width:100%;">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px;"><div style="width:40px;height:40px;border-radius:999px;background:${m.color||'#6241F5'};color:white;font-weight:800;font-size:14px;display:flex;align-items:center;justify-content:center;">${esc(m.name.slice(0,1).toUpperCase())}</div><div><div style="font-weight:800;font-size:15px;">${esc(m.name)}</div><div style="font-size:11.5px;color:var(--text-soft);">PIN 입력 (4자리)</div></div></div>
+      <div style="font-size:12px;color:var(--text-soft);margin-bottom:14px;line-height:1.55;">본인 확인을 위해 PIN을 입력하세요. (24시간마다 재인증${m.isObserver?', 옵저버는 1시간':''})</div>
+      <input id="inline-pin-enter" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off" placeholder="••••" style="width:100%;font-size:22px;letter-spacing:8px;text-align:center;padding:11px;border:1px solid var(--line);border-radius:8px;font-family:'SF Mono',Monaco,Consolas,monospace;margin-bottom:10px;" />
+      <div id="inline-pin-msg" style="font-size:11.5px;color:var(--warning);min-height:18px;margin-bottom:10px;"></div>
+      <div style="display:flex;gap:6px;"><button type="button" onclick="window.__loginBack&&window.__loginBack()" style="flex:0 0 auto;padding:11px 18px;border:1px solid var(--line);background:white;border-radius:8px;cursor:pointer;font-size:13px;font-family:inherit;">뒤로</button><button type="button" onclick="window.__doPinVerify&&window.__doPinVerify('${String(memberId).replace(/'/g,"\\'")}')" style="flex:1;padding:11px;border:none;background:var(--primary);color:white;border-radius:8px;cursor:pointer;font-size:14px;font-weight:700;font-family:inherit;">확인</button></div>
+      <div style="margin-top:12px;text-align:center;"><button type="button" onclick="if(confirm('PIN을 초기화하고 다시 등록하시겠습니까?'))window.__doPinReset&&window.__doPinReset('${String(memberId).replace(/'/g,"\\'")}')" style="background:none;border:none;color:var(--text-soft);font-size:11px;cursor:pointer;text-decoration:underline;">PIN 잊음 (초기화)</button></div>
+    </div>
+  </div>`;
+  window.__loginBack=function(){renderLoginWall();};
+  window.__doPinVerify=async function(mid){
+    const p=document.getElementById('inline-pin-enter')?.value||'';
+    const msg=document.getElementById('inline-pin-msg');
+    if(!/^[0-9]{4}$/.test(p)){if(msg)msg.textContent='4자리 숫자만 입력 가능';return;}
+    const lockKey='pin-lock-'+mid;const failKey='pin-fail-'+mid;
+    const lockUntil=parseInt(localStorage.getItem(lockKey)||'0');
+    if(lockUntil>Date.now()){const remain=Math.ceil((lockUntil-Date.now())/60000);if(msg)msg.textContent=`잠금 — ${remain}분 후 재시도`;return;}
+    try{
+      const ok=await verifyPin(mid,p);
+      if(ok){localStorage.removeItem(failKey);localStorage.removeItem(lockKey);setSelfId(mid);setPinAuth(mid);try{startMemberSession();}catch(e){}try{startObserverLogoutWatcher();}catch(e){}initialized=true;render();try{refreshHelpBadge();}catch(e){}}
+      else{
+        const fails=parseInt(localStorage.getItem(failKey)||'0')+1;
+        localStorage.setItem(failKey,String(fails));
+        if(fails>=5){localStorage.setItem(lockKey,String(Date.now()+30*60*1000));localStorage.removeItem(failKey);if(msg)msg.textContent='5회 실패 — 30분 잠금됨';}
+        else if(msg)msg.textContent=`PIN 불일치 (${5-fails}회 남음)`;
+        const el=document.getElementById('inline-pin-enter');if(el){el.value='';el.focus();}
+      }
+    }catch(e){console.error(e);if(msg)msg.textContent='오류: '+(e.message||e);}
+  };
+  window.__doPinReset=async function(mid){
+    try{
+      const memb=state.members.find(x=>x.id===mid);if(memb)memb.pin_hash=null;
+      clearPinAuth(mid);
+      await sb.from('members').update({pin_hash:null}).eq('id',mid);
+      renderLoginWall();
+    }catch(e){alert('초기화 실패: '+(e.message||e));}
+  };
+  setTimeout(()=>{
+    const el=document.getElementById('inline-pin-enter');
+    if(el){el.focus();el.addEventListener('input',()=>{if(el.value.length===4)window.__doPinVerify(memberId);});el.addEventListener('keydown',ev=>{if(ev.key==='Enter')window.__doPinVerify(memberId);});}
+  },50);
 }
 
 // ============================================================
