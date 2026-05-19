@@ -1720,25 +1720,45 @@ function updateBlockerUI(date,mid){if(date!==viewingDate)return;const s=state.st
 // ============================================================
 // v16 — 로그인 가드 화면 (인증 전에는 콘텐츠 차단)
 // ============================================================
+// v16 — 로그인 화면에 팀원 목록 직접 표시 (모달 의존 제거 → 클릭 무반응 문제 차단)
 function renderLoginWall(){
   const t=currentTeam();const ini=teamInitial(t?.name);const col=teamColor(t);
   const app=document.getElementById('app');
-  app.innerHTML=`<div style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#F4F0FF 0%,#FAFAFA 100%);z-index:100;padding:20px;">
-    <div style="background:white;border-radius:16px;box-shadow:0 8px 32px rgba(0,0,0,.08);padding:40px 36px;max-width:480px;width:100%;text-align:center;">
-      <div style="width:64px;height:64px;border-radius:14px;background:${col||'#6241F5'};color:white;font-weight:800;font-size:24px;display:flex;align-items:center;justify-content:center;margin:0 auto 18px;">${esc(ini||'팀')}</div>
-      <h1 style="font-size:22px;font-weight:800;margin:0 0 6px;color:var(--text);">${esc(t?.name||'팀')} OKR</h1>
-      <div style="font-size:13px;color:var(--text-soft);margin-bottom:24px;">${esc(t?.quarter||'')} · 일일 스프린트</div>
-      <div style="font-size:13px;color:var(--text);font-weight:600;margin-bottom:6px;">🔐 보안 인증이 필요합니다</div>
-      <div style="font-size:12px;color:var(--text-soft);margin-bottom:24px;line-height:1.55;">팀 데이터는 본인 확인 후에만 표시됩니다. 본인을 선택하고 PIN을 입력하세요.</div>
-      <button id="login-self-btn" class="btn btn-primary" data-act="open-self-picker" style="font-size:14px;padding:11px 28px;width:100%;cursor:pointer;">본인 선택 → PIN 입력</button>
-      <div style="font-size:11px;color:var(--text-soft);margin-top:14px;line-height:1.55;">최초 진입 시 4자리 PIN을 설정하고, 24시간마다 재인증합니다.</div>
+  const teamMembers=(state.members||[]).filter(m=>!m.isObserver);
+  const observerMembers=(state.members||[]).filter(m=>m.isObserver);
+  const memberBtns=teamMembers.length>0?teamMembers.map(m=>{
+    const hasPin=!!m.pin_hash;const authed=isPinAuthValid(m.id);
+    return `<button type="button" class="login-member-btn" data-act="set-self" data-mid="${esc(m.id)}" style="display:flex;align-items:center;gap:10px;width:100%;padding:11px 14px;background:white;border:1px solid var(--line);border-radius:8px;font-size:13.5px;cursor:pointer;font-family:inherit;text-align:left;transition:all .15s;margin-bottom:6px;"><span style="width:24px;height:24px;border-radius:999px;background:${m.color||'#6241F5'};color:white;display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:11px;flex-shrink:0;">${esc(m.name.slice(0,1).toUpperCase())}</span><span style="flex:1;font-weight:600;color:var(--text);">${esc(m.name)}</span><span style="font-size:11px;color:var(--text-soft);">${esc(m.role||'')}</span>${hasPin?(authed?'<span style="font-size:10px;color:var(--growth);font-weight:700;">🔓 인증됨</span>':'<span style="font-size:10px;color:var(--text-soft);">🔐 PIN</span>'):'<span style="font-size:10px;color:#F59E0B;">PIN 미설정</span>'}</button>`;
+  }).join(''):'<div style="font-size:12px;color:var(--text-soft);text-align:center;padding:16px;">팀원 데이터 로딩 중…</div>';
+  const observerBtns=observerMembers.length>0?observerMembers.map(m=>{
+    const hasPin=!!m.pin_hash;
+    return `<button type="button" class="login-member-btn" data-act="set-self" data-mid="${esc(m.id)}" style="display:flex;align-items:center;gap:10px;width:100%;padding:9px 14px;background:#FAFAFB;border:1px solid var(--line);border-radius:8px;font-size:13px;cursor:pointer;font-family:inherit;text-align:left;margin-bottom:4px;"><span style="width:22px;height:22px;border-radius:999px;background:#7E8794;color:white;display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:11px;flex-shrink:0;">👁</span><span style="flex:1;font-weight:600;color:var(--text-soft);">옵저버</span><span style="font-size:10px;color:var(--text-soft);">1시간 자동 로그아웃</span>${hasPin?'':'<span style="font-size:10px;color:#F59E0B;margin-left:6px;">PIN 미설정</span>'}</button>`;
+  }).join(''):'';
+  app.innerHTML=`<div id="login-wall" style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#F4F0FF 0%,#FAFAFA 100%);z-index:100;padding:20px;overflow-y:auto;">
+    <div style="background:white;border-radius:16px;box-shadow:0 8px 32px rgba(0,0,0,.08);padding:36px 32px;max-width:460px;width:100%;">
+      <div style="text-align:center;margin-bottom:24px;">
+        <div style="width:56px;height:56px;border-radius:12px;background:${col||'#6241F5'};color:white;font-weight:800;font-size:20px;display:flex;align-items:center;justify-content:center;margin:0 auto 14px;">${esc(ini||'팀')}</div>
+        <h1 style="font-size:20px;font-weight:800;margin:0 0 4px;color:var(--text);">${esc(t?.name||'팀')} OKR</h1>
+        <div style="font-size:12.5px;color:var(--text-soft);">${esc(t?.quarter||'')} · 일일 스프린트</div>
+      </div>
+      <div style="font-size:12.5px;color:var(--text);font-weight:600;margin-bottom:4px;">🔐 본인을 선택하세요</div>
+      <div style="font-size:11.5px;color:var(--text-soft);margin-bottom:14px;line-height:1.55;">선택 후 PIN을 입력하면 진입됩니다. 본인 확인 후에만 팀 데이터가 표시됩니다.</div>
+      <div id="login-member-list">${memberBtns}</div>
+      ${observerBtns?`<div style="margin-top:12px;padding-top:12px;border-top:1px dashed var(--line);"><div style="font-size:10.5px;color:var(--text-soft);margin-bottom:6px;">옵저버 (열람 전용 · 변경 사항 저장 안 됨)</div>${observerBtns}</div>`:''}
+      <div style="font-size:10.5px;color:var(--text-soft);margin-top:16px;line-height:1.55;text-align:center;">최초 진입 시 4자리 PIN을 설정하고, 24시간마다 재인증합니다.</div>
     </div>
   </div>`;
-  // v16 — 직접 바인딩 (document-level 핸들러가 어떤 이유로 작동 안 할 때의 안전망)
-  const directBtn=document.getElementById('login-self-btn');
-  if(directBtn){
-    directBtn.onclick=function(ev){ev.preventDefault();ev.stopPropagation();try{openSelfPicker();}catch(e){console.error('[login] openSelfPicker fail',e);alert('로그인 모달 열기 실패: '+(e.message||e));}};
-  }
+  // 직접 바인딩 — 인라인 onclick 없이도 작동
+  document.querySelectorAll('#login-wall .login-member-btn').forEach(b=>{
+    b.addEventListener('click',function(ev){
+      ev.preventDefault();ev.stopPropagation();
+      const mid=this.getAttribute('data-mid');
+      if(!mid)return;
+      try{attemptSelfChange(mid);}catch(e){console.error('[login] attemptSelfChange fail',e);alert('로그인 실패: '+(e.message||e));}
+    });
+    b.addEventListener('mouseenter',function(){this.style.borderColor='var(--primary)';this.style.background='#FAFAFE';});
+    b.addEventListener('mouseleave',function(){this.style.borderColor='var(--line)';this.style.background=this.classList.contains('observer')?'#FAFAFB':'white';});
+  });
 }
 
 // ============================================================
