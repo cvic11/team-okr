@@ -992,14 +992,12 @@ function render(){
   restoreFocus(focusSig);
   // v13 — 모든 자동 확장 textarea 즉시 적용 (data-autogrow + data-krl-autogrow 통합)
   // 다중 timing — 첫 페인트 후 즉시 + 다음 프레임 + 200ms 후 (콘텐츠 lazy load 대응)
-  const _autoGrowSweep=()=>{
+  // v13 — 자동 확장 textarea 적용 (rAF 1회 — layout thrashing 최소화)
+  requestAnimationFrame(()=>{
     document.querySelectorAll('textarea[data-autogrow], textarea[data-krl-autogrow]').forEach(el=>{
       el.style.height='auto';el.style.height=(el.scrollHeight+2)+'px';
     });
-  };
-  requestAnimationFrame(_autoGrowSweep);
-  setTimeout(_autoGrowSweep,0);
-  setTimeout(_autoGrowSweep,200);
+  });
 }
 
 function renderHeader(){
