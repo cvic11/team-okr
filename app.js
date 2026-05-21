@@ -487,15 +487,29 @@ html.dark .init-row-line1 .init-title-input:focus{background:#1A1D27}
 .date-bar{margin-top:-28px !important}
 body.present .date-bar{margin-top:-20px !important}
 @media(max-width:760px){.date-bar{margin-top:-14px !important}}
-/* ③ Objective 반짝임 + 글자 위계 — v54: 색상 단순화(보라 + 옅은 보라 sheen)로 세련되게 */
+/* ③ Objective 강조 — v55: 깊은 보라 그라데이션 + 흐르는 sheen + 숨쉬는 글로우 */
 .obj-title-input,.obj-shimmer{
-  background:linear-gradient(100deg,#6241F5 0%,#6241F5 38%,#D6CBFD 50%,#6241F5 62%,#6241F5 100%);
-  background-size:230% 100%;
+  background:linear-gradient(
+    100deg,
+    #4D2BE0 0%,
+    #6241F5 32%,
+    #8B6FF7 45%,
+    #EBE0FF 50%,
+    #8B6FF7 55%,
+    #6241F5 68%,
+    #4D2BE0 100%
+  );
+  background-size:240% 100%;
   -webkit-background-clip:text;background-clip:text;
   -webkit-text-fill-color:transparent;
-  animation:objShine 5s linear infinite;
+  animation:objShine 5.5s linear infinite,objBreathe 3.4s ease-in-out infinite;
+  position:relative;
 }
-@keyframes objShine{0%{background-position:100% 50%}100%{background-position:-30% 50%}}
+@keyframes objShine{0%{background-position:100% 50%}100%{background-position:-40% 50%}}
+@keyframes objBreathe{
+  0%,100%{filter:drop-shadow(0 0 0 rgba(98,65,245,0))}
+  50%{filter:drop-shadow(0 0 14px rgba(98,65,245,.42)) drop-shadow(0 2px 18px rgba(98,65,245,.18))}
+}
 .obj-title-input{
   font-size:30px !important;font-weight:900 !important;letter-spacing:-0.9px !important;
   line-height:1.2 !important;padding:6px 2px !important;
@@ -506,12 +520,14 @@ body.present .date-bar{margin-top:-20px !important}
 }
 .obj-title-input:focus{
   -webkit-text-fill-color:var(--text);
-  animation:none;background:rgba(255,255,255,.5);border-radius:4px;
+  animation:none;background:rgba(255,255,255,.6);border-radius:4px;filter:none;
 }
-/* 오늘 탭 Objective 패널 제목에도 같은 sheen */
 .obj-shimmer{font-weight:800 !important;letter-spacing:-0.2px}
 body.present .obj-title-input{font-size:36px !important}
 @media(max-width:760px){.obj-title-input{font-size:22px !important}}
+/* v55 — 사람 아이콘 클릭 시 sticky 헤더에 가리지 않도록 스크롤 여백 */
+.member-card{scroll-margin-top:130px}
+[data-obj-id],.kr-row,.init-row{scroll-margin-top:130px}
 /* KR 두 번째로 큰 */
 .kr-title-input{font-size:17px !important;font-weight:700 !important;letter-spacing:-0.2px !important;padding:6px 4px !important}
 body.present .kr-title-input{font-size:20px !important}
@@ -521,14 +537,23 @@ body.present .kr-title-input{font-size:20px !important}
 .init-sub-row .init-title-input{font-size:12.5px !important;font-weight:400 !important}
 /* obj-desc 부제 — 위계 보조 */
 .obj-desc-input{font-size:13px !important;font-style:italic;color:var(--text-soft);opacity:.85}
-/* 다크모드: sheen 색을 어두운 배경에 맞게 (밝은 라벤더 → 흰색에 가깝게) */
+/* 다크모드: 라벤더 깊이 + 옅은 흰빛 sheen + 보라 글로우 */
 html.dark .obj-title-input,html.dark .obj-shimmer{
-  background:linear-gradient(100deg,#A89BF5 0%,#A89BF5 38%,#F5F2FF 50%,#A89BF5 62%,#A89BF5 100%);
-  background-size:230% 100%;
+  background:linear-gradient(
+    100deg,
+    #8770EE 0%,
+    #A89BF5 32%,
+    #C4B5FD 45%,
+    #FAF5FF 50%,
+    #C4B5FD 55%,
+    #A89BF5 68%,
+    #8770EE 100%
+  );
+  background-size:240% 100%;
   -webkit-background-clip:text;background-clip:text;
   -webkit-text-fill-color:transparent;
 }
-html.dark .obj-title-input:focus{-webkit-text-fill-color:#E5E7EB;background:rgba(26,29,39,.5)}
+html.dark .obj-title-input:focus,html.dark .obj-shimmer:focus{-webkit-text-fill-color:#E5E7EB;background:rgba(26,29,39,.5);filter:none}
 `;document.head.appendChild(s);
 // 다크 모드 즉시 적용 (FOUC 방지)
 document.documentElement.classList.toggle('dark',localStorage.getItem('team-okr-dark')==='1');
@@ -2967,7 +2992,15 @@ document.addEventListener('click',async e=>{
   if(a==='jump-to-member'){
     const mid=btn.dataset.mid;
     const card=document.querySelector('[data-member-card="'+mid+'"]');
-    if(card){card.scrollIntoView({behavior:'smooth',block:'start'});card.classList.add('highlight-flash');setTimeout(()=>card.classList.remove('highlight-flash'),1500);}
+    if(card){
+      // v55 — sticky 헤더+date-bar 가림 보정 (scroll-margin-top + 수동 보정 모두 적용)
+      const headerH=(document.querySelector('header.app-header')?.offsetHeight)||64;
+      const dateBarH=(document.querySelector('.date-bar')?.offsetHeight)||50;
+      const top=window.scrollY+card.getBoundingClientRect().top-headerH-dateBarH-12;
+      window.scrollTo({top,behavior:'smooth'});
+      card.classList.add('highlight-flash');
+      setTimeout(()=>card.classList.remove('highlight-flash'),1500);
+    }
     return;
   }
   if(a==='present-prev'){const pm=presentableMembers();if(pm.length===0)return;const i=pm.findIndex(m=>m.id===presentMid);const ni=i>0?i-1:pm.length-1;presentMid=pm[ni].id;render();return;}
