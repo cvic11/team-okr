@@ -423,6 +423,9 @@ html.dark .chat-input{background:#1A1D27;color:#D1D5DB;border-color:#22252F}
 .init-meta-chip{flex-shrink:0;font-size:10.5px;padding:3px 8px;border-radius:5px;background:transparent;color:var(--text-soft);border:1px solid var(--line);cursor:pointer;font-family:inherit;font-weight:600;line-height:1.3}
 .init-meta-chip:hover{border-color:var(--primary);color:var(--primary)}
 .init-meta-chip.active{background:var(--primary-soft);color:var(--primary);border-color:#D9CFFB}
+/* v46 — 할일 추가 작은 + 버튼 (init-row 안에 통합) */
+.init-meta-add{flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:5px;background:var(--primary-soft);color:var(--primary);border:1px solid #D9CFFB;cursor:pointer;font-family:inherit;padding:0;margin-left:-2px;line-height:1}
+.init-meta-add:hover{background:var(--primary);color:white;border-color:var(--primary)}
 /* v43 — Init을 다른 Init의 sub-list에 떨어뜨리는 drop-zone 시각 (보조 경로: 펼쳐진 sub-list) */
 .init-sub-list.drop-target-into{background:var(--primary-soft) !important;border-left-color:var(--primary) !important;outline:2px dashed var(--primary);outline-offset:-2px;transition:background .12s,outline .12s}
 /* v44 — Init 행 가운데에 떨어뜨리면 nest (해당 Init의 할일로 demote) */
@@ -1138,7 +1141,16 @@ function onInitTaskChange(p){
   }
   if(currentView==='okr')render();
 }
-async function saveInitiativeTask(it){debouncedSave(`init-task-${it.id}`,async()=>{markLocal('initiative_tasks',it.id);const{error}=await sb.from('initiative_tasks').upsert({id:it.id,initiative_id:it.initiative_id,title:it.title,status:it.status||'todo',owner_id:it.owner_id||null,start_date:it.start_date||null,due_date:it.due_date||null,sort_order:it.sort_order||0,updated_at:new Date().toISOString()});if(error)showToast('할일 저장 실패',true);});}
+async function saveInitiativeTask(it){debouncedSave(`init-task-${it.id}`,async()=>{markLocal('initiative_tasks',it.id);const{error}=await sb.from('initiative_tasks').upsert({id:it.id,initiative_id:it.initiative_id,title:it.title,status:it.status||'todo',owner_id:it.owner_id||null,start_date:it.start_date||null,due_date:it.due_date||null,sort_order:it.sort_order||0,updated_at:new Date().toISOString()});if(error){
+  // v46 — 테이블 누락 에러는 한 번만 명확하게 안내
+  const m=String(error.message||error.code||'');
+  if(!window._initTaskTableMissingWarned && (error.code==='42P01' || m.includes('does not exist') || m.includes('schema cache') || m.includes('relation'))){
+    window._initTaskTableMissingWarned=true;
+    showToast('initiative_tasks 테이블이 DB에 없습니다 — schema.sql 실행 필요',true);
+  }else if(!window._initTaskTableMissingWarned){
+    showToast('할일 저장 실패: '+m.slice(0,80),true);
+  }
+}});}
 async function deleteInitiativeTask(id){const{error}=await sb.from('initiative_tasks').delete().eq('id',id);if(error)showToast('삭제 실패',true);}
 function onIDLChange(p){const r=p.new||p.old;if(!r)return;if(isLocal('initiative_daily_logs',`${r.initiative_id}-${r.member_id}-${r.date}`))return;if(!state.initiativeDailyLogs[r.date])state.initiativeDailyLogs[r.date]={};if(!state.initiativeDailyLogs[r.date][r.member_id])state.initiativeDailyLogs[r.date][r.member_id]={};if(p.eventType==='DELETE'){delete state.initiativeDailyLogs[r.date][r.member_id][r.initiative_id];}else{state.initiativeDailyLogs[r.date][r.member_id][r.initiative_id]={checked:!!r.checked,note:r.note||''};}if(currentView==='today'&&r.date===viewingDate)scheduleRender();}
 function onTeamsChange(p){const r=p.new||p.old;if(!r)return;if(isLocal('teams',r.id))return;if(p.eventType==='DELETE'){state.teams=state.teams.filter(t=>t.id!==r.id);}else{const i=state.teams.findIndex(t=>t.id===r.id);if(i>=0)state.teams[i]={...r};else state.teams.push({...r});state.teams.sort((a,b)=>(a.sort_order||0)-(b.sort_order||0));}scheduleRender();}
@@ -1674,7 +1686,7 @@ function renderObjective(o,idx){
   const okrRo=okrEdit?'':' readonly';
   const okrDis=okrEdit?'':' disabled';
   const okrTip=okrEdit?'':' title="관리자만 수정 가능"';
-  return `<div class="obj-card" data-obj-id="${o.id}" draggable="${okrEdit?'true':'false'}" data-drag-type="obj"><div class="obj-head"><span class="drag-handle" title="드래그로 순서 변경" style="${okrEdit?'':'opacity:.3;'}">⋮⋮</span><button class="obj-toggle btn-icon" data-act="toggle-obj" data-oid="${o.id}" title="${open?'접기':'펼치기'}">${caret(open,18)}</button><div class="obj-body"><div class="obj-tags"><span class="tag-id">O${idx+1}</span>${guideHelp('objective')}<select class="tag-owner" data-field="obj-owner" data-oid="${o.id}"${okrDis}><option value="">담당 미지정</option>${state.members.map(m=>`<option value="${m.id}" ${o.ownerId===m.id?'selected':''}>${esc(m.name)}</option>`).join('')}</select>${renderConfChip('objective',o.id,o.confidence||'mid')}<label style="font-size:10.5px;color:var(--text-soft);font-weight:600;">시작<input type="date" data-field="obj-start" data-oid="${o.id}" value="${o.startDate||''}"${okrRo}${okrTip} style="font-size:11px;padding:3px 6px;margin-left:4px;border:1px solid var(--line);border-radius:5px;font-family:inherit;" /></label><label style="font-size:10.5px;color:var(--text-soft);font-weight:600;">마감<input type="date" data-field="obj-due" data-oid="${o.id}" value="${o.dueDate||''}"${okrRo}${okrTip} style="font-size:11px;padding:3px 6px;margin-left:4px;border:1px solid var(--line);border-radius:5px;font-family:inherit;" /></label><button class="reality-toggle ${hr?'has-content':''}" data-act="toggle-reality" data-key="${rk}">${ro?'Reality ▴':'Reality ▾'}</button><button class="btn-icon" data-act="show-history" data-etype="objective" data-eid="${o.id}" title="이력">${I.clock}</button><button class="btn-icon" data-act="open-reflection" data-etype="objective" data-eid="${o.id}" data-period="final" title="회고 작성">${I.star}</button></div><input class="obj-title-input" data-field="obj-title" data-oid="${o.id}" value="${esc(o.title)}" placeholder="가슴 뛰는 도달점 (예: 편의점 창업 희망자들이 CU의 브리핑을 먼저 떠올리고 CU만을 희망한다)"${okrRo}${okrTip} /><input class="obj-desc-input" data-field="obj-desc" data-oid="${o.id}" placeholder="이 목표가 달성되었을 때 우리 팀·고객에게 어떤 변화가 있는가" value="${esc(o.description||'')}"${okrRo}${okrTip} />${ro?renderRealityBox('objective',o.id,o.realityBlocker,o.realityHelp):''}</div><div class="obj-avg-wrap"><div class="obj-avg-label">평균 진척</div><div class="obj-avg" data-obj-avg style="color:${progressColor(avg)};">${avg}%</div><div class="obj-actions">${okrEdit?`<button class="btn-icon" data-act="del-obj" data-oid="${o.id}" title="삭제">${I.trash}</button>`:''}</div></div></div>${open?`<div class="obj-krs">${o.keyResults.length===0?`<div style="padding:14px 22px;">${renderGuideCard('kr')}</div>`:''}${o.keyResults.map((kr,ki)=>renderKR(o.id,kr,ki)).join('')}<div class="add-line">${okrEdit?`<button class="btn btn-soft" data-act="add-kr" data-oid="${o.id}">${I.plus} KR 추가</button>`:'<span style="font-size:11.5px;color:var(--text-soft);">KR 추가는 관리자만 가능</span>'}${o.keyResults.length>5?'<span style="font-size:11px;color:var(--warning);font-weight:600;margin-left:8px;align-self:center;">⚠ 권장 3~5개</span>':o.keyResults.length<3&&o.keyResults.length>0?'<span style="font-size:11px;color:var(--text-soft);margin-left:8px;align-self:center;">권장 3~5개 (현재 '+o.keyResults.length+'개)</span>':''}</div></div>`:''}</div>`;
+  return `<div class="obj-card" data-obj-id="${o.id}" draggable="${okrEdit?'true':'false'}" data-drag-type="obj"><div class="obj-head"><span class="drag-handle" title="드래그로 순서 변경" style="${okrEdit?'':'opacity:.3;'}">⋮⋮</span><button class="obj-toggle btn-icon" data-act="toggle-obj" data-oid="${o.id}" title="${open?'접기':'펼치기'}">${caret(open,18)}</button><div class="obj-body"><div class="obj-tags"><span class="tag-id">O${idx+1}</span>${guideHelp('objective')}${renderConfChip('objective',o.id,o.confidence||'mid')}<label style="font-size:10.5px;color:var(--text-soft);font-weight:600;">시작<input type="date" data-field="obj-start" data-oid="${o.id}" value="${o.startDate||''}"${okrRo}${okrTip} style="font-size:11px;padding:3px 6px;margin-left:4px;border:1px solid var(--line);border-radius:5px;font-family:inherit;" /></label><label style="font-size:10.5px;color:var(--text-soft);font-weight:600;">마감<input type="date" data-field="obj-due" data-oid="${o.id}" value="${o.dueDate||''}"${okrRo}${okrTip} style="font-size:11px;padding:3px 6px;margin-left:4px;border:1px solid var(--line);border-radius:5px;font-family:inherit;" /></label><button class="reality-toggle ${hr?'has-content':''}" data-act="toggle-reality" data-key="${rk}">${ro?'Reality ▴':'Reality ▾'}</button><button class="btn-icon" data-act="show-history" data-etype="objective" data-eid="${o.id}" title="이력">${I.clock}</button><button class="btn-icon" data-act="open-reflection" data-etype="objective" data-eid="${o.id}" data-period="final" title="회고 작성">${I.star}</button></div><input class="obj-title-input" data-field="obj-title" data-oid="${o.id}" value="${esc(o.title)}" placeholder="가슴 뛰는 도달점 (예: 편의점 창업 희망자들이 CU의 브리핑을 먼저 떠올리고 CU만을 희망한다)"${okrRo}${okrTip} /><input class="obj-desc-input" data-field="obj-desc" data-oid="${o.id}" placeholder="이 목표가 달성되었을 때 우리 팀·고객에게 어떤 변화가 있는가" value="${esc(o.description||'')}"${okrRo}${okrTip} />${ro?renderRealityBox('objective',o.id,o.realityBlocker,o.realityHelp):''}</div><div class="obj-avg-wrap"><div class="obj-avg-label">평균 진척</div><div class="obj-avg" data-obj-avg style="color:${progressColor(avg)};">${avg}%</div><div class="obj-actions">${okrEdit?`<button class="btn-icon" data-act="del-obj" data-oid="${o.id}" title="삭제">${I.trash}</button>`:''}</div></div></div>${open?`<div class="obj-krs">${o.keyResults.length===0?`<div style="padding:14px 22px;">${renderGuideCard('kr')}</div>`:''}${o.keyResults.map((kr,ki)=>renderKR(o.id,kr,ki)).join('')}<div class="add-line">${okrEdit?`<button class="btn btn-soft" data-act="add-kr" data-oid="${o.id}">${I.plus} KR 추가</button>`:'<span style="font-size:11.5px;color:var(--text-soft);">KR 추가는 관리자만 가능</span>'}${o.keyResults.length>5?'<span style="font-size:11px;color:var(--warning);font-weight:600;margin-left:8px;align-self:center;">⚠ 권장 3~5개</span>':o.keyResults.length<3&&o.keyResults.length>0?'<span style="font-size:11px;color:var(--text-soft);margin-left:8px;align-self:center;">권장 3~5개 (현재 '+o.keyResults.length+'개)</span>':''}</div></div>`:''}</div>`;
 }
 function renderKR(oid,kr,idx){
   const p=pct(kr.current,kr.target);const rk=`kr:${kr.id}`;const ro=realityOpen.has(rk);const hr=(kr.realityBlocker||kr.realityHelp);const ko=!krCollapsed.has(kr.id);
@@ -1692,11 +1704,10 @@ function renderKR(oid,kr,idx){
 function renderInitiativesList(kr){
   // v15·v16 — 본인이 본인 이니셔티브를 만들 수 있도록 (관리자 = 자유)
   const canAddInit=!!selfMember();
+  // v46 — 가이드 카드 제거. 추가 버튼만 컴팩트하게.
   const addBtn=canAddInit?`<div class="add-init" data-act="add-init" data-krid="${kr.id}">${I.plus} 이니셔티브 추가 (본인 담당)</div>`:'';
-  const guide=kr.initiatives.length===0?`<div style="padding:6px 0;">${renderGuideCard('initiative')}</div>`:'';
-  const items=kr.initiatives.length===0?'':kr.initiatives.map(i=>renderInitiative(kr.id,i)).join('');
-  // v16 — 추가 버튼이 위, 안내(가이드)가 아래
-  return `<div class="init-list">${items}${addBtn}${guide}</div>`;
+  const items=kr.initiatives.map(i=>renderInitiative(kr.id,i)).join('');
+  return `<div class="init-list">${items}${addBtn}</div>`;
 }
 function renderInitiative(krId,init){
   const rk=`initiative:${init.id}`;const ro=realityOpen.has(rk);const hr=(init.realityBlocker||init.realityHelp);
@@ -1714,14 +1725,17 @@ function renderInitiative(krId,init){
   // v30 — Initiative 하위 sub-task 영역
   const subTasks=state.initiativeTasks&&state.initiativeTasks[init.id]||[];
   const subOpen=window._initSubOpen&&window._initSubOpen.has(init.id);
-  // v31 — 할일 칩 (메타 영역으로 이동)
+  // v46 — 할일 칩 + 추가 버튼을 init-row 안에 함께 배치 (새 줄 안 만듦)
   const subHead=`<button class="init-meta-chip ${subTasks.length>0?'active':''}" data-act="toggle-init-sub" data-iid="${init.id}" title="${subOpen?'접기':'펼치기'}">${caret(subOpen)} 할일 ${subTasks.length}</button>`;
+  const subAddBtn=initEdit?`<button class="init-meta-add" data-act="add-init-sub" data-iid="${init.id}" title="할일 추가">${I.plus}</button>`:'';
   let subBody='';
-  if(subOpen){
+  if(subOpen&&subTasks.length>0){
+    // v46 — 할일이 있을 때만 sub-list 렌더 (빈 메시지·하단 add 버튼 모두 제거)
     const subRows=subTasks.map(t=>renderInitSubTaskRow(init.id,t,initEdit)).join('');
-    const addBtn=initEdit?`<div style="margin-top:8px;display:flex;justify-content:flex-end;"><button class="btn btn-soft" data-act="add-init-sub" data-iid="${init.id}" style="padding:5px 11px;font-size:11.5px;">${I.plus} 할일 추가</button></div>`:'';
-    // v43 — 다른 Init을 끌어다 떨어뜨려 task로 demote할 수 있도록 drop-zone 속성 부여
-    subBody=`<div class="init-sub-list" data-init-sub="${init.id}" data-drop-zone="init-sub-list" data-parent-iid="${init.id}">${subTasks.length===0?'<div style="font-size:11.5px;color:var(--text-soft);padding:4px 0;">아직 할일이 없습니다. (다른 이니셔티브를 끌어다 놓으면 할일로 변환)</div>':subRows}${addBtn}</div>`;
+    subBody=`<div class="init-sub-list" data-init-sub="${init.id}" data-drop-zone="init-sub-list" data-parent-iid="${init.id}">${subRows}</div>`;
+  }else if(subOpen){
+    // 빈 상태: drop-zone만 유지하고 시각적으로는 비움 (drag preview용)
+    subBody=`<div class="init-sub-list init-sub-empty" data-init-sub="${init.id}" data-drop-zone="init-sub-list" data-parent-iid="${init.id}" style="display:none;"></div>`;
   }
   // v43 — 1행 통합: 모든 컨트롤을 한 줄에 컴팩트하게. flex-wrap:nowrap + overflow-x:auto로 좁아져도 줄바꿈 안 함
   const mainLine=`<div class="init-row-main">`
@@ -1733,7 +1747,7 @@ function renderInitiative(krId,init){
     +`<label class="init-meta-date" title="시작일"><span>시작</span><input type="date" data-field="init-start" data-krid="${krId}" data-iid="${init.id}" value="${init.startDate||''}"${initRo}${initTip} /></label>`
     +`<label class="init-meta-date ${isOverdue(init.dueDate,init.status)?'overdue':''}" title="마감일"><span>마감</span><input type="date" data-field="init-due" data-krid="${krId}" data-iid="${init.id}" value="${init.dueDate||''}"${initRo}${initTip} /></label>`
     +renderConfChip('initiative',init.id,init.confidence||'mid')
-    +subHead
+    +subHead+subAddBtn
     +`<button class="reality-toggle ${hr?'has-content':''}" data-act="toggle-reality" data-key="${rk}" title="Reality 메모">${ro?'R▴':'R▾'}</button>`
     +`<button class="btn-icon" data-act="show-history" data-etype="initiative" data-eid="${init.id}" title="이력">${I.clock}</button>`
     +(initEdit?`<button class="btn-icon" data-act="del-init" data-krid="${krId}" data-iid="${init.id}" title="삭제" style="color:var(--warning);">${I.x}</button>`:'')
