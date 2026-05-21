@@ -3101,8 +3101,8 @@ init();
     else if(a==='krl-del-task'){
       const next=data.tasks.filter(x=>x.id!==tid);
       updateMemberTasks(mid,kind,data.legacy,next);
-      const row=document.querySelector('.krl-task-row[data-tid="'+tid+'"][data-mid="'+mid+'"][data-kind="'+kind+'"]');
-      if(row)row.remove();
+      // v18 — 그룹의 마지막 작업이 삭제되면 KR 선택 헤더(빈 그룹)도 함께 사라지도록 블록 전체 재렌더
+      rerenderTaskBlock(mid,kind);
       updateCount(mid,kind,next.length);
       scheduleDistributionUpdate();
     }
