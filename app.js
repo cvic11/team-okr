@@ -263,6 +263,14 @@ html.dark .member-card.is-readonly{background:#15171F}
 html.dark .member-card.is-readonly .member-head::after{background:#22252F;color:#9CA3AF}
 /* v11 — 기록 남기기/할일 추가 입력란 크기 확대 */
 .krl-task-row > textarea[data-krl-field="task-text"]{min-height:72px !important}
+/* v18 — 그룹 헤더(KR/Initiative 선택기) 클릭 영역 확대 + 타격감 */
+.krl-group-head.is-interactive{cursor:pointer;user-select:none;transition:transform .08s ease,box-shadow .12s ease,filter .12s ease}
+.krl-group-head.is-interactive:hover{box-shadow:inset 0 0 0 999px rgba(0,0,0,.045)}
+.krl-group-head.is-interactive:active{transform:translateY(1px);box-shadow:inset 0 0 0 999px rgba(0,0,0,.085)}
+.krl-group-head.is-interactive:focus-within{box-shadow:inset 0 0 0 999px rgba(0,0,0,.045),0 0 0 2px rgba(98,65,245,.25)}
+.krl-group-head .krl-group-caret{font-size:11px;font-weight:800;opacity:.85;line-height:1;flex-shrink:0;transition:transform .12s ease,opacity .12s ease}
+.krl-group-head.is-interactive:hover .krl-group-caret{opacity:1}
+.krl-group-head.is-interactive:active .krl-group-caret{transform:translateY(1px)}
 `;document.head.appendChild(s);
 // 다크 모드 즉시 적용 (FOUC 방지)
 document.documentElement.classList.toggle('dark',localStorage.getItem('team-okr-dark')==='1');
@@ -2864,10 +2872,10 @@ init();
       // v17 — 그룹 헤더 자체가 KR/Initiative 선택기. 클릭 시 드롭다운 → 그룹 내 작업 일괄 재배치
       const selVal=key==='none'?'':key; // 'kr:..' / 'init:..' / ''
       const headInner=editable
-        ? '<select data-krl-field="group-kr" data-mid="'+mid+'" data-kind="'+kind+'" data-groupkey="'+escapeHtml(key)+'" title="클릭하여 KR/Initiative 선택" style="flex:1;min-width:0;font-size:11.5px;font-weight:700;background:transparent;color:'+h.fg+';border:none;outline:none;cursor:pointer;font-family:inherit;-webkit-appearance:none;appearance:none;padding:0;">'+buildKROptions(selVal,allKR)+'</select><span style="font-size:9px;opacity:.6;flex-shrink:0;" title="클릭하여 변경">▼</span>'
+        ? '<select data-krl-field="group-kr" data-mid="'+mid+'" data-kind="'+kind+'" data-groupkey="'+escapeHtml(key)+'" title="클릭하여 KR/Initiative 선택" style="flex:1;min-width:0;font-size:11.5px;font-weight:700;background:transparent;color:'+h.fg+';border:none;outline:none;cursor:pointer;font-family:inherit;-webkit-appearance:none;appearance:none;padding:0;">'+buildKROptions(selVal,allKR)+'</select><span class="krl-group-caret" title="클릭하여 변경" aria-hidden="true">▼</span>'
         : '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+escapeHtml(h.title)+'">'+escapeHtml(h.title)+'</span>';
       return '<div class="krl-group" data-group-key="'+escapeHtml(key)+'" style="margin-bottom:8px;border:1px solid '+h.border+';border-radius:7px;overflow:hidden;background:white;">'+
-        '<div class="krl-group-head" style="background:'+h.bg+';color:'+h.fg+';padding:6px 10px;font-size:11.5px;font-weight:700;display:flex;align-items:center;gap:6px;'+(editable?'cursor:pointer;':'')+'">'+
+        '<div class="krl-group-head'+(editable?' is-interactive':'')+'" style="background:'+h.bg+';color:'+h.fg+';padding:6px 10px;font-size:11.5px;font-weight:700;display:flex;align-items:center;gap:6px;">'+
           '<span style="flex-shrink:0;">'+h.icon+'</span>'+
           headInner+
           '<span style="font-size:10px;opacity:.75;flex-shrink:0;">'+gTasks.length+'건</span>'+
@@ -3017,6 +3025,19 @@ init();
   // 드롭다운 열리는 순간 최신 state로 옵션 재생성 (task-kr 구버전 + group-kr 신버전)
   document.addEventListener('mousedown',function(e){const sel=e.target.closest('select[data-krl-field="task-kr"],select[data-krl-field="group-kr"]');if(!sel)return;const cur=sel.value;sel.innerHTML=buildKROptions(cur,collectAllKR());},true);
   document.addEventListener('focusin',function(e){const sel=e.target;if(sel.tagName!=='SELECT'||(sel.dataset.krlField!=='task-kr'&&sel.dataset.krlField!=='group-kr'))return;sel.innerHTML=buildKROptions(sel.value,collectAllKR());},true);
+  // v18 — 그룹 헤더 어디를 눌러도 KR/Initiative 드롭다운 열기 (클릭 영역 확대)
+  document.addEventListener('click',function(e){
+    const head=e.target.closest('.krl-group-head.is-interactive');
+    if(!head)return;
+    if(e.target.closest('select[data-krl-field="group-kr"]'))return; // select 자체 클릭은 브라우저 기본 동작
+    const sel=head.querySelector('select[data-krl-field="group-kr"]');
+    if(!sel||sel.disabled)return;
+    try{sel.innerHTML=buildKROptions(sel.value,collectAllKR());}catch(_){}
+    if(typeof sel.showPicker==='function'){
+      try{sel.focus();sel.showPicker();return;}catch(_){}
+    }
+    sel.focus();
+  });
   document.addEventListener('click',function(e){
     const btn=e.target.closest('[data-act]');if(!btn)return;
     const a=btn.dataset.act;
