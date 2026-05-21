@@ -329,7 +329,9 @@ html.dark .krl-cmt-item{border-bottom-color:rgba(255,255,255,.06)}
 .wbs-bar:hover::before,.wbs-bar:hover::after{background:rgba(255,255,255,.45)}
 .wbs-drag-tip{position:fixed;z-index:9999;background:#26215C;color:white;padding:6px 10px;border-radius:6px;font-size:11.5px;font-weight:700;pointer-events:none;box-shadow:0 4px 12px rgba(0,0,0,.3);white-space:nowrap;font-family:inherit;line-height:1.45}
 /* v23 — 상단 날짜바의 담당자 아이콘 (클릭 점프) */
-.date-bar-members{display:inline-flex;gap:5px;align-items:center;margin-left:6px;flex-wrap:wrap}
+/* v40 — 아이콘은 한 줄에 고정. 좁아지면 가로 스크롤. 너비/높이 출렁이는 문제 차단 */
+.date-bar-members{display:inline-flex;gap:5px;align-items:center;margin-left:6px;flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;max-width:100%;min-height:32px;flex-shrink:1;min-width:0}
+.date-bar-members::-webkit-scrollbar{display:none}
 .date-bar-member-icon{width:28px;height:28px;border-radius:50%;border:2px solid white;cursor:pointer;font-size:11.5px;font-weight:800;color:white;display:inline-flex;align-items:center;justify-content:center;font-family:inherit;box-shadow:0 1px 3px rgba(0,0,0,.12);transition:transform .12s,box-shadow .12s,filter .12s;flex-shrink:0;padding:0;line-height:1}
 .date-bar-member-icon:hover{transform:translateY(-1px);box-shadow:0 3px 8px rgba(0,0,0,.22);filter:brightness(1.06)}
 .date-bar-member-icon:active{transform:translateY(0)}
@@ -343,9 +345,10 @@ html.dark .krl-cmt-item{border-bottom-color:rgba(255,255,255,.06)}
   100%{box-shadow:0 0 0 0 transparent;background-color:transparent}
 }
 /* v25 — 상단 날짜바(담당자 아이콘 포함) 스크롤 중에도 헤더 아래에 고정 (v29 — 헤더 높이 동적 측정) */
-.date-bar{position:sticky;top:var(--app-header-h,64px);z-index:15;background:rgba(250,250,250,0.94);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);padding:8px 8px;border-bottom:1px solid var(--line);border-radius:8px 8px 0 0}
+.date-bar{position:sticky;top:var(--app-header-h,64px);z-index:15;background:rgba(250,250,250,0.94);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);padding:8px 8px;border-bottom:1px solid var(--line);border-radius:8px 8px 0 0;flex-wrap:nowrap !important;min-height:50px;overflow-x:auto;overflow-y:hidden;scrollbar-width:none}
+.date-bar::-webkit-scrollbar{display:none}
 html.dark .date-bar{background:rgba(15,17,23,0.94);border-bottom-color:#22252F}
-@media(max-width:760px){.date-bar{padding:6px 4px}}
+@media(max-width:760px){.date-bar{padding:6px 4px;min-height:46px}}
 /* v24 — 팀원 간 1:1 메시지 채팅 (우측 하단 플로팅) */
 .chat-launcher{position:fixed;right:20px;bottom:20px;z-index:9000;width:52px;height:52px;border-radius:50%;background:var(--primary);color:white;border:none;cursor:pointer;font-size:22px;box-shadow:0 4px 14px rgba(98,65,245,.4);display:flex;align-items:center;justify-content:center;transition:transform .15s,box-shadow .15s;line-height:1;font-family:inherit}
 .chat-launcher:hover{transform:translateY(-2px);box-shadow:0 6px 20px rgba(98,65,245,.55)}
