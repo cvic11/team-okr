@@ -297,6 +297,11 @@ html.dark .member-card.is-readonly .member-head::after{background:#22252F;color:
 html.dark .krl-cmt-thread{background:rgba(98,65,245,.12);border-left-color:var(--primary)}
 html.dark .krl-cmt-input{background:#1B1E27;color:#D1D5DB;border-color:#22252F}
 html.dark .krl-cmt-item{border-bottom-color:rgba(255,255,255,.06)}
+/* v21 — WBS 막대 드래그 */
+.wbs-bar{cursor:grab;user-select:none;touch-action:none;transition:box-shadow .12s,filter .12s}
+.wbs-bar:hover{filter:brightness(1.05);box-shadow:0 2px 6px rgba(0,0,0,.18)!important}
+.wbs-bar.dragging{cursor:grabbing;opacity:.88;box-shadow:0 6px 14px rgba(0,0,0,.28)!important;z-index:10;transition:none}
+.wbs-drag-tip{position:fixed;z-index:9999;background:#26215C;color:white;padding:6px 10px;border-radius:6px;font-size:11.5px;font-weight:700;pointer-events:none;box-shadow:0 4px 12px rgba(0,0,0,.3);white-space:nowrap;font-family:inherit;line-height:1.45}
 `;document.head.appendChild(s);
 // 다크 모드 즉시 적용 (FOUC 방지)
 document.documentElement.classList.toggle('dark',localStorage.getItem('team-okr-dark')==='1');
@@ -1735,9 +1740,116 @@ function renderWBS(){
     </div>
   </div>
   <div style="font-size:11.5px;color:var(--text-soft);margin-top:8px;line-height:1.55;">
-    💡 막대 클릭 → 해당 항목으로 점프 / ▶▼ 클릭 → 하위 항목 접기·펼치기 / Initiative 마감 지연 시 빨간 테두리
+    💡 막대 클릭 → 점프 · 막대 드래그(좌/우) → 일정 이동 · ▶▼ → 접기·펼치기 · Initiative 마감 지연 시 빨간 테두리
   </div>`;
 }
+// v21 — WBS 막대 드래그로 일정 이동 (시작·종료 유지 폭) + 드래그 중 날짜 툴팁
+(function(){
+  const PX_PER_DAY=10;
+  let drag=null,tipEl=null;
+  function ensureTip(){
+    if(tipEl)return tipEl;
+    tipEl=document.createElement('div');
+    tipEl.className='wbs-drag-tip';
+    tipEl.style.display='none';
+    document.body.appendChild(tipEl);
+    return tipEl;
+  }
+  function showTip(html,x,y){const t=ensureTip();t.innerHTML=html;t.style.display='block';t.style.left=(x+14)+'px';t.style.top=(y-44)+'px';}
+  function hideTip(){if(tipEl)tipEl.style.display='none';}
+  function shiftYMD(ymd,days){if(!ymd)return ymd;const d=new Date(ymd+'T00:00:00');d.setDate(d.getDate()+days);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+  function fmtMD(ymd){return ymd?ymd.slice(5).replace('-','/'):'—';}
+  function findItem(type,id){
+    if(!window.state||!state.objectives)return null;
+    for(const o of state.objectives){
+      if(type==='O'&&o.id===id)return{kind:'O',item:o};
+      for(const k of(o.keyResults||[])){
+        if(type==='KR'&&k.id===id)return{kind:'KR',oid:o.id,item:k};
+        for(const i of(k.initiatives||[])){
+          if(type==='I'&&i.id===id)return{kind:'I',krid:k.id,item:i};
+        }
+      }
+    }
+    return null;
+  }
+  function canDragNow(){
+    if(typeof isObserver==='function'&&isObserver())return false;
+    if(typeof selfMember==='function'&&!selfMember())return false;
+    return true;
+  }
+  document.addEventListener('pointerdown',function(e){
+    if(e.button!==0&&e.pointerType==='mouse')return; // 좌클릭만
+    const bar=e.target.closest('.wbs-bar');
+    if(!bar)return;
+    if(!canDragNow())return;
+    const type=bar.dataset.type,id=bar.dataset.id;
+    const found=findItem(type,id);
+    if(!found||!found.item)return;
+    const it=found.item;
+    if(!it.startDate&&!it.dueDate)return; // 양쪽 다 없으면 이동 무의미
+    drag={
+      bar,type,id,found,
+      origStart:it.startDate,origEnd:it.dueDate,
+      startX:e.clientX,
+      origLeft:parseFloat(bar.style.left)||0,
+      moved:false,days:0,
+      pointerId:e.pointerId
+    };
+    try{bar.setPointerCapture(e.pointerId);}catch(_){}
+    bar.classList.add('dragging');
+  },true);
+  document.addEventListener('pointermove',function(e){
+    if(!drag)return;
+    const dx=e.clientX-drag.startX;
+    if(!drag.moved&&Math.abs(dx)<4)return;
+    drag.moved=true;
+    const days=Math.round(dx/PX_PER_DAY);
+    drag.days=days;
+    drag.bar.style.left=(drag.origLeft+days*PX_PER_DAY)+'px';
+    const ns=drag.origStart?shiftYMD(drag.origStart,days):null;
+    const ne=drag.origEnd?shiftYMD(drag.origEnd,days):null;
+    let html='';
+    if(ns&&ne)html=fmtMD(ns)+' ~ '+fmtMD(ne);
+    else if(ne)html='마감 '+fmtMD(ne);
+    else if(ns)html='시작 '+fmtMD(ns);
+    html+='<span style="opacity:.7;margin-left:6px;">('+(days>0?'+':'')+days+'일)</span>';
+    showTip(html,e.clientX,e.clientY);
+  },true);
+  document.addEventListener('pointerup',function(e){
+    if(!drag)return;
+    const d=drag;drag=null;
+    try{d.bar.releasePointerCapture(e.pointerId);}catch(_){}
+    d.bar.classList.remove('dragging');
+    hideTip();
+    if(!d.moved||d.days===0)return;
+    // 후속 click 이벤트(wbs-jump) 차단
+    d.bar.dataset.justDragged='1';
+    setTimeout(()=>{try{delete d.bar.dataset.justDragged;}catch(_){}},300);
+    // 상태 반영 + 저장
+    const it=d.found.item;
+    if(it.startDate)it.startDate=shiftYMD(it.startDate,d.days);
+    if(it.dueDate)it.dueDate=shiftYMD(it.dueDate,d.days);
+    try{
+      if(d.found.kind==='O'&&typeof saveObjective==='function')saveObjective(it);
+      else if(d.found.kind==='KR'&&typeof saveKR==='function')saveKR(d.found.oid,it);
+      else if(d.found.kind==='I'&&typeof saveInitiative==='function')saveInitiative(d.found.krid,it);
+    }catch(err){console.warn('[WBS drag] save failed',err);}
+    if(typeof render==='function')render();
+  },true);
+  document.addEventListener('pointercancel',function(e){
+    if(!drag)return;
+    try{drag.bar.releasePointerCapture(e.pointerId);}catch(_){}
+    drag.bar.classList.remove('dragging');
+    hideTip();
+    drag=null;
+  },true);
+  // 드래그 직후의 click은 기존 wbs-jump가 받지 않도록 차단
+  document.addEventListener('click',function(e){
+    const bar=e.target.closest('.wbs-bar');
+    if(!bar)return;
+    if(bar.dataset.justDragged){e.stopImmediatePropagation();e.preventDefault();}
+  },true);
+})();
 
 function renderManage(){
   const t=currentTeam();
