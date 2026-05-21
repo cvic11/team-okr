@@ -278,12 +278,19 @@ html.dark .member-card.is-readonly .member-head::after{background:#22252F;color:
 .krl-group-head.is-interactive:hover .krl-group-caret{opacity:1}
 .krl-group-head.is-interactive:active .krl-group-caret{transform:translateY(1px)}
 /* v32 — 그룹 헤더(KR/Init)가 이미 상위 컨텍스트를 표시하므로 task 행의 상위 변경 chip 제거 */
-/* v33 — 그룹 헤더 클릭으로 그룹 전체 이동 (제목 위에 투명 select overlay) */
-.krl-subgroup-head.is-interactive,.krl-group-head.is-interactive{cursor:pointer;user-select:none}
-.krl-group-title-clickable{transition:opacity .12s}
-.krl-subgroup-head.is-interactive:hover .krl-group-title-clickable,.krl-group-head.is-interactive:hover .krl-group-title-clickable{opacity:.78}
-.krl-group-title-clickable .krl-group-caret{transition:transform .12s ease}
-.krl-subgroup-head.is-interactive:hover .krl-group-caret,.krl-group-head.is-interactive:hover .krl-group-caret{transform:translateY(1px);opacity:1}
+/* v34 — 그룹 헤더 제목 인플레이스 편집 + 우측 ▾ 그룹 이동 (영역 분리) */
+.krl-group-title-input{flex:1;min-width:0;border:1px solid transparent;background:transparent;color:inherit;font:inherit;font-weight:inherit;padding:2px 6px;border-radius:4px;outline:none;line-height:1.3;cursor:text;text-overflow:ellipsis;transition:background .12s,border-color .12s,box-shadow .12s}
+.krl-group-title-input:hover:not([readonly]){background:rgba(255,255,255,.55)}
+.krl-group-title-input:focus{background:white;border-color:rgba(98,65,245,.5);box-shadow:0 0 0 2px var(--primary-soft);color:var(--text);font-weight:700}
+.krl-group-title-input[readonly]{cursor:default}
+.krl-group-move-btn{position:relative;display:inline-flex;align-items:center;justify-content:center;width:22px;height:20px;cursor:pointer;border-radius:4px;flex-shrink:0;font-size:11px;opacity:.65;transition:opacity .12s,background .12s;user-select:none}
+.krl-group-move-btn:hover{opacity:1;background:rgba(0,0,0,.07)}
+.krl-group-move-btn select{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;border:none;font-family:inherit;background:transparent;-webkit-appearance:none;appearance:none}
+html.dark .krl-group-title-input:hover:not([readonly]){background:rgba(255,255,255,.08)}
+html.dark .krl-group-title-input:focus{background:#1A1D27;color:#E5E7EB}
+html.dark .krl-group-move-btn:hover{background:rgba(255,255,255,.10)}
+/* v34 — 댓글 작성자 아바타 (이름 앞 작은 컬러 원) */
+.krl-cmt-avatar{width:18px;height:18px;border-radius:50%;color:white;font-weight:800;font-size:9.5px;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;line-height:1}
 /* v26 — 할일 댓글 (토글 없이 상시 노출 · 짧은 글은 이름 옆에 인라인) */
 .krl-task-container,.recent-task-container{position:relative}
 .krl-cmt-thread{margin:2px 0 8px 26px;padding:5px 10px;background:rgba(98,65,245,.04);border-left:2px solid var(--primary-soft);border-radius:0 6px 6px 0}
@@ -3350,8 +3357,15 @@ init();
           '<button class="krl-cmt-act" data-act="cmt-del" data-mid="'+mid+'" data-kind="'+kind+'" data-tid="'+task.id+'" data-cid="'+escapeHtml(c.id)+'"'+dAttr+' title="삭제">✕</button>'+
         '</span>'
       : '';
+    // v34 — 댓글 작성자 아바타 (색·이니셜)
+    const member=c.uid&&typeof state!=='undefined'&&state.members?state.members.find(m=>m.id===c.uid):null;
+    const avBg=member&&member.color?member.color:'#9CA3AF';
+    const avName=(member&&member.name)||c.uname||'?';
+    const avChar=String(avName).slice(0,1).toUpperCase();
+    const avatarHtml='<span class="krl-cmt-avatar" style="background:'+avBg+';" title="'+escapeHtml(avName)+'">'+escapeHtml(avChar)+'</span>';
     if(isShort){
       return '<div class="krl-cmt-item krl-cmt-inline" data-cmt-id="'+escapeHtml(c.id)+'">'+
+        avatarHtml+
         '<span class="krl-cmt-author">'+escapeHtml(c.uname||'(이름없음)')+'</span>'+
         '<span class="krl-cmt-body">'+escapeHtml(body)+'</span>'+
         '<span class="krl-cmt-time">'+escapeHtml(formatCmtTime(c.ts))+'</span>'+
@@ -3360,6 +3374,7 @@ init();
     }
     return '<div class="krl-cmt-item" data-cmt-id="'+escapeHtml(c.id)+'">'+
       '<div class="krl-cmt-meta">'+
+        avatarHtml+
         '<span class="krl-cmt-author">'+escapeHtml(c.uname||'(이름없음)')+'</span>'+
         '<span>·</span>'+
         '<span>'+escapeHtml(formatCmtTime(c.ts))+'</span>'+
@@ -3482,18 +3497,19 @@ init();
       const title=init.title||'(제목 없는 Initiative)';
       const bg='#D9CFFB',fg='#3A2670',border='#B5A0F0';
       const addBtn=editable?'<button class="krl-add-mini" data-act="krl-add-task-in-init" data-mid="'+mid+'" data-kind="'+kind+'" data-init-id="'+escapeHtml(init.id)+'" data-kr-id="'+escapeHtml(krId)+'" title="이 Initiative에 할일 추가" style="background:transparent;border:1px solid '+fg+';color:'+fg+';border-radius:4px;cursor:pointer;font-size:11px;padding:1px 7px;font-family:inherit;line-height:1;font-weight:800;flex-shrink:0;">＋</button>':'';
-      // v33 — 헤더 클릭 시 이 그룹의 task 전체를 다른 KR/Init으로 이동 (보이는 텍스트 위에 투명 select)
+      // v34 — 제목 클릭 = 인플레이스 편집 / 우측 ▾ 클릭 = 그룹 이동 (영역 분리)
       const groupKey='init:'+init.id;
-      const titleArea=editable
-        ? '<span class="krl-group-title-clickable" style="position:relative;flex:1;min-width:0;display:inline-flex;align-items:center;gap:4px;">'+
-            '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+escapeHtml(title)+' (클릭하여 그룹 전체 이동)">'+escapeHtml(title)+'</span>'+
-            '<span class="krl-group-caret" aria-hidden="true" style="font-size:9px;opacity:.7;flex-shrink:0;">▾</span>'+
-            '<select data-krl-field="group-kr" data-mid="'+mid+'" data-kind="'+kind+'" data-groupkey="'+escapeHtml(groupKey)+'" title="이 그룹의 task 전체를 다른 KR/Initiative로 이동" style="position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;border:none;font-family:inherit;font-size:11px;background:transparent;-webkit-appearance:none;appearance:none;">'+buildKROptions(groupKey,allKR)+'</select>'+
-          '</span>'
-        : '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+escapeHtml(title)+'">'+escapeHtml(title)+'</span>';
-      const head='<div class="krl-subgroup-head'+(editable?' is-interactive':'')+'" style="background:'+bg+';color:'+fg+';padding:5px 10px 5px 22px;font-size:11px;font-weight:700;display:flex;align-items:center;gap:6px;border-top:1px solid '+border+';">'+
+      const titleEditable=(typeof canEditInit==='function')?canEditInit(init):editable;
+      const titleRo=titleEditable?'':' readonly';
+      const titleTip=titleEditable?' title="클릭하여 Initiative 제목 편집"':' title="본인 담당 Initiative 또는 관리자만 수정 가능"';
+      const titleInput='<input class="krl-group-title-input" data-field="init-title" data-krid="'+escapeHtml(krId)+'" data-iid="'+escapeHtml(init.id)+'" value="'+escapeHtml(title)+'"'+titleRo+titleTip+' />';
+      const moveBtn=editable
+        ? '<span class="krl-group-move-btn" title="다른 KR/Init으로 그룹 이동">▾<select data-krl-field="group-kr" data-mid="'+mid+'" data-kind="'+kind+'" data-groupkey="'+escapeHtml(groupKey)+'">'+buildKROptions(groupKey,allKR)+'</select></span>'
+        : '';
+      const head='<div class="krl-subgroup-head" style="background:'+bg+';color:'+fg+';padding:5px 10px 5px 22px;font-size:11px;font-weight:700;display:flex;align-items:center;gap:6px;border-top:1px solid '+border+';">'+
         '<span style="flex-shrink:0;">⚡</span>'+
-        titleArea+
+        titleInput+
+        moveBtn+
         '<span style="font-size:10px;opacity:.75;flex-shrink:0;">'+ig.tasks.length+'건</span>'+
         addBtn+
       '</div>';
@@ -3508,18 +3524,24 @@ init();
       const bg='#EEEAFE',fg='#6241F5',border='#D9CFFB';
       const total=g.directTasks.length+g.initOrder.reduce((s,iid)=>s+g.initGroups[iid].tasks.length,0);
       const addBtn=editable?'<button class="krl-add-mini" data-act="krl-add-task-in-kr" data-mid="'+mid+'" data-kind="'+kind+'" data-kr-id="'+escapeHtml(g.krId)+'" title="이 KR에 직속 할일 추가" style="background:transparent;border:1px solid '+fg+';color:'+fg+';border-radius:4px;cursor:pointer;font-size:11px;padding:1px 7px;font-family:inherit;line-height:1;font-weight:800;flex-shrink:0;">＋</button>':'';
-      // v33 — 헤더 클릭 시 KR 직속 task들을 다른 KR/Init으로 이동 (보이는 텍스트 위에 투명 select). Init 하위 task는 영향 없음
+      // v34 — KR 제목 클릭 = 인플레이스 편집 / 우측 ▾ = KR 직속 task 이동. Init 하위 task 영향 없음
       const groupKey='kr:'+g.krId;
-      const titleArea=editable
-        ? '<span class="krl-group-title-clickable" style="position:relative;flex:1;min-width:0;display:inline-flex;align-items:center;gap:4px;">'+
-            '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+escapeHtml(title)+' (클릭하여 KR 직속 task 이동)">KR · '+escapeHtml(title)+'</span>'+
-            '<span class="krl-group-caret" aria-hidden="true" style="font-size:9px;opacity:.7;flex-shrink:0;">▾</span>'+
-            '<select data-krl-field="group-kr" data-mid="'+mid+'" data-kind="'+kind+'" data-groupkey="'+escapeHtml(groupKey)+'" title="이 KR 직속 task(Init 미지정)를 다른 KR/Initiative로 이동" style="position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;border:none;font-family:inherit;font-size:11.5px;background:transparent;-webkit-appearance:none;appearance:none;">'+buildKROptions(groupKey,allKR)+'</select>'+
-          '</span>'
-        : '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+escapeHtml(title)+'">KR · '+escapeHtml(title)+'</span>';
-      const head='<div class="krl-group-head'+(editable?' is-interactive':'')+'" style="background:'+bg+';color:'+fg+';padding:6px 10px;font-size:11.5px;font-weight:700;display:flex;align-items:center;gap:6px;">'+
+      // KR 소속 Objective id 찾기
+      let krOid=null;
+      if(typeof state!=='undefined'&&state.objectives){
+        for(const o of state.objectives){if((o.keyResults||[]).some(k=>k.id===g.krId)){krOid=o.id;break;}}
+      }
+      const titleEditable=(typeof canEditOKR==='function')?canEditOKR():editable;
+      const titleRo=titleEditable?'':' readonly';
+      const titleTip=titleEditable?' title="클릭하여 KR 제목 편집"':' title="관리자만 수정 가능"';
+      const titleInput='<span style="flex-shrink:0;">KR · </span><input class="krl-group-title-input" data-field="kr-title" data-oid="'+escapeHtml(krOid||'')+'" data-krid="'+escapeHtml(g.krId)+'" value="'+escapeHtml(title)+'"'+titleRo+titleTip+' />';
+      const moveBtn=editable
+        ? '<span class="krl-group-move-btn" title="이 KR 직속 task(Init 미지정)를 다른 KR/Init으로 이동">▾<select data-krl-field="group-kr" data-mid="'+mid+'" data-kind="'+kind+'" data-groupkey="'+escapeHtml(groupKey)+'">'+buildKROptions(groupKey,allKR)+'</select></span>'
+        : '';
+      const head='<div class="krl-group-head" style="background:'+bg+';color:'+fg+';padding:6px 10px;font-size:11.5px;font-weight:700;display:flex;align-items:center;gap:6px;">'+
         '<span style="flex-shrink:0;">📌</span>'+
-        titleArea+
+        titleInput+
+        moveBtn+
         '<span style="font-size:10px;opacity:.75;flex-shrink:0;">'+total+'건</span>'+
         addBtn+
       '</div>';
@@ -3695,10 +3717,10 @@ init();
   // 드롭다운 열리는 순간 최신 state로 옵션 재생성 (task-kr 구버전 + group-kr 신버전)
   document.addEventListener('mousedown',function(e){const sel=e.target.closest('select[data-krl-field="task-kr"],select[data-krl-field="group-kr"]');if(!sel)return;const cur=sel.value;sel.innerHTML=buildKROptions(cur,collectAllKR());},true);
   document.addEventListener('focusin',function(e){const sel=e.target;if(sel.tagName!=='SELECT'||(sel.dataset.krlField!=='task-kr'&&sel.dataset.krlField!=='group-kr'))return;sel.innerHTML=buildKROptions(sel.value,collectAllKR());},true);
-  // v18 — 그룹 헤더 어디를 눌러도 KR/Initiative 드롭다운 열기 (클릭 영역 확대)
-  // v33 — subgroup-head(Init 그룹)도 포함
+  // v18 — 그룹 헤더 어디를 눌러도 KR/Initiative 드롭다운 열기 (운영 그룹 = renderIndividual용)
+  // v34 — KR/Init 그룹은 제목 input + 별도 ▾ 이동 칩으로 분리되어 이 핸들러 적용 안 됨
   document.addEventListener('click',function(e){
-    const head=e.target.closest('.krl-group-head.is-interactive, .krl-subgroup-head.is-interactive');
+    const head=e.target.closest('.krl-group-head.is-interactive');
     if(!head)return;
     if(e.target.closest('select[data-krl-field="group-kr"]'))return; // select 자체 클릭은 브라우저 기본 동작
     if(e.target.closest('[data-act]'))return; // + 버튼 등 다른 액션은 자기 핸들러로
