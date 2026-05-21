@@ -3238,6 +3238,34 @@ init();
     });
     return{order,groups};
   }
+  // v28 — KR > Init > 할일 트리 구조 빌드 (이니셔티브 하위에 할일 묶기)
+  function buildTaskTree(tasks){
+    const allKR=collectAllKR();
+    const krById={};const initToKr={};
+    allKR.forEach(k=>{krById[k.id]=k;(k.initiatives||[]).forEach(i=>{initToKr[i.id]=k.id;});});
+    const tree={krOrder:[],krGroups:{},individualTasks:[]};
+    function ensureKR(krId){
+      if(!tree.krGroups[krId]){
+        tree.krGroups[krId]={krId,kr:krById[krId]||null,directTasks:[],initGroups:{},initOrder:[]};
+        tree.krOrder.push(krId);
+      }
+      return tree.krGroups[krId];
+    }
+    tasks.forEach(t=>{
+      if(t.i){
+        const krId=initToKr[t.i]||t.k||'__orphan';
+        const g=ensureKR(krId);
+        const initObj=(g.kr&&(g.kr.initiatives||[]).find(i=>i.id===t.i))||{id:t.i,title:'(삭제된 Initiative)'};
+        if(!g.initGroups[t.i]){g.initGroups[t.i]={init:initObj,tasks:[]};g.initOrder.push(t.i);}
+        g.initGroups[t.i].tasks.push(t);
+      }else if(t.k){
+        ensureKR(t.k).directTasks.push(t);
+      }else{
+        tree.individualTasks.push(t);
+      }
+    });
+    return tree;
+  }
   function renderTaskGroupHead(key){
     let icon='⚪',title='운영 (KR 무관)',bg='#F4F4F5',fg='#737373',border='#E5E5E8';
     if(key.startsWith('kr:')){
@@ -3256,28 +3284,65 @@ init();
     const editable=(typeof canEditAs==='function')?canEditAs(mid):true;
     const dis=editable?'':' disabled';
     const tip=editable?'':' title="본인이 작성한 항목만 수정할 수 있습니다"';
-    // v16 — KR/Init별 그룹화
+    // v28 — KR > Init > 할일 트리 구조 (이니셔티브 하위에 할일 묶기)
     const allKR=collectAllKR();
-    const{order,groups}=groupTasksByLink(tasks);
-    const groupsHtml=order.map(key=>{
-      const gTasks=groups.get(key);
-      const h=renderTaskGroupHead(key);
-      // v17 — 그룹 헤더 자체가 KR/Initiative 선택기. 클릭 시 드롭다운 → 그룹 내 작업 일괄 재배치
-      const selVal=(key.startsWith('kr:')||key.startsWith('init:'))?key:''; // 'kr:..' / 'init:..' / '' (none|task:..)
+    const tree=buildTaskTree(tasks);
+    function renderInitSub(ig,krId){
+      const init=ig.init;
+      const title=init.title||'(제목 없는 Initiative)';
+      const bg='#D9CFFB',fg='#3A2670',border='#B5A0F0';
+      const addBtn=editable?'<button class="krl-add-mini" data-act="krl-add-task-in-init" data-mid="'+mid+'" data-kind="'+kind+'" data-init-id="'+escapeHtml(init.id)+'" data-kr-id="'+escapeHtml(krId)+'" title="이 Initiative에 할일 추가" style="background:transparent;border:1px solid '+fg+';color:'+fg+';border-radius:4px;cursor:pointer;font-size:11px;padding:1px 7px;font-family:inherit;line-height:1;font-weight:800;flex-shrink:0;">＋</button>':'';
+      const head='<div class="krl-subgroup-head" style="background:'+bg+';color:'+fg+';padding:5px 10px 5px 22px;font-size:11px;font-weight:700;display:flex;align-items:center;gap:6px;border-top:1px solid '+border+';">'+
+        '<span style="flex-shrink:0;">⚡</span>'+
+        '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+escapeHtml(title)+'">'+escapeHtml(title)+'</span>'+
+        '<span style="font-size:10px;opacity:.75;flex-shrink:0;">'+ig.tasks.length+'건</span>'+
+        addBtn+
+      '</div>';
+      const rows='<div class="krl-subgroup-tasks" style="padding:2px 10px 2px 22px;">'+
+        ig.tasks.map(t=>renderTaskRowGrouped(t,mid,kind)).join('')+
+      '</div>';
+      return '<div class="krl-subgroup" data-init-id="'+escapeHtml(init.id)+'">'+head+rows+'</div>';
+    }
+    function renderKRTree(g){
+      const kr=g.kr;
+      const title=kr?(kr.title||'(제목 없는 KR)'):'(삭제된 KR)';
+      const bg='#EEEAFE',fg='#6241F5',border='#D9CFFB';
+      const total=g.directTasks.length+g.initOrder.reduce((s,iid)=>s+g.initGroups[iid].tasks.length,0);
+      const addBtn=editable?'<button class="krl-add-mini" data-act="krl-add-task-in-kr" data-mid="'+mid+'" data-kind="'+kind+'" data-kr-id="'+escapeHtml(g.krId)+'" title="이 KR에 직속 할일 추가" style="background:transparent;border:1px solid '+fg+';color:'+fg+';border-radius:4px;cursor:pointer;font-size:11px;padding:1px 7px;font-family:inherit;line-height:1;font-weight:800;flex-shrink:0;">＋</button>':'';
+      const head='<div class="krl-group-head" style="background:'+bg+';color:'+fg+';padding:6px 10px;font-size:11.5px;font-weight:700;display:flex;align-items:center;gap:6px;">'+
+        '<span style="flex-shrink:0;">📌</span>'+
+        '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+escapeHtml(title)+'">KR · '+escapeHtml(title)+'</span>'+
+        '<span style="font-size:10px;opacity:.75;flex-shrink:0;">'+total+'건</span>'+
+        addBtn+
+      '</div>';
+      const directRows=g.directTasks.length>0?'<div class="krl-group-tasks" style="padding:2px 10px;">'+
+        g.directTasks.map(t=>renderTaskRowGrouped(t,mid,kind)).join('')+
+      '</div>':'';
+      const initSubs=g.initOrder.map(iid=>renderInitSub(g.initGroups[iid],g.krId)).join('');
+      return '<div class="krl-group krl-group-kr" data-kr-id="'+escapeHtml(g.krId)+'" style="margin-bottom:8px;border:1px solid '+border+';border-radius:7px;overflow:hidden;background:white;">'+
+        head+directRows+initSubs+
+      '</div>';
+    }
+    function renderIndividual(t){
+      // 미선택 task — KR 선택 드롭다운이 있는 단일 그룹
+      const key='task:'+t.id;
+      const bg='#F4F4F5',fg='#737373',border='#E5E5E8';
       const headInner=editable
-        ? '<select data-krl-field="group-kr" data-mid="'+mid+'" data-kind="'+kind+'" data-groupkey="'+escapeHtml(key)+'" title="클릭하여 KR/Initiative 선택" style="flex:1;min-width:0;font-size:11.5px;font-weight:700;background:transparent;color:'+h.fg+';border:none;outline:none;cursor:pointer;font-family:inherit;-webkit-appearance:none;appearance:none;padding:0;">'+buildKROptions(selVal,allKR)+'</select><span class="krl-group-caret" title="클릭하여 변경" aria-hidden="true">▼</span>'
-        : '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+escapeHtml(h.title)+'">'+escapeHtml(h.title)+'</span>';
-      return '<div class="krl-group" data-group-key="'+escapeHtml(key)+'" style="margin-bottom:8px;border:1px solid '+h.border+';border-radius:7px;overflow:hidden;background:white;">'+
-        '<div class="krl-group-head'+(editable?' is-interactive':'')+'" style="background:'+h.bg+';color:'+h.fg+';padding:6px 10px;font-size:11.5px;font-weight:700;display:flex;align-items:center;gap:6px;">'+
-          '<span style="flex-shrink:0;">'+h.icon+'</span>'+
+        ? '<select data-krl-field="group-kr" data-mid="'+mid+'" data-kind="'+kind+'" data-groupkey="'+escapeHtml(key)+'" title="클릭하여 KR/Initiative 선택" style="flex:1;min-width:0;font-size:11.5px;font-weight:700;background:transparent;color:'+fg+';border:none;outline:none;cursor:pointer;font-family:inherit;-webkit-appearance:none;appearance:none;padding:0;">'+buildKROptions('',allKR)+'</select><span class="krl-group-caret" title="클릭하여 변경" aria-hidden="true">▼</span>'
+        : '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">운영 (KR 무관)</span>';
+      return '<div class="krl-group" data-group-key="'+escapeHtml(key)+'" style="margin-bottom:8px;border:1px solid '+border+';border-radius:7px;overflow:hidden;background:white;">'+
+        '<div class="krl-group-head'+(editable?' is-interactive':'')+'" style="background:'+bg+';color:'+fg+';padding:6px 10px;font-size:11.5px;font-weight:700;display:flex;align-items:center;gap:6px;">'+
+          '<span style="flex-shrink:0;">⚪</span>'+
           headInner+
-          '<span style="font-size:10px;opacity:.75;flex-shrink:0;">'+gTasks.length+'건</span>'+
+          '<span style="font-size:10px;opacity:.75;flex-shrink:0;">1건</span>'+
         '</div>'+
         '<div class="krl-group-tasks" style="padding:2px 10px;">'+
-          gTasks.map(t=>renderTaskRowGrouped(t,mid,kind)).join('')+
+          renderTaskRowGrouped(t,mid,kind)+
         '</div>'+
       '</div>';
-    }).join('');
+    }
+    const groupsHtml=tree.krOrder.map(krId=>renderKRTree(tree.krGroups[krId])).join('')+
+      tree.individualTasks.map(t=>renderIndividual(t)).join('');
     return '<div class="krl-block" data-krl-block="'+mid+':'+kind+'" style="background:#FAFAFB;border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin-top:8px;">'+
       '<div class="krl-block-head" data-krl-head="'+mid+':'+kind+'" style="font-size:12px;color:var(--text-soft);font-weight:600;margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">'+
         (tasks.length>0?'<span style="display:inline-flex;align-items:center;gap:6px;">'+escapeHtml(label)+'<span class="krl-count" style="font-size:11px;color:var(--text-soft);font-weight:600;">'+tasks.length+'건</span></span>':'<span></span>')+
@@ -3345,21 +3410,22 @@ init();
           const krMap={};allKR.forEach(k=>{krMap[k.id]=k;});
           const initMap={};collectAllInit().forEach(i=>{initMap[i.id]=i;});
           const recent=[];
-          for(let i=1;i<=7;i++){
+          // v27 — 최근 입력된 가장 가까운 날짜 1건만 표시
+          for(let i=1;i<=30;i++){
             const d=window.shiftDate?window.shiftDate(viewing,-i):(()=>{const x=new Date(viewing);x.setDate(x.getDate()-i);return `${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,'0')}-${String(x.getDate()).padStart(2,'0')}`;})();
             const e=st.standups&&st.standups[d]&&st.standups[d].entries&&st.standups[d].entries[mid];
             if(!e)continue;
             const parsed=parseTasksField(e.today||'');
             const hasTask=parsed.tasks&&parsed.tasks.length>0;
             const hasLegacy=parsed.legacy&&parsed.legacy.trim();
-            if(hasTask||hasLegacy)recent.push({date:d,tasks:parsed.tasks||[],legacy:parsed.legacy||''});
+            if(hasTask||hasLegacy){recent.push({date:d,tasks:parsed.tasks||[],legacy:parsed.legacy||''});break;}
           }
           if(recent.length>0){
             const fmtDate=window.formatRecentDateLabel||(d=>d);
             // v14 — 담당자(본인) 여부 확인: 본인은 다음 날에도 체크박스 토글 가능
             const ownerEditable=(typeof canEditAs==='function')&&canEditAs(mid);
             recentHtml='<div class="krl-recent" style="margin-bottom:8px;background:#FFFDF2;border:1px solid #F5C76A;border-radius:8px;padding:10px 12px;">'+
-              '<div style="font-size:11px;color:#946800;font-weight:700;margin-bottom:8px;letter-spacing:.3px;">📅 최근 7일 작성 내역 (담당자 본인은 ✓ 체크 가능)</div>'+
+              '<div style="font-size:11px;color:#946800;font-weight:700;margin-bottom:8px;letter-spacing:.3px;">📅 직전 작성 내역 (담당자 본인은 ✓ 체크 가능)</div>'+
               recent.map(r=>{
                 const dateLabel=fmtDate(r.date);
                 // v16 — 날짜 내에서 KR/Init별 그룹화
@@ -3527,6 +3593,27 @@ init();
       ref.task.c.splice(idx,1);
       updateMemberTasks(mid,kind,ref.data.legacy,ref.data.tasks,ref.date);
       rerenderTaskCommentsThread(mid,kind,tid,date||undefined);
+      return;
+    }
+    // v28 — KR/Init 헤더 ＋ 버튼: 그 KR/Init에 직접 묶이는 할일을 즉시 추가
+    if(a==='krl-add-task-in-kr'||a==='krl-add-task-in-init'){
+      const mid=btn.dataset.mid,kind=btn.dataset.kind;
+      const data=getMemberTasks(mid,kind);
+      const krId=btn.dataset.krId||'';
+      const initId=a==='krl-add-task-in-init'?(btn.dataset.initId||''):'';
+      const newTask={id:newTaskId(),t:'',k:krId,i:initId,d:false};
+      data.tasks.push(newTask);
+      updateMemberTasks(mid,kind,data.legacy,data.tasks);
+      const block=document.querySelector('[data-krl-block="'+mid+':'+kind+'"]');
+      if(block){
+        const tmp=document.createElement('div');
+        tmp.innerHTML=renderTaskListBlock(mid,kind,kind==='today'?'추가 할일':'추가 작업');
+        const newBlock=tmp.firstElementChild;
+        if(newBlock){block.replaceWith(newBlock);
+          setTimeout(()=>{const ta=document.querySelector('textarea[data-krl-field="task-text"][data-tid="'+newTask.id+'"]');if(ta){ta.focus();autoGrow(ta);}},0);
+        }
+      }
+      scheduleDistributionUpdate();
       return;
     }
     if(a!=='krl-add-task'&&a!=='krl-toggle-task'&&a!=='krl-del-task'&&a!=='krl-clear-legacy')return;
