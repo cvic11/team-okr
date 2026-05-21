@@ -335,6 +335,13 @@ html.dark .krl-cmt-item{border-bottom-color:rgba(255,255,255,.06)}
 .date-bar-member-icon:active{transform:translateY(0)}
 .member-card.highlight-flash{animation:mcFlash 1.5s ease-out}
 @keyframes mcFlash{0%{box-shadow:0 0 0 3px var(--primary),0 0 18px rgba(98,65,245,.4)}100%{box-shadow:0 0 0 0 transparent}}
+/* v38 — WBS·기타 점프 시 강한 펄스 하이라이트 */
+.jump-flash{animation:jumpFlash 1.8s ease-out;position:relative;z-index:1}
+@keyframes jumpFlash{
+  0%{box-shadow:0 0 0 3px var(--primary),0 0 24px rgba(98,65,245,.55);background-color:#FFF4B8 !important}
+  35%{box-shadow:0 0 0 3px var(--primary),0 0 18px rgba(98,65,245,.35);background-color:#FFF8CC !important}
+  100%{box-shadow:0 0 0 0 transparent;background-color:transparent}
+}
 /* v25 — 상단 날짜바(담당자 아이콘 포함) 스크롤 중에도 헤더 아래에 고정 (v29 — 헤더 높이 동적 측정) */
 .date-bar{position:sticky;top:var(--app-header-h,64px);z-index:15;background:rgba(250,250,250,0.94);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);padding:8px 8px;border-bottom:1px solid var(--line);border-radius:8px 8px 0 0}
 html.dark .date-bar{background:rgba(15,17,23,0.94);border-bottom-color:#22252F}
@@ -2710,7 +2717,12 @@ document.addEventListener('click',async e=>{
     if(!expanded.has(oid))expanded.add(oid);
     krCollapsed.delete(krid);
     render();
-    setTimeout(()=>{const el=document.querySelector(`[data-kr-id="${krid}"]`);if(el){el.scrollIntoView({behavior:'smooth',block:'center'});el.style.transition='background .8s';el.style.background='#FFF8DC';setTimeout(()=>el.style.background='',1500);}},150);
+    setTimeout(()=>{
+      const el=document.querySelector(`[data-kr-id="${krid}"]`);
+      if(!el)return;
+      el.scrollIntoView({behavior:'smooth',block:'center'});
+      setTimeout(()=>{el.classList.remove('jump-flash');void el.offsetWidth;el.classList.add('jump-flash');setTimeout(()=>el.classList.remove('jump-flash'),1900);},200);
+    },150);
     return;
   }
   if(a==='jump-to'){
@@ -2756,10 +2768,19 @@ document.addEventListener('click',async e=>{
     else if(type==='KR'){expanded.add(btn.dataset.oid);krCollapsed.delete(id);}
     else if(type==='I'){expanded.add(btn.dataset.oid);krCollapsed.delete(btn.dataset.krid);}
     render();
+    // v38 — 점프 후 펄스 하이라이트로 시각 cue 강화
     setTimeout(()=>{
       const sel=type==='O'?`[data-obj-id="${id}"]`:type==='KR'?`[data-kr-id="${id}"]`:`[data-init-id="${id}"]`;
       const el=document.querySelector(sel);
-      if(el){el.scrollIntoView({behavior:'smooth',block:'center'});el.style.transition='background .8s';el.style.background='#FFF8DC';setTimeout(()=>el.style.background='',1500);}
+      if(!el)return;
+      el.scrollIntoView({behavior:'smooth',block:'center'});
+      // 스크롤 안정화 후 애니메이션 (재실행을 위해 클래스 제거→추가)
+      setTimeout(()=>{
+        el.classList.remove('jump-flash');
+        void el.offsetWidth; // reflow 강제로 애니메이션 재시작 보장
+        el.classList.add('jump-flash');
+        setTimeout(()=>el.classList.remove('jump-flash'),1900);
+      },200);
     },150);
     return;
   }
