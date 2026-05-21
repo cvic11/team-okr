@@ -402,7 +402,7 @@ const PALETTE=['#6241F5','#30AB62','#F59E0B','#EC4899','#0EA5E9','#8B5CF6','#14B
 const CONF_LABELS={high:'자신있어요',mid:'해볼만합니다',low:'쉽지 않아요'};
 const STATUS_LABELS={todo:'할 일',doing:'진행',done:'완료',blocked:'막힘'};
 let sb=null;
-let state={teams:[],currentTeamId:null,members:[],objectives:[],standups:{},routines:[],routineLogs:{},reviews:[],initiativeDailyLogs:{},selfId:null};
+let state={teams:[],currentTeamId:null,members:[],objectives:[],standups:{},routines:[],routineLogs:{},reviews:[],initiativeDailyLogs:{},initiativeTasks:{},selfId:null};
 function getSelfId(){return localStorage.getItem(SELF_KEY)||null;}
 function setSelfId(id){if(id==='__observer__'){localStorage.setItem(SELF_KEY,id);}else if(id){localStorage.setItem(SELF_KEY,id);}else{localStorage.removeItem(SELF_KEY);}state.selfId=id;}
 function selfMember(){if(!state.selfId||state.selfId==='__observer__')return null;return state.members.find(m=>m.id===state.selfId)||null;}
@@ -773,14 +773,21 @@ async function initialLoad(){
   initialized=true;
 }
 async function loadTeamData(tid){
-  const[mr,or,kr,ir,rr,rvr]=await Promise.all([
+  const[mr,or,kr,ir,rr,rvr,itr]=await Promise.all([
     sb.from('members').select('*').eq('team_id',tid).order('sort_order'),
     sb.from('objectives').select('*').eq('team_id',tid).order('sort_order'),
     sb.from('key_results').select('*').order('sort_order'),
     sb.from('initiatives').select('*').order('sort_order'),
     sb.from('routines').select('*').eq('team_id',tid).order('sort_order'),
-    sb.from('reviews').select('*').eq('team_id',tid).order('updated_at',{ascending:false})
+    sb.from('reviews').select('*').eq('team_id',tid).order('updated_at',{ascending:false}),
+    sb.from('initiative_tasks').select('*').order('sort_order')
   ]);
+  // v30 — Initiative 하위 sub-task 그룹화
+  state.initiativeTasks={};
+  (itr.data||[]).forEach(it=>{
+    if(!state.initiativeTasks[it.initiative_id])state.initiativeTasks[it.initiative_id]=[];
+    state.initiativeTasks[it.initiative_id].push(it);
+  });
   state.members=(mr.data||[]).map(m=>({...m,isAdmin:!!m.is_admin,isObserver:!!m.is_observer}));
   const krs=kr.data||[],inits=ir.data||[];
   state.objectives=(or.data||[]).map(o=>({
@@ -1004,8 +1011,28 @@ function setupRealtime(){
     .on('postgres_changes',{event:'*',schema:'public',table:'routine_logs'},onRoutineLogChange)
     .on('postgres_changes',{event:'*',schema:'public',table:'reviews'},onReviewChange)
     .on('postgres_changes',{event:'*',schema:'public',table:'initiative_daily_logs'},onIDLChange)
+    .on('postgres_changes',{event:'*',schema:'public',table:'initiative_tasks'},onInitTaskChange)
     .subscribe(s=>{if(s==='SUBSCRIBED'){connStatus='online';updateConnDot();}else if(['CHANNEL_ERROR','TIMED_OUT','CLOSED'].includes(s)){connStatus='offline';updateConnDot();}});
 }
+function onInitTaskChange(p){
+  const r=p.new||p.old;if(!r)return;
+  if(isLocal('initiative_tasks',r.id))return;
+  if(p.eventType==='DELETE'){
+    Object.keys(state.initiativeTasks).forEach(iid=>{
+      state.initiativeTasks[iid]=(state.initiativeTasks[iid]||[]).filter(x=>x.id!==r.id);
+    });
+  }else{
+    const iid=r.initiative_id;
+    if(!state.initiativeTasks[iid])state.initiativeTasks[iid]=[];
+    const i=state.initiativeTasks[iid].findIndex(x=>x.id===r.id);
+    if(i>=0)state.initiativeTasks[iid][i]={...r};
+    else state.initiativeTasks[iid].push({...r});
+    state.initiativeTasks[iid].sort((a,b)=>(a.sort_order||0)-(b.sort_order||0));
+  }
+  if(currentView==='okr')render();
+}
+async function saveInitiativeTask(it){debouncedSave(`init-task-${it.id}`,async()=>{markLocal('initiative_tasks',it.id);const{error}=await sb.from('initiative_tasks').upsert({id:it.id,initiative_id:it.initiative_id,title:it.title,status:it.status||'todo',owner_id:it.owner_id||null,start_date:it.start_date||null,due_date:it.due_date||null,sort_order:it.sort_order||0,updated_at:new Date().toISOString()});if(error)showToast('할일 저장 실패',true);});}
+async function deleteInitiativeTask(id){const{error}=await sb.from('initiative_tasks').delete().eq('id',id);if(error)showToast('삭제 실패',true);}
 function onIDLChange(p){const r=p.new||p.old;if(!r)return;if(isLocal('initiative_daily_logs',`${r.initiative_id}-${r.member_id}-${r.date}`))return;if(!state.initiativeDailyLogs[r.date])state.initiativeDailyLogs[r.date]={};if(!state.initiativeDailyLogs[r.date][r.member_id])state.initiativeDailyLogs[r.date][r.member_id]={};if(p.eventType==='DELETE'){delete state.initiativeDailyLogs[r.date][r.member_id][r.initiative_id];}else{state.initiativeDailyLogs[r.date][r.member_id][r.initiative_id]={checked:!!r.checked,note:r.note||''};}if(currentView==='today'&&r.date===viewingDate)render();}
 function onTeamsChange(p){const r=p.new||p.old;if(!r)return;if(isLocal('teams',r.id))return;if(p.eventType==='DELETE'){state.teams=state.teams.filter(t=>t.id!==r.id);}else{const i=state.teams.findIndex(t=>t.id===r.id);if(i>=0)state.teams[i]={...r};else state.teams.push({...r});state.teams.sort((a,b)=>(a.sort_order||0)-(b.sort_order||0));}render();}
 function onMembersChange(p){const r=p.new||p.old;if(r.team_id&&r.team_id!==state.currentTeamId)return;if(isLocal('members',r.id))return;if(p.eventType==='DELETE'){state.members=state.members.filter(m=>m.id!==r.id);}else{const i=state.members.findIndex(m=>m.id===r.id);if(i>=0)state.members[i]={...r};else state.members.push({...r});state.members.sort((a,b)=>(a.sort_order||0)-(b.sort_order||0));}if(['today','manage','eval'].includes(currentView))render();}
@@ -1545,7 +1572,30 @@ function renderInitiative(krId,init){
   // v16 — 담당자: 다중 + 팀 전원 지원 (버튼 + 모달)
   const od=initOwnersDisplay(init);
   const ownerBtn=`<button class="kr-owner-select" data-act="open-init-owners" data-krid="${krId}" data-iid="${init.id}" style="font-size:11px;padding:4px 9px;background:${od.isTeamAll?'#EEEAFE':'white'};color:${od.color};border:1px solid var(--line);border-radius:5px;cursor:pointer;font-family:inherit;font-weight:600;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"${initDis} title="담당자 선택 (다중 가능, 팀 전원도 가능)">${esc(od.text)} ▾</button>`;
-  return `<div class="init-row" data-init-id="${init.id}" draggable="${initEdit?'true':'false'}" data-drag-type="init" data-drag-parent="${krId}"><span class="drag-handle" style="font-size:11px;${initEdit?'':'opacity:.3;'}" title="드래그로 순서 변경">⋮⋮</span>${checkBtn}<select class="init-status ${init.status||'todo'}" data-field="init-status" data-krid="${krId}" data-iid="${init.id}"${initDis}>${Object.entries(STATUS_LABELS).map(([k,v])=>`<option value="${k}" ${init.status===k?'selected':''}>${v}</option>`).join('')}</select><input class="init-title-input" data-field="init-title" data-krid="${krId}" data-iid="${init.id}" value="${esc(init.title)}" placeholder="구체 액션 (예: AI 어시스턴트 MVP 개발 / 가맹점주 인터뷰 30건 / 경쟁사 매출 분석)"${initRo}${initTip} style="${done?'text-decoration:line-through;color:var(--text-soft);':''}" />${ownerBtn}<label style="font-size:10px;color:var(--text-soft);">시작<input type="date" class="init-due" data-field="init-start" data-krid="${krId}" data-iid="${init.id}" value="${init.startDate||''}"${initRo}${initTip} style="font-size:11px;margin-left:3px;width:120px;" /></label><label style="font-size:10px;color:var(--text-soft);">마감<input type="date" class="init-due ${isOverdue(init.dueDate,init.status)?'overdue':''}" data-field="init-due" data-krid="${krId}" data-iid="${init.id}" value="${init.dueDate||''}"${initRo}${initTip} style="font-size:11px;margin-left:3px;width:120px;" /></label>${renderConfChip('initiative',init.id,init.confidence||'mid')}<button class="reality-toggle ${hr?'has-content':''}" data-act="toggle-reality" data-key="${rk}">${ro?'R ▴':'R ▾'}</button><button class="btn-icon" data-act="show-history" data-etype="initiative" data-eid="${init.id}" title="이력">${I.clock}</button>${initEdit?`<button class="btn-icon" data-act="del-init" data-krid="${krId}" data-iid="${init.id}">${I.x}</button>`:''}${ro?`<div style="width:100%;">${renderRealityBox('initiative',init.id,init.realityBlocker,init.realityHelp)}</div>`:''}</div>`;
+  // v30 — Initiative 하위 sub-task 영역
+  const subTasks=state.initiativeTasks&&state.initiativeTasks[init.id]||[];
+  const subOpen=window._initSubOpen&&window._initSubOpen.has(init.id);
+  const subHead=`<button class="btn-mode" data-act="toggle-init-sub" data-iid="${init.id}" style="font-size:11px;padding:2px 8px;background:${subTasks.length>0?'var(--primary-soft)':'transparent'};color:${subTasks.length>0?'var(--primary)':'var(--text-soft)'};border:1px solid var(--line);border-radius:5px;cursor:pointer;font-family:inherit;font-weight:600;" title="${subOpen?'접기':'펼치기'}">${subOpen?'▼':'▶'} 할일 ${subTasks.length}</button>`;
+  let subBody='';
+  if(subOpen){
+    const subRows=subTasks.map(t=>renderInitSubTaskRow(init.id,t,initEdit)).join('');
+    const addBtn=initEdit?`<div style="margin-top:6px;display:flex;justify-content:flex-end;"><button class="btn btn-soft" data-act="add-init-sub" data-iid="${init.id}" style="padding:4px 10px;font-size:11px;">${I.plus} 할일 추가</button></div>`:'';
+    subBody=`<div class="init-sub-list" data-init-sub="${init.id}" style="width:100%;margin:6px 0 4px 28px;padding:8px 12px;background:rgba(98,65,245,.04);border-left:3px solid var(--primary-soft);border-radius:0 6px 6px 0;">${subTasks.length===0?'<div style="font-size:11.5px;color:var(--text-soft);padding:3px 0;">아직 할일이 없습니다.</div>':subRows}${addBtn}</div>`;
+  }
+  return `<div class="init-row" data-init-id="${init.id}" draggable="${initEdit?'true':'false'}" data-drag-type="init" data-drag-parent="${krId}"><span class="drag-handle" style="font-size:11px;${initEdit?'':'opacity:.3;'}" title="드래그로 순서 변경">⋮⋮</span>${checkBtn}<select class="init-status ${init.status||'todo'}" data-field="init-status" data-krid="${krId}" data-iid="${init.id}"${initDis}>${Object.entries(STATUS_LABELS).map(([k,v])=>`<option value="${k}" ${init.status===k?'selected':''}>${v}</option>`).join('')}</select><input class="init-title-input" data-field="init-title" data-krid="${krId}" data-iid="${init.id}" value="${esc(init.title)}" placeholder="구체 액션 (예: AI 어시스턴트 MVP 개발 / 가맹점주 인터뷰 30건 / 경쟁사 매출 분석)"${initRo}${initTip} style="${done?'text-decoration:line-through;color:var(--text-soft);':''}" />${ownerBtn}<label style="font-size:10px;color:var(--text-soft);">시작<input type="date" class="init-due" data-field="init-start" data-krid="${krId}" data-iid="${init.id}" value="${init.startDate||''}"${initRo}${initTip} style="font-size:11px;margin-left:3px;width:120px;" /></label><label style="font-size:10px;color:var(--text-soft);">마감<input type="date" class="init-due ${isOverdue(init.dueDate,init.status)?'overdue':''}" data-field="init-due" data-krid="${krId}" data-iid="${init.id}" value="${init.dueDate||''}"${initRo}${initTip} style="font-size:11px;margin-left:3px;width:120px;" /></label>${renderConfChip('initiative',init.id,init.confidence||'mid')}${subHead}<button class="reality-toggle ${hr?'has-content':''}" data-act="toggle-reality" data-key="${rk}">${ro?'R ▴':'R ▾'}</button><button class="btn-icon" data-act="show-history" data-etype="initiative" data-eid="${init.id}" title="이력">${I.clock}</button>${initEdit?`<button class="btn-icon" data-act="del-init" data-krid="${krId}" data-iid="${init.id}">${I.x}</button>`:''}${ro?`<div style="width:100%;">${renderRealityBox('initiative',init.id,init.realityBlocker,init.realityHelp)}</div>`:''}${subBody}</div>`;
+}
+// v30 — Initiative 하위 sub-task 행
+function renderInitSubTaskRow(initId,t,editable){
+  const done=t.status==='done';
+  const ro=editable?'':' readonly';
+  const dis=editable?'':' disabled';
+  return `<div class="init-sub-row" data-init-sub-id="${t.id}" style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px dashed rgba(0,0,0,.06);">
+    <button class="rt-check ${done?'checked':''}" style="width:16px;height:16px;border-width:1.5px;border-radius:4px;flex-shrink:0;" data-act="toggle-init-sub-done" data-iid="${initId}" data-stid="${t.id}"${dis} title="완료">${done?'✓':''}</button>
+    <input class="rt-input" data-field="init-sub-title" data-iid="${initId}" data-stid="${t.id}" value="${esc(t.title||'')}" placeholder="할일 내용" style="flex:1;min-width:0;font-size:12.5px;padding:4px 8px;${done?'text-decoration:line-through;color:var(--text-soft);':''}"${ro}/>
+    <select class="rt-input" data-field="init-sub-owner" data-iid="${initId}" data-stid="${t.id}"${dis} style="font-size:11px;padding:3px 6px;width:90px;flex-shrink:0;"><option value="">담당</option>${state.members.map(m=>`<option value="${m.id}" ${t.owner_id===m.id?'selected':''}>${esc(m.name)}</option>`).join('')}</select>
+    <input type="date" class="rt-input" data-field="init-sub-due" data-iid="${initId}" data-stid="${t.id}" value="${t.due_date||''}"${ro} style="font-size:11px;padding:3px 6px;width:115px;flex-shrink:0;" title="마감"/>
+    ${editable?`<button class="btn-icon" data-act="del-init-sub" data-iid="${initId}" data-stid="${t.id}" title="삭제">${I.x}</button>`:''}
+  </div>`;
 }
 // v16 — Initiative 담당자 선택 모달 (다중 + 팀 전원)
 function openInitOwnersPicker(krId,iid){
@@ -2715,6 +2765,39 @@ document.addEventListener('click',async e=>{
   if(a==='del-member'){if(!confirm('팀원을 삭제할까요?'))return;const mid=btn.dataset.mid;const m=state.members.find(x=>x.id===mid);state.members=state.members.filter(x=>x.id!==mid);render();await sb.from('members').delete().eq('id',mid);logChange('member',mid,'delete','',m?.name||'','',m?.name||'');return;}
   if(a==='add-routine'){window._routinesMngOpen=true;const id=uid();const i=state.routines.length;const r={id,team_id:state.currentTeamId,title:'새 루틴',description:'',owner_id:state.members[0]?.id||null,frequency:'weekdays',days_of_week:[1,2,3,4,5],active:true,sort_order:i};state.routines.push(r);render();setTimeout(()=>{const inp=document.querySelector('input[data-field="rt-title"][data-rid="'+id+'"]');if(inp){inp.focus();inp.select();inp.scrollIntoView({behavior:'smooth',block:'center'});}},0);const{error}=await sb.from('routines').insert(r);if(error)showToast('저장 실패',true);else logChange('routine',id,'create','','',r.title,r.title);return;}
   if(a==='toggle-routines-mng'){window._routinesMngOpen=!window._routinesMngOpen;render();return;}
+  // v30 — Initiative 하위 sub-task 액션
+  if(a==='toggle-init-sub'){
+    if(!window._initSubOpen)window._initSubOpen=new Set();
+    const iid=btn.dataset.iid;
+    if(window._initSubOpen.has(iid))window._initSubOpen.delete(iid);else window._initSubOpen.add(iid);
+    render();return;
+  }
+  if(a==='add-init-sub'){
+    const iid=btn.dataset.iid;
+    if(!window._initSubOpen)window._initSubOpen=new Set();
+    window._initSubOpen.add(iid);
+    const list=state.initiativeTasks[iid]||(state.initiativeTasks[iid]=[]);
+    const newT={id:uid(),initiative_id:iid,title:'',status:'todo',owner_id:selfMember()?.id||null,start_date:null,due_date:null,sort_order:list.length};
+    list.push(newT);
+    saveInitiativeTask(newT);
+    render();
+    setTimeout(()=>{const inp=document.querySelector('input[data-field="init-sub-title"][data-stid="'+newT.id+'"]');if(inp){inp.focus();}},0);
+    return;
+  }
+  if(a==='toggle-init-sub-done'){
+    const iid=btn.dataset.iid,stid=btn.dataset.stid;
+    const list=state.initiativeTasks[iid]||[];const t=list.find(x=>x.id===stid);
+    if(!t)return;
+    t.status=t.status==='done'?'todo':'done';
+    saveInitiativeTask(t);render();return;
+  }
+  if(a==='del-init-sub'){
+    if(!confirm('이 할일을 삭제할까요?'))return;
+    const iid=btn.dataset.iid,stid=btn.dataset.stid;
+    state.initiativeTasks[iid]=(state.initiativeTasks[iid]||[]).filter(x=>x.id!==stid);
+    await deleteInitiativeTask(stid);
+    render();return;
+  }
   if(a==='del-routine'){if(!confirm('이 루틴과 모든 수행 기록을 삭제할까요?'))return;const rid=btn.dataset.rid;const r=state.routines.find(x=>x.id===rid);state.routines=state.routines.filter(x=>x.id!==rid);render();await sb.from('routines').delete().eq('id',rid);logChange('routine',rid,'delete','',r?.title||'','',r?.title||'');return;}
   if(a==='toggle-day'){const rid=btn.dataset.rid;const day=parseInt(btn.dataset.day);const r=state.routines.find(x=>x.id===rid);if(!r)return;const arr=r.days_of_week||[];const i=arr.indexOf(day);if(i>=0)arr.splice(i,1);else arr.push(day);r.days_of_week=arr.sort((a,b)=>a-b);saveRoutine(r);render();return;}
   if(a==='toggle-routine'){const rid=btn.dataset.rid;ensureRoutineLog(viewingDate);const cur=state.routineLogs[viewingDate][rid]?.completed||false;saveRoutineLog(rid,viewingDate,!cur);render();return;}
@@ -2970,6 +3053,9 @@ document.addEventListener('input',e=>{
   else if(f==='reality-blocker'||f==='reality-help'){const et=el.dataset.etype,eid=el.dataset.eid;const fn=f==='reality-blocker'?'realityBlocker':'realityHelp';if(et==='objective'){const o=state.objectives.find(x=>x.id===eid);if(o){o[fn]=el.value;saveObjective(o);}}else if(et==='kr'){let oid=null,kr=null;state.objectives.forEach(o=>o.keyResults.forEach(k=>{if(k.id===eid){oid=o.id;kr=k;}}));if(kr){kr[fn]=el.value;saveKR(oid,kr);}}else if(et==='initiative'){let krid=null,init=null;state.objectives.forEach(o=>o.keyResults.forEach(k=>k.initiatives.forEach(i=>{if(i.id===eid){krid=k.id;init=i;}})));if(init){init[fn]=el.value;saveInitiative(krid,init);}}}
   else if(f==='rt-title'){const r=state.routines.find(x=>x.id===el.dataset.rid);if(r){r.title=el.value;saveRoutine(r);}}
   else if(f==='rt-day-of-month'){const r=state.routines.find(x=>x.id===el.dataset.rid);if(r){r.day_of_month=parseInt(el.value)||1;saveRoutine(r);}}
+  // v30 — Initiative 하위 sub-task 필드
+  else if(f==='init-sub-title'){const iid=el.dataset.iid,stid=el.dataset.stid;const t=(state.initiativeTasks[iid]||[]).find(x=>x.id===stid);if(t){t.title=el.value;saveInitiativeTask(t);}}
+  else if(f==='init-sub-due'){const iid=el.dataset.iid,stid=el.dataset.stid;const t=(state.initiativeTasks[iid]||[]).find(x=>x.id===stid);if(t){t.due_date=el.value||null;saveInitiativeTask(t);}}
   else if(f==='rt-note'){saveRoutineLog(el.dataset.rid,viewingDate,!!(state.routineLogs[viewingDate]?.[el.dataset.rid]?.completed),el.value);}
   else if(f==='r-summary'){if(window._editingReview)window._editingReview.summary=el.value;}
   else if(f==='r-worked'){if(window._editingReview)window._editingReview.what_worked=el.value;}
@@ -2994,6 +3080,8 @@ document.addEventListener('change',async e=>{
   else if(f==='init-owner'){const krid=el.dataset.krid;let init=null;state.objectives.forEach(o=>o.keyResults.forEach(k=>{if(k.id===krid)init=k.initiatives.find(i=>i.id===el.dataset.iid);}));if(init){init.ownerId=el.value||null;saveInitiative(krid,init);}}
   else if(f==='rt-frequency'){const r=state.routines.find(x=>x.id===el.dataset.rid);if(r){r.frequency=el.value;if(r.frequency==='weekdays'&&(!r.days_of_week||r.days_of_week.length===0))r.days_of_week=[1,2,3,4,5];saveRoutine(r);render();}}
   else if(f==='rt-owner'){const r=state.routines.find(x=>x.id===el.dataset.rid);if(r){r.owner_id=el.value||null;saveRoutine(r);}}
+  // v30 — Initiative 하위 sub-task 담당자
+  else if(f==='init-sub-owner'){const iid=el.dataset.iid,stid=el.dataset.stid;const t=(state.initiativeTasks[iid]||[]).find(x=>x.id===stid);if(t){t.owner_id=el.value||null;saveInitiativeTask(t);}}
   else if(f==='member-color'){const m=state.members.find(x=>x.id===el.dataset.mid);if(m){m.color=el.value;saveMember(m);}}
   else if(f==='helper-member'){saveEntry(viewingDate,el.dataset.mid,'helper_member_id',el.value);}
 });
