@@ -381,6 +381,48 @@ html.dark .chat-list-item.has-unread{background:#2A2410}
 html.dark .chat-msg.theirs{background:#1A1D27;color:#D1D5DB;border-color:#22252F}
 html.dark .chat-input-wrap{background:#15171F;border-top-color:#22252F}
 html.dark .chat-input{background:#1A1D27;color:#D1D5DB;border-color:#22252F}
+/* v31 — Initiative 행 2행 구조 (UI/UX 개선) — 제목 입력칸이 행 너비를 충분히 갖도록 메타 분리 */
+.init-row{flex-direction:column !important;align-items:stretch !important;padding:10px 22px !important;gap:6px !important;flex-wrap:nowrap !important}
+.init-row-line1{display:flex;align-items:center;gap:8px;width:100%;min-width:0}
+.init-row-line1 .init-title-input{flex:1 1 auto;min-width:0;width:auto;font-size:14.5px;padding:7px 9px;border-radius:7px;background:transparent;border:1px solid transparent;transition:background .12s,border-color .12s,box-shadow .12s}
+.init-row-line1 .init-title-input:hover:not([readonly]){background:#F4F4F5}
+.init-row-line1 .init-title-input:focus{background:white;border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-soft);outline:none}
+.init-row-line1 .init-status{flex-shrink:0}
+.init-row-meta{display:flex;align-items:center;gap:7px;flex-wrap:wrap;padding-left:34px}
+.init-meta-date{display:inline-flex;align-items:center;gap:5px;font-size:10.5px;color:var(--text-soft);padding:3px 7px;border-radius:6px;background:#FAFAFA;border:1px solid var(--line);font-weight:600;letter-spacing:.2px}
+.init-meta-date:hover{border-color:var(--primary);color:var(--primary)}
+.init-meta-date input[type="date"]{border:none;background:transparent;padding:0;font-size:11.5px;color:var(--text);outline:none;width:108px;font-family:inherit;font-weight:600}
+.init-meta-date.overdue{border-color:#F5C2C5;background:var(--warning-soft);color:var(--warning)}
+.init-meta-date.overdue input[type="date"]{color:var(--warning)}
+.init-meta-chip{font-size:11px;padding:3px 9px;border-radius:6px;background:transparent;color:var(--text-soft);border:1px solid var(--line);cursor:pointer;font-family:inherit;font-weight:600;line-height:1.4}
+.init-meta-chip:hover{border-color:var(--primary);color:var(--primary)}
+.init-meta-chip.active{background:var(--primary-soft);color:var(--primary);border-color:#D9CFFB}
+.init-row-meta .reality-toggle{font-size:11px;padding:3px 9px}
+.init-row-meta .btn-icon{padding:4px 6px}
+/* sub-task 행 — 제목 input 우선, 메타 작게 */
+.init-sub-row{display:flex;align-items:center;gap:6px;padding:5px 0;border-bottom:1px dashed rgba(0,0,0,.06)}
+.init-sub-row .init-sub-title{flex:1 1 auto;min-width:0;font-size:13px;padding:6px 10px;background:white;border:1px solid var(--line);border-radius:6px;font-family:inherit;outline:none;transition:border-color .12s,box-shadow .12s}
+.init-sub-row .init-sub-title:focus{border-color:var(--primary);box-shadow:0 0 0 2px var(--primary-soft)}
+.init-sub-row .init-sub-meta{font-size:11px;padding:4px 7px;background:#FAFAFA;border:1px solid var(--line);border-radius:6px;flex-shrink:0;color:var(--text-soft);outline:none;font-family:inherit;cursor:pointer;font-weight:600;height:28px}
+.init-sub-row .init-sub-meta:hover{border-color:var(--primary);color:var(--primary)}
+.init-sub-row select.init-sub-meta{width:82px;max-width:82px}
+.init-sub-row input.init-sub-due{width:104px}
+.init-sub-row input.init-sub-due.overdue{color:var(--warning);border-color:#F5C2C5;background:var(--warning-soft)}
+.init-sub-list{width:auto !important;margin:6px 0 4px 28px !important;padding:10px 14px !important;background:rgba(98,65,245,.04);border-left:3px solid var(--primary-soft);border-radius:0 8px 8px 0}
+@media(max-width:760px){
+  .init-row{padding:10px 12px !important}
+  .init-row-meta{padding-left:0;gap:5px}
+  .init-meta-date input[type="date"]{width:100px}
+  .init-sub-row{flex-wrap:wrap;gap:5px}
+  .init-sub-row .init-sub-title{flex:1 1 100%;order:1}
+  .init-sub-list{margin-left:14px !important;padding:8px 10px !important}
+}
+html.dark .init-meta-date,html.dark .init-meta-chip,html.dark .init-sub-row .init-sub-meta{background:#222631;border-color:#2A2D38;color:#9CA3AF}
+html.dark .init-meta-date input[type="date"]{color:#E5E7EB}
+html.dark .init-sub-row .init-sub-title{background:#1A1D27;color:#E5E7EB;border-color:#2A2D38}
+html.dark .init-sub-list{background:rgba(98,65,245,.10);border-left-color:var(--primary)}
+html.dark .init-row-line1 .init-title-input:hover:not([readonly]){background:#222631}
+html.dark .init-row-line1 .init-title-input:focus{background:#1A1D27}
 `;document.head.appendChild(s);
 // 다크 모드 즉시 적용 (FOUC 방지)
 document.documentElement.classList.toggle('dark',localStorage.getItem('team-okr-dark')==='1');
@@ -1575,27 +1617,27 @@ function renderInitiative(krId,init){
   // v30 — Initiative 하위 sub-task 영역
   const subTasks=state.initiativeTasks&&state.initiativeTasks[init.id]||[];
   const subOpen=window._initSubOpen&&window._initSubOpen.has(init.id);
-  const subHead=`<button class="btn-mode" data-act="toggle-init-sub" data-iid="${init.id}" style="font-size:11px;padding:2px 8px;background:${subTasks.length>0?'var(--primary-soft)':'transparent'};color:${subTasks.length>0?'var(--primary)':'var(--text-soft)'};border:1px solid var(--line);border-radius:5px;cursor:pointer;font-family:inherit;font-weight:600;" title="${subOpen?'접기':'펼치기'}">${subOpen?'▼':'▶'} 할일 ${subTasks.length}</button>`;
+  // v31 — 할일 칩 (메타 영역으로 이동)
+  const subHead=`<button class="init-meta-chip ${subTasks.length>0?'active':''}" data-act="toggle-init-sub" data-iid="${init.id}" title="${subOpen?'접기':'펼치기'}">${subOpen?'▼':'▶'} 할일 ${subTasks.length}</button>`;
   let subBody='';
   if(subOpen){
     const subRows=subTasks.map(t=>renderInitSubTaskRow(init.id,t,initEdit)).join('');
-    const addBtn=initEdit?`<div style="margin-top:6px;display:flex;justify-content:flex-end;"><button class="btn btn-soft" data-act="add-init-sub" data-iid="${init.id}" style="padding:4px 10px;font-size:11px;">${I.plus} 할일 추가</button></div>`:'';
-    subBody=`<div class="init-sub-list" data-init-sub="${init.id}" style="width:100%;margin:6px 0 4px 28px;padding:8px 12px;background:rgba(98,65,245,.04);border-left:3px solid var(--primary-soft);border-radius:0 6px 6px 0;">${subTasks.length===0?'<div style="font-size:11.5px;color:var(--text-soft);padding:3px 0;">아직 할일이 없습니다.</div>':subRows}${addBtn}</div>`;
+    const addBtn=initEdit?`<div style="margin-top:8px;display:flex;justify-content:flex-end;"><button class="btn btn-soft" data-act="add-init-sub" data-iid="${init.id}" style="padding:5px 11px;font-size:11.5px;">${I.plus} 할일 추가</button></div>`:'';
+    subBody=`<div class="init-sub-list" data-init-sub="${init.id}">${subTasks.length===0?'<div style="font-size:11.5px;color:var(--text-soft);padding:4px 0;">아직 할일이 없습니다.</div>':subRows}${addBtn}</div>`;
   }
-  return `<div class="init-row" data-init-id="${init.id}" draggable="${initEdit?'true':'false'}" data-drag-type="init" data-drag-parent="${krId}"><span class="drag-handle" style="font-size:11px;${initEdit?'':'opacity:.3;'}" title="드래그로 순서 변경">⋮⋮</span>${checkBtn}<select class="init-status ${init.status||'todo'}" data-field="init-status" data-krid="${krId}" data-iid="${init.id}"${initDis}>${Object.entries(STATUS_LABELS).map(([k,v])=>`<option value="${k}" ${init.status===k?'selected':''}>${v}</option>`).join('')}</select><input class="init-title-input" data-field="init-title" data-krid="${krId}" data-iid="${init.id}" value="${esc(init.title)}" placeholder="구체 액션 (예: AI 어시스턴트 MVP 개발 / 가맹점주 인터뷰 30건 / 경쟁사 매출 분석)"${initRo}${initTip} style="${done?'text-decoration:line-through;color:var(--text-soft);':''}" />${ownerBtn}<label style="font-size:10px;color:var(--text-soft);">시작<input type="date" class="init-due" data-field="init-start" data-krid="${krId}" data-iid="${init.id}" value="${init.startDate||''}"${initRo}${initTip} style="font-size:11px;margin-left:3px;width:120px;" /></label><label style="font-size:10px;color:var(--text-soft);">마감<input type="date" class="init-due ${isOverdue(init.dueDate,init.status)?'overdue':''}" data-field="init-due" data-krid="${krId}" data-iid="${init.id}" value="${init.dueDate||''}"${initRo}${initTip} style="font-size:11px;margin-left:3px;width:120px;" /></label>${renderConfChip('initiative',init.id,init.confidence||'mid')}${subHead}<button class="reality-toggle ${hr?'has-content':''}" data-act="toggle-reality" data-key="${rk}">${ro?'R ▴':'R ▾'}</button><button class="btn-icon" data-act="show-history" data-etype="initiative" data-eid="${init.id}" title="이력">${I.clock}</button>${initEdit?`<button class="btn-icon" data-act="del-init" data-krid="${krId}" data-iid="${init.id}">${I.x}</button>`:''}${ro?`<div style="width:100%;">${renderRealityBox('initiative',init.id,init.realityBlocker,init.realityHelp)}</div>`:''}${subBody}</div>`;
+  // v31 — 1행: 핵심(드래그·완료·상태·제목·삭제). 제목 input이 행 너비를 거의 다 차지함
+  const line1=`<div class="init-row-line1"><span class="drag-handle" style="font-size:11px;${initEdit?'':'opacity:.3;'}" title="드래그로 순서 변경">⋮⋮</span>${checkBtn}<select class="init-status ${init.status||'todo'}" data-field="init-status" data-krid="${krId}" data-iid="${init.id}"${initDis}>${Object.entries(STATUS_LABELS).map(([k,v])=>`<option value="${k}" ${init.status===k?'selected':''}>${v}</option>`).join('')}</select><input class="init-title-input" data-field="init-title" data-krid="${krId}" data-iid="${init.id}" value="${esc(init.title)}" placeholder="구체 액션 (예: AI 어시스턴트 MVP 개발 / 가맹점주 인터뷰 30건 / 경쟁사 매출 분석)"${initRo}${initTip} style="${done?'text-decoration:line-through;color:var(--text-soft);':''}" />${initEdit?`<button class="btn-icon" data-act="del-init" data-krid="${krId}" data-iid="${init.id}" title="삭제">${I.x}</button>`:''}</div>`;
+  // v31 — 2행: 메타(담당·시작·마감·신뢰도·할일·R·이력) — 1행을 좁히지 않도록 분리
+  const line2=`<div class="init-row-meta">${ownerBtn}<label class="init-meta-date"><span>시작</span><input type="date" data-field="init-start" data-krid="${krId}" data-iid="${init.id}" value="${init.startDate||''}"${initRo}${initTip} /></label><label class="init-meta-date ${isOverdue(init.dueDate,init.status)?'overdue':''}"><span>마감</span><input type="date" data-field="init-due" data-krid="${krId}" data-iid="${init.id}" value="${init.dueDate||''}"${initRo}${initTip} /></label>${renderConfChip('initiative',init.id,init.confidence||'mid')}${subHead}<button class="reality-toggle ${hr?'has-content':''}" data-act="toggle-reality" data-key="${rk}">${ro?'R ▴':'R ▾'}</button><button class="btn-icon" data-act="show-history" data-etype="initiative" data-eid="${init.id}" title="이력">${I.clock}</button></div>`;
+  return `<div class="init-row" data-init-id="${init.id}" draggable="${initEdit?'true':'false'}" data-drag-type="init" data-drag-parent="${krId}">${line1}${line2}${ro?`<div style="width:100%;">${renderRealityBox('initiative',init.id,init.realityBlocker,init.realityHelp)}</div>`:''}${subBody}</div>`;
 }
-// v30 — Initiative 하위 sub-task 행
+// v31 — Initiative 하위 sub-task 행 (컴팩트 칩 스타일 — 제목 input이 행 너비 우선)
 function renderInitSubTaskRow(initId,t,editable){
   const done=t.status==='done';
   const ro=editable?'':' readonly';
   const dis=editable?'':' disabled';
-  return `<div class="init-sub-row" data-init-sub-id="${t.id}" style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px dashed rgba(0,0,0,.06);">
-    <button class="rt-check ${done?'checked':''}" style="width:16px;height:16px;border-width:1.5px;border-radius:4px;flex-shrink:0;" data-act="toggle-init-sub-done" data-iid="${initId}" data-stid="${t.id}"${dis} title="완료">${done?'✓':''}</button>
-    <input class="rt-input" data-field="init-sub-title" data-iid="${initId}" data-stid="${t.id}" value="${esc(t.title||'')}" placeholder="할일 내용" style="flex:1;min-width:0;font-size:12.5px;padding:4px 8px;${done?'text-decoration:line-through;color:var(--text-soft);':''}"${ro}/>
-    <select class="rt-input" data-field="init-sub-owner" data-iid="${initId}" data-stid="${t.id}"${dis} style="font-size:11px;padding:3px 6px;width:90px;flex-shrink:0;"><option value="">담당</option>${state.members.map(m=>`<option value="${m.id}" ${t.owner_id===m.id?'selected':''}>${esc(m.name)}</option>`).join('')}</select>
-    <input type="date" class="rt-input" data-field="init-sub-due" data-iid="${initId}" data-stid="${t.id}" value="${t.due_date||''}"${ro} style="font-size:11px;padding:3px 6px;width:115px;flex-shrink:0;" title="마감"/>
-    ${editable?`<button class="btn-icon" data-act="del-init-sub" data-iid="${initId}" data-stid="${t.id}" title="삭제">${I.x}</button>`:''}
-  </div>`;
+  const overdue=isOverdue(t.due_date,t.status);
+  return `<div class="init-sub-row" data-init-sub-id="${t.id}"><button class="rt-check ${done?'checked':''}" style="width:18px;height:18px;border-width:1.5px;border-radius:4px;flex-shrink:0;" data-act="toggle-init-sub-done" data-iid="${initId}" data-stid="${t.id}"${dis} title="완료">${done?'✓':''}</button><input class="init-sub-title" data-field="init-sub-title" data-iid="${initId}" data-stid="${t.id}" value="${esc(t.title||'')}" placeholder="할일 내용" style="${done?'text-decoration:line-through;color:var(--text-soft);':''}"${ro}/><select class="init-sub-meta" data-field="init-sub-owner" data-iid="${initId}" data-stid="${t.id}"${dis} title="담당자"><option value="">담당</option>${state.members.map(m=>`<option value="${m.id}" ${t.owner_id===m.id?'selected':''}>${esc(m.name)}</option>`).join('')}</select><input type="date" class="init-sub-meta init-sub-due ${overdue?'overdue':''}" data-field="init-sub-due" data-iid="${initId}" data-stid="${t.id}" value="${t.due_date||''}"${ro} title="마감"/>${editable?`<button class="btn-icon" data-act="del-init-sub" data-iid="${initId}" data-stid="${t.id}" title="삭제">${I.x}</button>`:''}</div>`;
 }
 // v16 — Initiative 담당자 선택 모달 (다중 + 팀 전원)
 function openInitOwnersPicker(krId,iid){
