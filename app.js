@@ -3391,13 +3391,28 @@ function _resolveDragZone(tgt,clientY,src){
   }
   return{zone:rel>0.5?'after':'before',rect:r};
 }
+// v51 — sub-task 행 위로 호버 시 부모 init-row로 재타겟 (할일 영역에 떨어뜨리는 케이스 지원)
+function _retargetForNest(tgt,src){
+  if(!tgt||!src)return tgt;
+  if(tgt.dataset.dragType!=='init-task')return tgt;
+  const sameParent=(src.dataset.dragType==='init-task'&&tgt.dataset.dragParent===src.dataset.dragParent);
+  if(sameParent)return tgt; // 같은 부모 task끼리 = 정상 reorder
+  // 그 외(다른 부모 task, 또는 init source)는 부모 init-row로 재타겟
+  const parentInit=tgt.closest('.init-row[data-drag-type="init"]');
+  if(!parentInit||parentInit===src)return tgt;
+  // src가 init인데 그 init의 자기 자식 task였다면 무효 (자기 자신으로 nest 불가)
+  if(src.dataset.dragType==='init'&&parentInit.dataset.initId===src.dataset.initId)return null;
+  return parentInit;
+}
 // v48 — drop 상태 캐시 (불필요한 class toggle 차단)
 let _lastDropState='';
 document.addEventListener('dragover',e=>{
   if(!dragSrc)return;
-  const tgt=e.target.closest('[draggable="true"]');if(!tgt||tgt===dragSrc)return;
+  let tgt=e.target.closest('[draggable="true"]');if(!tgt||tgt===dragSrc)return;
+  tgt=_retargetForNest(tgt,dragSrc);
+  if(!tgt||tgt===dragSrc)return;
   const srcType=dragSrc.dataset.dragType,tgtType=tgt.dataset.dragType;
-  // 같은 타입 + 같은 부모 (기본 reorder) OR init-task → init (promote)
+  // 같은 타입 + 같은 부모 (기본 reorder) OR init-task → init (promote/move)
   const sameType=srcType===tgtType;
   const isPromote=srcType==='init-task'&&tgtType==='init';
   if(!sameType&&!isPromote)return;
@@ -3418,7 +3433,9 @@ document.addEventListener('dragover',e=>{
 });
 document.addEventListener('drop',async e=>{
   if(!dragSrc)return;
-  const tgt=e.target.closest('[draggable="true"]');if(!tgt||tgt===dragSrc)return;
+  let tgt=e.target.closest('[draggable="true"]');if(!tgt||tgt===dragSrc)return;
+  tgt=_retargetForNest(tgt,dragSrc);
+  if(!tgt||tgt===dragSrc)return;
   const srcType=dragSrc.dataset.dragType,tgtType=tgt.dataset.dragType;
   const sameType=srcType===tgtType;
   const isPromote=srcType==='init-task'&&tgtType==='init';
