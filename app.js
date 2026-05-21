@@ -423,8 +423,12 @@ html.dark .chat-input{background:#1A1D27;color:#D1D5DB;border-color:#22252F}
 .init-meta-chip{flex-shrink:0;font-size:10.5px;padding:3px 8px;border-radius:5px;background:transparent;color:var(--text-soft);border:1px solid var(--line);cursor:pointer;font-family:inherit;font-weight:600;line-height:1.3}
 .init-meta-chip:hover{border-color:var(--primary);color:var(--primary)}
 .init-meta-chip.active{background:var(--primary-soft);color:var(--primary);border-color:#D9CFFB}
-/* v43 — Init을 다른 Init의 sub-list에 떨어뜨리는 drop-zone 시각 */
+/* v43 — Init을 다른 Init의 sub-list에 떨어뜨리는 drop-zone 시각 (보조 경로: 펼쳐진 sub-list) */
 .init-sub-list.drop-target-into{background:var(--primary-soft) !important;border-left-color:var(--primary) !important;outline:2px dashed var(--primary);outline-offset:-2px;transition:background .12s,outline .12s}
+/* v44 — Init 행 가운데에 떨어뜨리면 nest (해당 Init의 할일로 demote) */
+[draggable="true"].drop-target-nest{background:var(--primary-soft) !important;outline:2px dashed var(--primary);outline-offset:-3px;border-radius:8px;position:relative}
+[draggable="true"].drop-target-nest::before,[draggable="true"].drop-target-nest::after{display:none}
+[draggable="true"].drop-target-nest .init-row-main::before{content:'↳ 이 이니셔티브의 할일로 이동';position:absolute;right:12px;top:50%;transform:translateY(-50%);background:var(--primary);color:white;padding:3px 9px;border-radius:5px;font-size:11px;font-weight:700;z-index:60;pointer-events:none;white-space:nowrap;box-shadow:0 2px 6px rgba(98,65,245,.35)}
 /* sub-task 행 — 제목 input 우선, 메타 작게 */
 .init-sub-row{display:flex;align-items:center;gap:6px;padding:5px 0;border-bottom:1px dashed rgba(0,0,0,.06)}
 .init-sub-row .init-sub-title{flex:1 1 auto;min-width:0;font-size:13px;padding:6px 10px;background:white;border:1px solid var(--line);border-radius:6px;font-family:inherit;outline:none;transition:border-color .12s,box-shadow .12s}
@@ -3234,7 +3238,7 @@ document.addEventListener('dragstart',e=>{
   dragSrc=el;el.classList.add('dragging');
   e.dataTransfer.effectAllowed='move';try{e.dataTransfer.setData('text/plain',el.dataset.dragType);}catch(err){}
 });
-function _clearDropTargets(){document.querySelectorAll('.drop-target,.drop-target-before,.drop-target-after').forEach(el=>el.classList.remove('drop-target','drop-target-before','drop-target-after'));}
+function _clearDropTargets(){document.querySelectorAll('.drop-target,.drop-target-before,.drop-target-after,.drop-target-nest,.drop-target-into').forEach(el=>el.classList.remove('drop-target','drop-target-before','drop-target-after','drop-target-nest','drop-target-into'));}
 // v29 — 헤더 실제 높이를 CSS 변수로 노출 (date-bar 등 sticky 요소가 정확한 오프셋 사용)
 (function(){
   function update(){const h=document.querySelector('header.app-header');if(h)document.documentElement.style.setProperty('--app-header-h',h.offsetHeight+'px');}
@@ -3252,9 +3256,17 @@ document.addEventListener('dragend',e=>{
   _clearDropTargets();
   dragSrc=null;
 });
+// v44 — 마우스 Y 위치로 zone 결정 (init만 nest 가능)
+function _resolveDragZone(tgt,clientY){
+  const r=tgt.getBoundingClientRect();
+  const rel=(clientY-r.top)/r.height;
+  // Init에 한해 가운데 1/3 영역은 'nest' (demote-to-task)
+  if(tgt.dataset.dragType==='init'&&rel>=0.33&&rel<=0.67)return{zone:'nest',rect:r};
+  return{zone:rel>0.5?'after':'before',rect:r};
+}
 document.addEventListener('dragover',e=>{
   if(!dragSrc)return;
-  // v43 — Init이 다른 Init의 sub-list에 떨어지는 경우 (demote to task)
+  // v43 — Init이 다른 Init의 펼쳐진 sub-list에 직접 떨어지는 경우 (보조 경로)
   if(dragSrc.dataset.dragType==='init'){
     const zone=e.target.closest('[data-drop-zone="init-sub-list"]');
     if(zone && zone.dataset.parentIid !== dragSrc.dataset.initId){
@@ -3264,20 +3276,19 @@ document.addEventListener('dragover',e=>{
       return;
     }
   }
-  // 기존: 같은 부모 안에서 reorder
+  // 같은 부모 안에서 reorder / nest
   const tgt=e.target.closest('[draggable="true"]');if(!tgt||tgt===dragSrc)return;
   if(tgt.dataset.dragType!==dragSrc.dataset.dragType)return;
-  if(tgt.dataset.dragParent!==dragSrc.dataset.dragParent)return; // 같은 부모만
+  if(tgt.dataset.dragParent!==dragSrc.dataset.dragParent)return;
   e.preventDefault();
-  // v29 — 마우스 Y가 target 중간보다 위면 before, 아래면 after
-  const r=tgt.getBoundingClientRect();
-  const after=e.clientY>r.top+r.height/2;
+  const{zone}=_resolveDragZone(tgt,e.clientY);
   _clearDropTargets();
-  tgt.classList.add(after?'drop-target-after':'drop-target-before');
+  if(zone==='nest')tgt.classList.add('drop-target-nest');
+  else tgt.classList.add(zone==='after'?'drop-target-after':'drop-target-before');
 });
 document.addEventListener('drop',async e=>{
   if(!dragSrc)return;
-  // v43 — Init demote-to-task
+  // v43 — Init을 펼쳐진 sub-list에 직접 떨어뜨린 경우 (보조 경로)
   if(dragSrc.dataset.dragType==='init'){
     const zone=e.target.closest('[data-drop-zone="init-sub-list"]');
     if(zone && zone.dataset.parentIid !== dragSrc.dataset.initId){
@@ -3292,9 +3303,16 @@ document.addEventListener('drop',async e=>{
   if(tgt.dataset.dragType!==dragSrc.dataset.dragType)return;
   if(tgt.dataset.dragParent!==dragSrc.dataset.dragParent)return;
   e.preventDefault();
-  const r=tgt.getBoundingClientRect();
-  const after=e.clientY>r.top+r.height/2;
+  const{zone}=_resolveDragZone(tgt,e.clientY);
   const type=dragSrc.dataset.dragType;
+  // v44 — Init 가운데 zone = demote-to-task
+  if(type==='init'&&zone==='nest'){
+    const src=dragSrc;dragSrc=null;
+    _clearDropTargets();
+    await demoteInitToTask(src.dataset.initId,tgt.dataset.initId,src.dataset.dragParent);
+    return;
+  }
+  const after=zone==='after';
   if(type==='obj'){await reorderObjectives(dragSrc.dataset.objId,tgt.dataset.objId,after);}
   else if(type==='kr'){await reorderKRs(dragSrc.dataset.dragParent,dragSrc.dataset.krId,tgt.dataset.krId,after);}
   else if(type==='init'){await reorderInits(dragSrc.dataset.dragParent,dragSrc.dataset.initId,tgt.dataset.initId,after);}
