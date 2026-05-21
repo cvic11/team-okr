@@ -1656,15 +1656,48 @@ function parseQuarterRange(qStr){
   return{start,end};
 }
 function daysBetween(a,b){return Math.round((new Date(b+'T00:00:00')-new Date(a+'T00:00:00'))/86400000);}
+// v25 — WBS 보기 옵션: 빈 과거 자동 절단 + 항목 있으면 분기 밖도 확장 + 뷰 모드(월/주/일) + Initiative 기본 접힘
+function computeWBSRange(qRange){
+  const all=[];
+  state.objectives.forEach(o=>{
+    if(o.startDate)all.push(o.startDate);if(o.dueDate)all.push(o.dueDate);
+    (o.keyResults||[]).forEach(k=>{
+      if(k.startDate)all.push(k.startDate);if(k.dueDate)all.push(k.dueDate);
+      (k.initiatives||[]).forEach(i=>{
+        if(i.startDate)all.push(i.startDate);if(i.dueDate)all.push(i.dueDate);
+      });
+    });
+  });
+  if(all.length===0)return qRange;
+  all.sort();
+  const earliest=all[0],latest=all[all.length-1];
+  const today=todayKey();
+  // 시작: 과거 항목이 있으면 그 시작, 아니면 오늘 (빈 과거 절단)
+  const startD=earliest<today?earliest:today;
+  // 종료: 분기 너머로 항목이 있으면 그 마감까지 확장
+  const endD=latest>qRange.end?latest:qRange.end;
+  return{start:startD,end:endD};
+}
+function isWBSKidsHidden(type,id){
+  // 기본 표시 규칙: O는 펼침, KR은 접힘(=Initiative 안 보임). _wbsToggled가 있으면 반전.
+  if(!window._wbsToggled)window._wbsToggled=new Set();
+  const key=type+':'+id;
+  const toggled=window._wbsToggled.has(key);
+  const defaultHidden=type==='KR';
+  return toggled?!defaultHidden:defaultHidden;
+}
 function renderWBS(){
   const t=currentTeam();
-  const range=parseQuarterRange(t?.quarter);
+  const qRange=parseQuarterRange(t?.quarter);
+  const range=computeWBSRange(qRange);
   const startD=range.start,endD=range.end;
   const totalDays=daysBetween(startD,endD)+1;
   const todayD=todayKey();
   const todayOffset=Math.max(0,Math.min(totalDays,daysBetween(startD,todayD)));
-  // px per day — 화면 폭에 맞춰 자동
-  const pxPerDay=10;
+  // 뷰 모드 (월/주/일) — 디폴트 주
+  const view=window._wbsView||(window._wbsView='week');
+  const pxPerDay=view==='day'?16:view==='month'?3:7;
+  window._wbsPxPerDay=pxPerDay; // 드래그 핸들러에서 사용
   const timelineW=totalDays*pxPerDay;
 
   // 월/주 헤더 빌드
@@ -1681,23 +1714,30 @@ function renderWBS(){
   Object.values(months).forEach(m=>{
     monthHeader+=`<div style="position:absolute;left:${m.offset*pxPerDay}px;width:${m.width*pxPerDay}px;top:0;height:28px;border-right:1px solid #E5E5E8;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:var(--text);background:#F4F4F5;">${m.year}년 ${m.label}</div>`;
   });
-  // 주 헤더 — 매주 월요일 표시
-  for(let i=0;i<totalDays;i++){
-    const d=new Date(startDate);d.setDate(d.getDate()+i);
-    const dow=d.getDay();
-    if(dow===1||i===0){
-      const dd=`${d.getMonth()+1}/${d.getDate()}`;
-      weekHeader+=`<div style="position:absolute;left:${i*pxPerDay}px;top:28px;height:24px;font-size:10px;color:var(--text-soft);padding-left:3px;border-left:1px solid #EDEDEE;width:${pxPerDay*7}px;display:flex;align-items:center;">${dd}</div>`;
-    }
-    // 주말 음영
-    if(dow===0||dow===6){
-      weekHeader+=`<div style="position:absolute;left:${i*pxPerDay}px;top:52px;width:${pxPerDay}px;bottom:0;background:rgba(0,0,0,.02);pointer-events:none;z-index:0;"></div>`;
+  // 주/일 헤더 — 뷰 모드에 따라 라벨 빈도 조정
+  if(view!=='month'){
+    for(let i=0;i<totalDays;i++){
+      const d=new Date(startDate);d.setDate(d.getDate()+i);
+      const dow=d.getDay();
+      if(view==='day'){
+        // 일 뷰: 매일 표시 (요일별 색)
+        const dd=`${d.getDate()}`;
+        const dowColor=dow===0?'#E5484D':dow===6?'#4F6FE5':'var(--text-soft)';
+        weekHeader+=`<div style="position:absolute;left:${i*pxPerDay}px;top:28px;height:24px;font-size:10px;color:${dowColor};border-left:1px solid #EDEDEE;width:${pxPerDay}px;display:flex;align-items:center;justify-content:center;font-weight:${dow===0||dow===6?'700':'500'};">${dd}</div>`;
+      }else if(dow===1||i===0){
+        // 주 뷰: 매주 월요일에 날짜 라벨
+        const dd=`${d.getMonth()+1}/${d.getDate()}`;
+        weekHeader+=`<div style="position:absolute;left:${i*pxPerDay}px;top:28px;height:24px;font-size:10px;color:var(--text-soft);padding-left:3px;border-left:1px solid #EDEDEE;width:${pxPerDay*7}px;display:flex;align-items:center;">${dd}</div>`;
+      }
+      // 주말 음영 (모든 비-월 뷰)
+      if(dow===0||dow===6){
+        weekHeader+=`<div style="position:absolute;left:${i*pxPerDay}px;top:52px;width:${pxPerDay}px;bottom:0;background:rgba(0,0,0,.02);pointer-events:none;z-index:0;"></div>`;
+      }
     }
   }
 
   // 데이터 행 빌드
   const rows=[];
-  const expandSet=window._wbsCollapsed||(window._wbsCollapsed=new Set());
   // v15 — Objective별 색조 통일 — 같은 O 아래 KR/Init은 동일 hue
   const HUES=[250,145,30,200,340,270,80,0,165,100,310,50];
   function objColor(objIdx,type,status,progress){
@@ -1725,7 +1765,7 @@ function renderWBS(){
     const objEnd=o.dueDate||allEnds[allEnds.length-1]||endD;
     const objAvg=objKRs.length?Math.round(objKRs.reduce((s,k)=>s+pct(k.current,k.target),0)/objKRs.length):0;
     rows.push({type:'O',id:o.id,label:o.title||'(Objective)',level:0,start:objStart,end:objEnd,owner:o.ownerId,progress:objAvg,confidence:o.confidence,objIdx});
-    if(expandSet.has('O:'+o.id))return;
+    if(isWBSKidsHidden('O',o.id))return;
     objKRs.forEach(k=>{
       const krP=pct(k.current,k.target);
       const krKidStarts=(k.initiatives||[]).map(i=>i.startDate).filter(Boolean).sort();
@@ -1733,7 +1773,7 @@ function renderWBS(){
       const krStart=k.startDate||krKidStarts[0]||objStart;
       const krEnd=k.dueDate||krKidEnds[krKidEnds.length-1]||objEnd;
       rows.push({type:'KR',id:k.id,label:k.title||'(KR)',level:1,start:krStart,end:krEnd,owner:k.ownerId,progress:krP,confidence:k.confidence,objId:o.id,objIdx});
-      if(expandSet.has('KR:'+k.id))return;
+      if(isWBSKidsHidden('KR',k.id))return;
       (k.initiatives||[]).forEach(i=>{
         const iStart=i.startDate||krStart;
         const iEnd=i.dueDate||krEnd;
@@ -1758,7 +1798,7 @@ function renderWBS(){
     else{icon='⚡';badge=`<span style="background:hsl(${labelHue},45%,93%);color:hsl(${labelHue},45%,40%);font-size:9px;padding:1px 6px;border-radius:999px;font-weight:700;">Init</span>`;}
     const canCollapse=r.type==='O'||r.type==='KR';
     const collapseKey=r.type+':'+r.id;
-    const isCollapsed=expandSet.has(collapseKey);
+    const isCollapsed=isWBSKidsHidden(r.type,r.id);
     const toggleBtn=canCollapse?`<button class="btn-icon" data-act="wbs-toggle" data-key="${collapseKey}" style="padding:0 4px;font-size:10px;flex-shrink:0;">${isCollapsed?'▶':'▼'}</button>`:`<span style="display:inline-block;width:14px;"></span>`;
     const rowBg=r.type==='O'?`background:hsl(${labelHue},60%,96%);`:'';
     const sideBar=`<span style="position:absolute;left:0;top:0;bottom:0;width:3px;background:hsl(${labelHue},60%,55%);"></span>`;
@@ -1790,6 +1830,9 @@ function renderWBS(){
   return `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px;">
     <div><h2 style="font-weight:800;font-size:23px;margin:0;">WBS · 간트 차트</h2><div style="font-size:13px;color:var(--text-soft);margin-top:2px;">${esc(t?.quarter||'')} · ${range.start.slice(5).replace('-','/')} ~ ${range.end.slice(5).replace('-','/')} (총 ${totalDays}일)</div></div>
     <div style="display:flex;gap:8px;align-items:center;font-size:11.5px;color:var(--text-soft);flex-wrap:wrap;">
+      <div class="wbs-view-mode" style="display:inline-flex;border:1px solid var(--line);border-radius:7px;overflow:hidden;background:white;">
+        ${(()=>{const opts=[{m:'month',l:'월'},{m:'week',l:'주'},{m:'day',l:'일'}];return opts.map((o,i)=>`<button data-act="wbs-view" data-mode="${o.m}" title="${o.m==='month'?'월별':o.m==='week'?'주차별':'일별'} 보기" style="padding:5px 11px;background:${view===o.m?'var(--primary)':'transparent'};color:${view===o.m?'white':'var(--text)'};border:none;cursor:pointer;font-family:inherit;font-size:11.5px;font-weight:${view===o.m?'700':'500'};${i<opts.length-1?'border-right:1px solid var(--line);':''}">${o.l}</button>`).join('');})()}
+      </div>
       <span style="font-weight:700;color:var(--text);">색조:</span>
       ${state.objectives.map((o,oi)=>{const hue=HUES[oi%HUES.length];return `<span style="display:inline-flex;align-items:center;gap:4px;"><span style="display:inline-flex;gap:1px;"><span style="width:8px;height:14px;border-radius:2px 0 0 2px;background:hsl(${hue},65%,40%);"></span><span style="width:8px;height:14px;background:hsl(${hue},55%,50%);"></span><span style="width:8px;height:14px;border-radius:0 2px 2px 0;background:hsl(${hue},45%,65%);"></span></span>O${oi+1}</span>`;}).join('')}
       <span style="display:inline-flex;align-items:center;gap:4px;margin-left:8px;"><span style="width:12px;height:10px;border-radius:3px;background:hsl(140,55%,45%);"></span>완료</span>
@@ -1818,7 +1861,7 @@ function renderWBS(){
 }
 // v21 — WBS 막대 드래그로 일정 이동 (시작·종료 유지 폭) + 드래그 중 날짜 툴팁
 (function(){
-  const PX_PER_DAY=10;
+  function pxPerDay(){return window._wbsPxPerDay||7;} // 현재 렌더 뷰의 px/day
   let drag=null,tipEl=null;
   function ensureTip(){
     if(tipEl)return tipEl;
@@ -1876,9 +1919,10 @@ function renderWBS(){
     const dx=e.clientX-drag.startX;
     if(!drag.moved&&Math.abs(dx)<4)return;
     drag.moved=true;
-    const days=Math.round(dx/PX_PER_DAY);
+    const ppd=pxPerDay();
+    const days=Math.round(dx/ppd);
     drag.days=days;
-    drag.bar.style.left=(drag.origLeft+days*PX_PER_DAY)+'px';
+    drag.bar.style.left=(drag.origLeft+days*ppd)+'px';
     const ns=drag.origStart?shiftYMD(drag.origStart,days):null;
     const ne=drag.origEnd?shiftYMD(drag.origEnd,days):null;
     let html='';
@@ -2394,7 +2438,8 @@ document.addEventListener('click',async e=>{
   if(a==='toggle-obj'){const oid=btn.dataset.oid;expanded.has(oid)?expanded.delete(oid):expanded.add(oid);render();return;}
   if(a==='toggle-kr'){const k=btn.dataset.krid;krCollapsed.has(k)?krCollapsed.delete(k):krCollapsed.add(k);render();return;}
   // v15 — WBS 간트
-  if(a==='wbs-toggle'){const key=btn.dataset.key;const set=window._wbsCollapsed||(window._wbsCollapsed=new Set());set.has(key)?set.delete(key):set.add(key);render();return;}
+  if(a==='wbs-toggle'){const key=btn.dataset.key;const set=window._wbsToggled||(window._wbsToggled=new Set());set.has(key)?set.delete(key):set.add(key);render();return;}
+  if(a==='wbs-view'){window._wbsView=btn.dataset.mode;render();return;}
   if(a==='wbs-jump'){
     const type=btn.dataset.type;const id=btn.dataset.id;
     currentView='okr';
