@@ -1953,7 +1953,7 @@ function renderWBS(){
     const endInfo=r.end?dueShort(r.end):'';
     const dateLabel=startInfo&&endInfo?` · ${startInfo} ~ ${endInfo}`:'';
     barsHtml+=`<div class="wbs-bar-row" style="height:${ROW_H}px;position:relative;border-bottom:1px solid #F4F4F5;">
-      <div class="wbs-bar" data-act="wbs-jump" data-type="${r.type}" data-id="${r.id}" data-oid="${r.objId||r.id}" data-krid="${r.krId||(r.type==='KR'?r.id:'')}" style="position:absolute;left:${bl}px;top:5px;width:${bw}px;height:24px;background:${c.bgGrad};color:${c.fg};border-radius:5px;display:flex;align-items:center;padding:0 8px;font-size:10.5px;font-weight:700;cursor:pointer;box-shadow:0 1px 2px rgba(0,0,0,.1);overflow:hidden;white-space:nowrap;text-overflow:ellipsis;${overdue&&r.type==='I'&&r.status!=='done'?'border:1.5px solid #B71D24;':''}" title="${esc(r.label)}${dateLabel}">${label?esc(label):esc(r.label).slice(0,30)}</div>
+      <div class="wbs-bar" data-act="wbs-jump" data-type="${r.type}" data-id="${r.id}" data-oid="${r.objId||r.id}" data-krid="${r.krId||(r.type==='KR'?r.id:'')}" data-start="${r.start||''}" data-end="${r.end||''}" style="position:absolute;left:${bl}px;top:5px;width:${bw}px;height:24px;background:${c.bgGrad};color:${c.fg};border-radius:5px;display:flex;align-items:center;padding:0 8px;font-size:10.5px;font-weight:700;box-shadow:0 1px 2px rgba(0,0,0,.1);overflow:hidden;white-space:nowrap;text-overflow:ellipsis;${overdue&&r.type==='I'&&r.status!=='done'?'border:1.5px solid #B71D24;':''}" title="${esc(r.label)}${dateLabel} · 끝 잡고 드래그=마감 변경, 가운데 드래그=일정 이동, 더블클릭=날짜 직접 입력">${label?esc(label):esc(r.label).slice(0,30)}</div>
     </div>`;
   });
 
@@ -1990,7 +1990,7 @@ function renderWBS(){
     </div>
   </div>
   <div style="font-size:11.5px;color:var(--text-soft);margin-top:8px;line-height:1.55;">
-    💡 막대 클릭 → 점프 · 막대 드래그(좌/우) → 일정 이동 · ▶▼ → 접기·펼치기 · Initiative 마감 지연 시 빨간 테두리
+    💡 막대 클릭 → 점프 · 막대 가운데 드래그 → 일정 이동 · 막대 끝 잡고 드래그 → 시작/마감 변경 · 막대 더블클릭 → 날짜 직접 입력 · ▶▼ → 접기·펼치기 · Initiative 마감 지연 시 빨간 테두리
   </div>`;
 }
 // v21 — WBS 막대 드래그로 일정 이동 (시작·종료 유지 폭) + 드래그 중 날짜 툴팁
@@ -2029,7 +2029,8 @@ function renderWBS(){
   }
   function detectMode(bar,clientX){
     const r=bar.getBoundingClientRect();
-    const handle=r.width<16?0:Math.min(10,r.width/3);
+    // v35 — 핸들 영역 12px로 확대 (좁은 막대에선 폭의 1/3까지)
+    const handle=r.width<14?0:Math.min(12,r.width/3);
     if(handle>0){
       if(clientX-r.left<handle)return'resize-start';
       if(r.right-clientX<handle)return'resize-end';
@@ -2054,13 +2055,18 @@ function renderWBS(){
     if(!found||!found.item)return;
     const it=found.item;
     const mode=detectMode(bar,e.clientX);
-    // 모드별 필수 날짜 검사
-    if(mode==='resize-start'&&!it.startDate)return;
-    if(mode==='resize-end'&&!it.dueDate)return;
-    if(mode==='move'&&!it.startDate&&!it.dueDate)return;
+    // v35 — 항목 자체에 날짜가 없으면 막대가 표시 중인 visible date(상위 상속)를 origin으로 사용
+    const visStart=bar.dataset.start||null;
+    const visEnd=bar.dataset.end||null;
+    const origStart=it.startDate||visStart;
+    const origEnd=it.dueDate||visEnd;
+    // 모드별 필수 날짜 검사 (이젠 visible date까지 fallback)
+    if(mode==='resize-start'&&!origStart)return;
+    if(mode==='resize-end'&&!origEnd)return;
+    if(mode==='move'&&!origStart&&!origEnd)return;
     drag={
       bar,type,id,found,mode,
-      origStart:it.startDate,origEnd:it.dueDate,
+      origStart,origEnd,
       startX:e.clientX,
       origLeft:parseFloat(bar.style.left)||0,
       origWidth:parseFloat(bar.style.width)||bar.getBoundingClientRect().width,
@@ -2117,15 +2123,15 @@ function renderWBS(){
     // 후속 click 이벤트(wbs-jump) 차단
     d.bar.dataset.justDragged='1';
     setTimeout(()=>{try{delete d.bar.dataset.justDragged;}catch(_){}},300);
-    // 상태 반영 + 저장 (모드별 날짜만 변경)
+    // v35 — origStart/origEnd 기반으로 계산 (item 자체 날짜 없어도 visible date에서 출발)
     const it=d.found.item;
     if(d.mode==='move'){
-      if(it.startDate)it.startDate=shiftYMD(it.startDate,d.days);
-      if(it.dueDate)it.dueDate=shiftYMD(it.dueDate,d.days);
+      if(d.origStart)it.startDate=shiftYMD(d.origStart,d.days);
+      if(d.origEnd)it.dueDate=shiftYMD(d.origEnd,d.days);
     }else if(d.mode==='resize-start'){
-      if(it.startDate)it.startDate=shiftYMD(it.startDate,d.days);
+      if(d.origStart)it.startDate=shiftYMD(d.origStart,d.days);
     }else if(d.mode==='resize-end'){
-      if(it.dueDate)it.dueDate=shiftYMD(it.dueDate,d.days);
+      if(d.origEnd)it.dueDate=shiftYMD(d.origEnd,d.days);
     }
     try{
       if(d.found.kind==='O'&&typeof saveObjective==='function')saveObjective(it);
@@ -2146,6 +2152,87 @@ function renderWBS(){
     const bar=e.target.closest('.wbs-bar');
     if(!bar)return;
     if(bar.dataset.justDragged){e.stopImmediatePropagation();e.preventDefault();}
+  },true);
+  // v35 — 막대 더블클릭 시 시작·마감 직접 입력 팝오버
+  let datePopover=null;
+  function closeDatePopover(){
+    if(datePopover){try{datePopover.remove();}catch(_){}datePopover=null;}
+    document.removeEventListener('mousedown',onOutsideClick,true);
+    document.removeEventListener('keydown',onPopoverKey,true);
+  }
+  function onOutsideClick(e){
+    if(!datePopover)return;
+    if(datePopover.contains(e.target))return;
+    closeDatePopover();
+  }
+  function onPopoverKey(e){
+    if(e.key==='Escape'){closeDatePopover();}
+  }
+  function openDatePopover(bar){
+    closeDatePopover();
+    const type=bar.dataset.type,id=bar.dataset.id;
+    const found=findItem(type,id);
+    if(!found||!found.item)return;
+    const it=found.item;
+    if(!canDragNow())return;
+    // Init은 본인/관리자, KR/O는 관리자
+    if(found.kind==='I'&&typeof canEditInit==='function'&&!canEditInit(it))return;
+    if((found.kind==='KR'||found.kind==='O')&&typeof canEditOKR==='function'&&!canEditOKR())return;
+    const r=bar.getBoundingClientRect();
+    const curStart=it.startDate||bar.dataset.start||'';
+    const curEnd=it.dueDate||bar.dataset.end||'';
+    const pop=document.createElement('div');
+    pop.className='wbs-date-popover';
+    pop.style.cssText='position:fixed;z-index:9998;background:white;border:1px solid var(--line);border-radius:8px;padding:10px 12px;box-shadow:0 8px 24px rgba(0,0,0,.18);font-family:inherit;font-size:12px;min-width:240px;';
+    pop.innerHTML=
+      '<div style="font-size:11px;font-weight:700;color:var(--text-soft);margin-bottom:7px;">'+
+        (type==='O'?'🎯 Objective':type==='KR'?'📌 KR':'⚡ Initiative')+' 일정 직접 입력'+
+      '</div>'+
+      '<div style="font-size:12px;color:var(--text);margin-bottom:8px;font-weight:600;max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+escapeHtml(it.title||'')+'</div>'+
+      '<label style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:11.5px;color:var(--text-soft);"><span style="width:36px;font-weight:700;">시작</span><input type="date" data-wbs-date="start" value="'+curStart+'" style="flex:1;padding:5px 8px;border:1px solid var(--line);border-radius:5px;font-family:inherit;font-size:12.5px;outline:none;"/></label>'+
+      '<label style="display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:11.5px;color:var(--text-soft);"><span style="width:36px;font-weight:700;">마감</span><input type="date" data-wbs-date="end" value="'+curEnd+'" style="flex:1;padding:5px 8px;border:1px solid var(--line);border-radius:5px;font-family:inherit;font-size:12.5px;outline:none;"/></label>'+
+      '<div style="display:flex;gap:6px;justify-content:flex-end;">'+
+        '<button type="button" data-wbs-date-act="cancel" style="padding:5px 11px;font-size:11.5px;border:1px solid var(--line);background:white;border-radius:5px;cursor:pointer;font-family:inherit;">취소</button>'+
+        '<button type="button" data-wbs-date-act="save" style="padding:5px 13px;font-size:11.5px;border:none;background:var(--primary);color:white;border-radius:5px;cursor:pointer;font-family:inherit;font-weight:700;">저장</button>'+
+      '</div>';
+    document.body.appendChild(pop);
+    datePopover=pop;
+    // 위치 — 막대 위/아래로 자동 배치
+    const ph=pop.getBoundingClientRect().height;
+    const pw=pop.getBoundingClientRect().width;
+    let top=r.top-ph-6;if(top<8)top=r.bottom+6;
+    let left=r.left;if(left+pw>window.innerWidth-8)left=window.innerWidth-pw-8;
+    if(left<8)left=8;
+    pop.style.left=left+'px';pop.style.top=top+'px';
+    // 핸들러
+    pop.addEventListener('click',function(e){
+      const a=e.target.closest('[data-wbs-date-act]');if(!a)return;
+      if(a.dataset.wbsDateAct==='cancel'){closeDatePopover();return;}
+      if(a.dataset.wbsDateAct==='save'){
+        const ns=pop.querySelector('input[data-wbs-date="start"]').value||null;
+        const ne=pop.querySelector('input[data-wbs-date="end"]').value||null;
+        if(ns&&ne&&ns>ne){if(typeof showToast==='function')showToast('시작일이 마감일보다 늦습니다',true);return;}
+        it.startDate=ns;it.dueDate=ne;
+        try{
+          if(found.kind==='O'&&typeof saveObjective==='function')saveObjective(it);
+          else if(found.kind==='KR'&&typeof saveKR==='function')saveKR(found.oid,it);
+          else if(found.kind==='I'&&typeof saveInitiative==='function')saveInitiative(found.krid,it);
+        }catch(err){console.warn('[WBS date popover] save failed',err);}
+        closeDatePopover();
+        if(typeof render==='function')render();
+      }
+    });
+    setTimeout(()=>{
+      document.addEventListener('mousedown',onOutsideClick,true);
+      document.addEventListener('keydown',onPopoverKey,true);
+      const first=pop.querySelector('input[data-wbs-date="start"]');if(first)first.focus();
+    },0);
+  }
+  document.addEventListener('dblclick',function(e){
+    const bar=e.target.closest('.wbs-bar');
+    if(!bar)return;
+    e.stopImmediatePropagation();e.preventDefault();
+    openDatePopover(bar);
   },true);
 })();
 
