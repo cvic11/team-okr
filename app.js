@@ -432,10 +432,12 @@ html.dark .chat-input{background:#1A1D27;color:#D1D5DB;border-color:#22252F}
 [draggable="true"].drop-target-nest{background:var(--primary-soft) !important;outline:2px dashed var(--primary);outline-offset:-3px;border-radius:8px;position:relative}
 [draggable="true"].drop-target-nest::before,[draggable="true"].drop-target-nest::after{display:none}
 /* v47 — 드롭 전 라이브 프리뷰: source 자체를 숨기고 target sub-list에 실제 task 형태로 표시 */
-.drag-source-hidden{opacity:0 !important;pointer-events:none;visibility:hidden}
+/* v49 — source는 반투명 ghost로 (공간 유지하되 시각적으로 옮겨가는 느낌) */
+.drag-source-hidden{opacity:.18 !important;filter:saturate(.2) blur(.5px);pointer-events:none;transition:opacity .12s,filter .12s;position:relative}
+.drag-source-hidden::before{content:'이동 중…';position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);background:var(--text-soft);color:white;font-size:10.5px;font-weight:700;padding:3px 10px;border-radius:5px;z-index:5;opacity:.95;pointer-events:none;filter:none !important}
 .nest-preview-wrap{margin:6px 0 4px 28px !important;padding:6px 8px !important;background:rgba(98,65,245,.08) !important;border-left:3px solid var(--primary) !important;border-radius:0 8px 8px 0}
-.nest-preview-row{animation:nestPreviewIn .22s ease-out;background:linear-gradient(90deg,rgba(98,65,245,.14),rgba(98,65,245,.05)) !important;border:1px dashed var(--primary);border-radius:6px;margin:2px 0;position:relative}
-.nest-preview-row::after{content:'미리보기 — 놓으면 확정';position:absolute;right:8px;top:50%;transform:translateY(-50%);background:var(--primary);color:white;font-size:9.5px;font-weight:700;padding:2px 7px;border-radius:4px;pointer-events:none;white-space:nowrap;box-shadow:0 2px 5px rgba(98,65,245,.35)}
+.nest-preview-row{animation:nestPreviewIn .22s ease-out;background:linear-gradient(90deg,rgba(98,65,245,.22),rgba(98,65,245,.08)) !important;border:2px dashed var(--primary) !important;border-radius:8px !important;margin:3px 0 !important;position:relative;box-shadow:0 4px 14px rgba(98,65,245,.28)}
+.nest-preview-row::after{content:'미리보기 — 놓으면 확정';position:absolute;right:10px;top:50%;transform:translateY(-50%);background:var(--primary);color:white;font-size:10px;font-weight:700;padding:3px 9px;border-radius:5px;pointer-events:none;white-space:nowrap;box-shadow:0 2px 8px rgba(98,65,245,.45);z-index:10}
 @keyframes nestPreviewIn{from{opacity:0;transform:translateY(-6px) scale(.97)}to{opacity:1;transform:translateY(0) scale(1)}}
 /* v47 — sub-task 행: init-row-main과 동일 레이아웃, 축소판 */
 .init-sub-row{display:block;border-bottom:1px dashed rgba(0,0,0,.04);position:relative}
@@ -3445,7 +3447,7 @@ async function demoteInitToTask(srcInitId,targetParentIid,sourceKrId){
     if(i.id===targetParentIid)targetInit=i;
   })));
   if(!srcInit||!targetInit){showToast('변환 대상을 찾을 수 없습니다',true);return;}
-  if(!confirm(`"${srcInit.title||'(제목 없음)'}"을(를)\n"${targetInit.title||'(제목 없음)'}"의 할일로 옮길까요?\n\n이니셔티브의 신뢰도·Reality 메모는 사라지고, 상태/담당/일정은 유지됩니다.`))return;
+  // v49 — confirm 팝업 제거. 즉시 변환, 토스트로만 알림 (실수 시 새로 만들어 복구 가능)
   // 담당자 — 다중이면 첫 번째 사용
   const ownerIds=(srcInit.ownerId||'').split(',').map(s=>s.trim()).filter(Boolean);
   const owner_id=ownerIds[0]&&ownerIds[0]!=='__team_all__'?ownerIds[0]:null;
@@ -3496,7 +3498,7 @@ async function promoteTaskToInit(srcInitId,taskId,targetInitId,after){
     if(idx>=0){targetKR=k;targetIdx=idx;}
   }));
   if(!targetKR){showToast('대상 KR을 찾을 수 없습니다',true);return;}
-  if(!confirm(`"${task.title||'(제목 없음)'}"을(를) 이니셔티브로 변환할까요?\n\n할일이 ${targetKR.title?'"'+targetKR.title+'"':''} KR의 이니셔티브가 됩니다.`))return;
+  // v49 — confirm 팝업 제거
   // 새 initiative 생성
   const newInit={
     id:uid(),title:task.title||'',status:task.status||'todo',
