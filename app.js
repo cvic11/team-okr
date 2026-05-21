@@ -325,10 +325,10 @@ html.dark .krl-cmt-item{border-bottom-color:rgba(255,255,255,.06)}
 .date-bar-member-icon:active{transform:translateY(0)}
 .member-card.highlight-flash{animation:mcFlash 1.5s ease-out}
 @keyframes mcFlash{0%{box-shadow:0 0 0 3px var(--primary),0 0 18px rgba(98,65,245,.4)}100%{box-shadow:0 0 0 0 transparent}}
-/* v25 — 상단 날짜바(담당자 아이콘 포함) 스크롤 중에도 헤더 아래에 고정 */
-.date-bar{position:sticky;top:64px;z-index:15;background:rgba(250,250,250,0.94);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);padding:8px 8px;border-bottom:1px solid var(--line);border-radius:8px 8px 0 0}
+/* v25 — 상단 날짜바(담당자 아이콘 포함) 스크롤 중에도 헤더 아래에 고정 (v29 — 헤더 높이 동적 측정) */
+.date-bar{position:sticky;top:var(--app-header-h,64px);z-index:15;background:rgba(250,250,250,0.94);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);padding:8px 8px;border-bottom:1px solid var(--line);border-radius:8px 8px 0 0}
 html.dark .date-bar{background:rgba(15,17,23,0.94);border-bottom-color:#22252F}
-@media(max-width:760px){.date-bar{top:54px;padding:6px 4px}}
+@media(max-width:760px){.date-bar{padding:6px 4px}}
 /* v24 — 팀원 간 1:1 메시지 채팅 (우측 하단 플로팅) */
 .chat-launcher{position:fixed;right:20px;bottom:20px;z-index:9000;width:52px;height:52px;border-radius:50%;background:var(--primary);color:white;border:none;cursor:pointer;font-size:22px;box-shadow:0 4px 14px rgba(98,65,245,.4);display:flex;align-items:center;justify-content:center;transition:transform .15s,box-shadow .15s;line-height:1;font-family:inherit}
 .chat-launcher:hover{transform:translateY(-2px);box-shadow:0 6px 20px rgba(98,65,245,.55)}
@@ -2820,6 +2820,18 @@ document.addEventListener('dragstart',e=>{
   e.dataTransfer.effectAllowed='move';try{e.dataTransfer.setData('text/plain',el.dataset.dragType);}catch(err){}
 });
 function _clearDropTargets(){document.querySelectorAll('.drop-target,.drop-target-before,.drop-target-after').forEach(el=>el.classList.remove('drop-target','drop-target-before','drop-target-after'));}
+// v29 — 헤더 실제 높이를 CSS 변수로 노출 (date-bar 등 sticky 요소가 정확한 오프셋 사용)
+(function(){
+  function update(){const h=document.querySelector('header.app-header');if(h)document.documentElement.style.setProperty('--app-header-h',h.offsetHeight+'px');}
+  function watch(){
+    const h=document.querySelector('header.app-header');
+    if(!h){setTimeout(watch,200);return;}
+    update();
+    if(typeof ResizeObserver!=='undefined'){try{new ResizeObserver(update).observe(h);}catch(_){}}
+    window.addEventListener('resize',update);
+  }
+  if(document.readyState!=='loading')watch();else document.addEventListener('DOMContentLoaded',watch);
+})();
 document.addEventListener('dragend',e=>{
   if(dragSrc)dragSrc.classList.remove('dragging');
   _clearDropTargets();
