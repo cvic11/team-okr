@@ -2806,13 +2806,15 @@ init();
         const title=k.title.length>40?k.title.slice(0,40)+'…':k.title;
         const krVal='kr:'+k.id;
         const isSel=sel.type==='kr'&&sel.id===k.id;
-        html+='<option value="'+escapeHtml(krVal)+'"'+(isSel?' selected':'')+'>📌 KR · '+escapeHtml(title)+'</option>';
+        // v19 — 헤더 아이콘(h.icon)에서 📌 표시하므로 옵션 텍스트는 이모지 제거 (중복 방지)
+        html+='<option value="'+escapeHtml(krVal)+'"'+(isSel?' selected':'')+'>KR · '+escapeHtml(title)+'</option>';
         // Initiative들도 같은 optgroup 안에 자식으로 표시
         (k.initiatives||[]).forEach(i=>{
           const itTitle=i.title.length>36?i.title.slice(0,36)+'…':i.title;
           const initVal='init:'+i.id;
           const isInitSel=sel.type==='init'&&sel.id===i.id;
-          html+='<option value="'+escapeHtml(initVal)+'"'+(isInitSel?' selected':'')+'>  ↳ ⚡ '+escapeHtml(itTitle)+'</option>';
+          // v19 — 헤더 아이콘(h.icon)에서 ⚡ 표시하므로 옵션 텍스트는 이모지 제거 (중복 방지). 들여쓰기 ↳ 유지
+          html+='<option value="'+escapeHtml(initVal)+'"'+(isInitSel?' selected':'')+'>  ↳ '+escapeHtml(itTitle)+'</option>';
         });
       });
       html+='</optgroup>';
@@ -2839,7 +2841,8 @@ init();
   function groupTasksByLink(tasks){
     const order=[],groups=new Map();
     tasks.forEach(t=>{
-      const key=t.i?'init:'+t.i:(t.k?'kr:'+t.k:'none');
+      // v19 — KR/Init 미선택 작업은 작업별 독립 그룹(각자 KR 선택기 보장)
+      const key=t.i?'init:'+t.i:(t.k?'kr:'+t.k:'task:'+t.id);
       if(!groups.has(key)){groups.set(key,[]);order.push(key);}
       groups.get(key).push(t);
     });
@@ -2870,7 +2873,7 @@ init();
       const gTasks=groups.get(key);
       const h=renderTaskGroupHead(key);
       // v17 — 그룹 헤더 자체가 KR/Initiative 선택기. 클릭 시 드롭다운 → 그룹 내 작업 일괄 재배치
-      const selVal=key==='none'?'':key; // 'kr:..' / 'init:..' / ''
+      const selVal=(key.startsWith('kr:')||key.startsWith('init:'))?key:''; // 'kr:..' / 'init:..' / '' (none|task:..)
       const headInner=editable
         ? '<select data-krl-field="group-kr" data-mid="'+mid+'" data-kind="'+kind+'" data-groupkey="'+escapeHtml(key)+'" title="클릭하여 KR/Initiative 선택" style="flex:1;min-width:0;font-size:11.5px;font-weight:700;background:transparent;color:'+h.fg+';border:none;outline:none;cursor:pointer;font-family:inherit;-webkit-appearance:none;appearance:none;padding:0;">'+buildKROptions(selVal,allKR)+'</select><span class="krl-group-caret" title="클릭하여 변경" aria-hidden="true">▼</span>'
         : '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+escapeHtml(h.title)+'">'+escapeHtml(h.title)+'</span>';
@@ -3147,7 +3150,8 @@ init();
       const sel=parseKRSelectValue(el.value||'');
       let changed=false;
       data.tasks.forEach(t=>{
-        const tKey=t.i?'init:'+t.i:(t.k?'kr:'+t.k:'none');
+        // v19 — 활성 블록 그룹화와 동일 규칙: KR/Init 미선택은 작업별 키
+        const tKey=t.i?'init:'+t.i:(t.k?'kr:'+t.k:'task:'+t.id);
         if(tKey===oldKey){t.k=sel.k;t.i=sel.i;changed=true;}
       });
       if(changed)updateMemberTasks(mid,kind,data.legacy,data.tasks);
