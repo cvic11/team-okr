@@ -1787,8 +1787,9 @@ function renderWBS(){
   const ROW_H=34;
   rows.forEach((r,idx)=>{
     // v16 — 다중 담당자 + 팀 전원 지원
+    // v26 — O·KR은 담당자 칩 생략 (Initiative만 표시)
     const ownerName=r.owner?memberName(r.owner):'';
-    const ownerChip=ownerName&&ownerName!=='-'?`<span class="kr-strip-owner" style="font-size:10px;padding:1px 6px;${r.owner==='__team_all__'?'background:var(--primary-soft);color:var(--primary);':''}">${esc(ownerName)}</span>`:'';
+    const ownerChip=(r.type==='I'&&ownerName&&ownerName!=='-')?`<span class="kr-strip-owner" style="font-size:10px;padding:1px 6px;${r.owner==='__team_all__'?'background:var(--primary-soft);color:var(--primary);':''}">${esc(ownerName)}</span>`:'';
     const lvIndent=r.level*16+8;
     // v15 — Objective별 hue를 라벨 좌측에 컬러 바로 적용
     const labelHue=HUES[r.objIdx%HUES.length];
