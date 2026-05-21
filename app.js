@@ -2045,25 +2045,22 @@ function renderWBS(){
     const m=detectMode(bar,e.clientX);
     bar.style.cursor=m==='move'?'grab':'ew-resize';
   });
-  document.addEventListener('pointerdown',function(e){
-    if(e.button!==0&&e.pointerType==='mouse')return; // 좌클릭만
-    const bar=e.target.closest('.wbs-bar');
-    if(!bar)return;
-    if(!canDragNow())return;
+  // v36 — pointer/mouse 둘 다 받고, document/window 양쪽 등록, 디버그 로그
+  const DBG=()=>!!window._wbsDragDebug;
+  function startDrag(e,bar){
+    if(!canDragNow()){if(DBG())console.log('[wbs-drag] canDragNow=false');return;}
     const type=bar.dataset.type,id=bar.dataset.id;
     const found=findItem(type,id);
-    if(!found||!found.item)return;
+    if(!found||!found.item){if(DBG())console.log('[wbs-drag] item not found',type,id);return;}
     const it=found.item;
     const mode=detectMode(bar,e.clientX);
-    // v35 — 항목 자체에 날짜가 없으면 막대가 표시 중인 visible date(상위 상속)를 origin으로 사용
     const visStart=bar.dataset.start||null;
     const visEnd=bar.dataset.end||null;
     const origStart=it.startDate||visStart;
     const origEnd=it.dueDate||visEnd;
-    // 모드별 필수 날짜 검사 (이젠 visible date까지 fallback)
-    if(mode==='resize-start'&&!origStart)return;
-    if(mode==='resize-end'&&!origEnd)return;
-    if(mode==='move'&&!origStart&&!origEnd)return;
+    if(mode==='resize-start'&&!origStart){if(DBG())console.log('[wbs-drag] no start for resize-start');return;}
+    if(mode==='resize-end'&&!origEnd){if(DBG())console.log('[wbs-drag] no end for resize-end');return;}
+    if(mode==='move'&&!origStart&&!origEnd){if(DBG())console.log('[wbs-drag] no dates for move');return;}
     drag={
       bar,type,id,found,mode,
       origStart,origEnd,
@@ -2073,33 +2070,33 @@ function renderWBS(){
       moved:false,days:0,
       pointerId:e.pointerId
     };
-    try{bar.setPointerCapture(e.pointerId);}catch(_){}
+    try{if(e.pointerId!=null)bar.setPointerCapture(e.pointerId);}catch(_){}
     bar.classList.add('dragging');
     bar.classList.add('drag-'+mode);
-  },true);
-  document.addEventListener('pointermove',function(e){
+    if(DBG())console.log('[wbs-drag] start',{mode,origStart,origEnd,origLeft:drag.origLeft,origWidth:drag.origWidth});
+    // 기본 동작 차단 (텍스트 선택, 이미지 드래그 등)
+    if(e.preventDefault)e.preventDefault();
+  }
+  function moveDrag(e){
     if(!drag)return;
     const dx=e.clientX-drag.startX;
-    if(!drag.moved&&Math.abs(dx)<4)return;
+    if(!drag.moved&&Math.abs(dx)<3)return; // v36 — 3px로 더 낮춤
     drag.moved=true;
     const ppd=pxPerDay();
     let days=Math.round(dx/ppd);
     if(drag.mode==='move'){
       drag.bar.style.left=(drag.origLeft+days*ppd)+'px';
     }else if(drag.mode==='resize-start'){
-      // 시작을 뒤로 밀수록 width 축소, 최소 1일 보장
       const maxDays=Math.floor((drag.origWidth-ppd)/ppd);
       if(days>maxDays)days=maxDays;
       drag.bar.style.left=(drag.origLeft+days*ppd)+'px';
       drag.bar.style.width=(drag.origWidth-days*ppd)+'px';
     }else if(drag.mode==='resize-end'){
-      // 마감을 앞으로 당기면 width 축소, 최소 1일 보장
       const minDays=-Math.floor((drag.origWidth-ppd)/ppd);
       if(days<minDays)days=minDays;
       drag.bar.style.width=(drag.origWidth+days*ppd)+'px';
     }
     drag.days=days;
-    // 툴팁 — 모드에 따라 표시 다름
     const moveStart=drag.mode==='move'||drag.mode==='resize-start';
     const moveEnd=drag.mode==='move'||drag.mode==='resize-end';
     const ns=drag.origStart&&moveStart?shiftYMD(drag.origStart,days):drag.origStart;
@@ -2112,18 +2109,17 @@ function renderWBS(){
     else if(ns)html='시작 '+fmtMD(ns);
     html+='<span style="opacity:.7;margin-left:6px;">('+(days>0?'+':'')+days+'일)</span>';
     showTip(html,e.clientX,e.clientY);
-  },true);
-  document.addEventListener('pointerup',function(e){
+  }
+  function endDrag(e){
     if(!drag)return;
     const d=drag;drag=null;
-    try{d.bar.releasePointerCapture(e.pointerId);}catch(_){}
+    try{if(e.pointerId!=null)d.bar.releasePointerCapture(e.pointerId);}catch(_){}
     d.bar.classList.remove('dragging','drag-move','drag-resize-start','drag-resize-end');
     hideTip();
+    if(DBG())console.log('[wbs-drag] end',{moved:d.moved,days:d.days});
     if(!d.moved||d.days===0)return;
-    // 후속 click 이벤트(wbs-jump) 차단
     d.bar.dataset.justDragged='1';
     setTimeout(()=>{try{delete d.bar.dataset.justDragged;}catch(_){}},300);
-    // v35 — origStart/origEnd 기반으로 계산 (item 자체 날짜 없어도 visible date에서 출발)
     const it=d.found.item;
     if(d.mode==='move'){
       if(d.origStart)it.startDate=shiftYMD(d.origStart,d.days);
@@ -2139,14 +2135,33 @@ function renderWBS(){
       else if(d.found.kind==='I'&&typeof saveInitiative==='function')saveInitiative(d.found.krid,it);
     }catch(err){console.warn('[WBS drag] save failed',err);}
     if(typeof render==='function')render();
-  },true);
-  document.addEventListener('pointercancel',function(e){
+  }
+  function cancelDrag(e){
     if(!drag)return;
-    try{drag.bar.releasePointerCapture(e.pointerId);}catch(_){}
+    try{if(e&&e.pointerId!=null)drag.bar.releasePointerCapture(e.pointerId);}catch(_){}
     drag.bar.classList.remove('dragging','drag-move','drag-resize-start','drag-resize-end');
     hideTip();
     drag=null;
+  }
+  // pointer 이벤트 (현대 브라우저)
+  document.addEventListener('pointerdown',function(e){
+    if(e.button!=null&&e.button!==0&&e.pointerType==='mouse')return;
+    const bar=e.target.closest('.wbs-bar');if(!bar)return;
+    startDrag(e,bar);
   },true);
+  document.addEventListener('pointermove',moveDrag,true);
+  document.addEventListener('pointerup',endDrag,true);
+  document.addEventListener('pointercancel',cancelDrag,true);
+  // mouse 이벤트 백업 (pointer 미지원·이벤트 누락 대비) + window 등록으로 dom 밖에서 mouseup해도 종료
+  document.addEventListener('mousedown',function(e){
+    if(drag)return; // pointerdown이 이미 잡았으면 skip
+    if(e.button!==0)return;
+    const bar=e.target.closest('.wbs-bar');if(!bar)return;
+    if(DBG())console.log('[wbs-drag] fallback mousedown');
+    startDrag(e,bar);
+  },true);
+  window.addEventListener('mousemove',function(e){if(drag)moveDrag(e);},true);
+  window.addEventListener('mouseup',function(e){if(drag)endDrag(e);},true);
   // 드래그 직후의 click은 기존 wbs-jump가 받지 않도록 차단
   document.addEventListener('click',function(e){
     const bar=e.target.closest('.wbs-bar');
