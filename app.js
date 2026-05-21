@@ -466,6 +466,62 @@ html.dark .init-sub-row .init-sub-title{background:#1A1D27;color:#E5E7EB;border-
 html.dark .init-sub-list{background:rgba(98,65,245,.10);border-left-color:var(--primary)}
 html.dark .init-row-line1 .init-title-input:hover:not([readonly]){background:#222631}
 html.dark .init-row-line1 .init-title-input:focus{background:#1A1D27}
+/* ============================================================
+   v53 — 메인 화면 시각 위계 정돈
+   ① 최상단 브랜드(팀명+OKR) 가장 크게
+   ② date-bar 스크롤 시 출렁임 완전 차단 (main top-padding 상쇄)
+   ③ Objective 가슴 설레는 반짝임 + 글자 위계 (O > KR > Init > 할일)
+   ============================================================ */
+/* ① 브랜드 가장 크게 */
+.brand-title{font-size:26px !important;font-weight:900 !important;letter-spacing:-0.7px;line-height:1.15;display:flex;align-items:center;gap:8px}
+.brand-sub{font-size:13px !important;font-weight:600 !important;color:var(--text-soft);margin-top:2px}
+.brand-mark{width:50px !important;height:50px !important;font-size:21px !important;border-radius:14px !important}
+.brand-meta{gap:2px}
+.team-switch{font-size:11px;padding:2px 8px;font-weight:600}
+@media(max-width:760px){
+  .brand-title{font-size:19px !important}
+  .brand-mark{width:38px !important;height:38px !important;font-size:16px !important;border-radius:11px !important}
+  .brand-sub{font-size:11.5px !important}
+}
+/* ② date-bar 안 움직이게 — main top padding 상쇄 (-padding-top) */
+.date-bar{margin-top:-28px !important}
+body.present .date-bar{margin-top:-20px !important}
+@media(max-width:760px){.date-bar{margin-top:-14px !important}}
+/* ③ Objective 반짝임 + 글자 위계 */
+.obj-title-input{
+  font-size:30px !important;font-weight:900 !important;letter-spacing:-0.9px !important;
+  line-height:1.2 !important;padding:6px 2px !important;
+  background:linear-gradient(90deg,#6241F5 0%,#8B6FF7 18%,#F5B82A 38%,#E5484D 50%,#F5B82A 62%,#8B6FF7 82%,#6241F5 100%);
+  background-size:260% 100%;
+  -webkit-background-clip:text;background-clip:text;
+  -webkit-text-fill-color:transparent;
+  animation:objShimmer 6s linear infinite;
+  filter:drop-shadow(0 0 10px rgba(98,65,245,.22));
+}
+@keyframes objShimmer{0%{background-position:0% 50%}100%{background-position:260% 50%}}
+.obj-title-input::placeholder{
+  -webkit-text-fill-color:var(--text-soft);color:var(--text-soft);
+  background:none;font-weight:600;letter-spacing:0;font-size:20px !important
+}
+.obj-title-input:focus{
+  -webkit-text-fill-color:var(--text);
+  animation:none;
+  filter:drop-shadow(0 0 4px rgba(98,65,245,.12));
+}
+body.present .obj-title-input{font-size:36px !important}
+@media(max-width:760px){.obj-title-input{font-size:22px !important}}
+/* KR 두 번째로 큰 */
+.kr-title-input{font-size:17px !important;font-weight:700 !important;letter-spacing:-0.2px !important;padding:6px 4px !important}
+body.present .kr-title-input{font-size:20px !important}
+/* Initiative 중간 */
+.init-row-main .init-title-input{font-size:14px !important;font-weight:500 !important}
+/* 할일 가장 작게 (이미 12.5px이지만 명시) */
+.init-sub-row .init-title-input{font-size:12.5px !important;font-weight:400 !important}
+/* obj-desc 부제 — 위계 보조 */
+.obj-desc-input{font-size:13px !important;font-style:italic;color:var(--text-soft);opacity:.85}
+/* 다크모드: 그라데이션이 어두운 배경에서 더 또렷하게 */
+html.dark .obj-title-input{filter:drop-shadow(0 0 12px rgba(168,155,245,.4))}
+html.dark .obj-title-input:focus{filter:drop-shadow(0 0 4px rgba(168,155,245,.15));-webkit-text-fill-color:#E5E7EB}
 `;document.head.appendChild(s);
 // 다크 모드 즉시 적용 (FOUC 방지)
 document.documentElement.classList.toggle('dark',localStorage.getItem('team-okr-dark')==='1');
