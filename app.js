@@ -1733,12 +1733,9 @@ function renderInitiative(krId,init){
   const subAddBtn=initEdit?`<button class="init-meta-add" data-act="add-init-sub" data-iid="${init.id}" title="할일 추가">${I.plus}</button>`:'';
   let subBody='';
   if(subOpen&&subTasks.length>0){
-    // v46 — 할일이 있을 때만 sub-list 렌더 (빈 메시지·하단 add 버튼 모두 제거)
+    // v52 — 할일 있을 때만 렌더. 빈 상태에선 아무것도 안 그림 (showNestPreview가 필요 시 temp wrap 생성)
     const subRows=subTasks.map(t=>renderInitSubTaskRow(init.id,t,initEdit)).join('');
     subBody=`<div class="init-sub-list" data-init-sub="${init.id}" data-drop-zone="init-sub-list" data-parent-iid="${init.id}">${subRows}</div>`;
-  }else if(subOpen){
-    // 빈 상태: drop-zone만 유지하고 시각적으로는 비움 (drag preview용)
-    subBody=`<div class="init-sub-list init-sub-empty" data-init-sub="${init.id}" data-drop-zone="init-sub-list" data-parent-iid="${init.id}" style="display:none;"></div>`;
   }
   // v43 — 1행 통합: 모든 컨트롤을 한 줄에 컴팩트하게. flex-wrap:nowrap + overflow-x:auto로 좁아져도 줄바꿈 안 함
   const mainLine=`<div class="init-row-main">`
@@ -3277,10 +3274,11 @@ document.addEventListener('click',e=>{if(e.target.id==='modal-back')closeModal()
 // ============================================================
 // 드래그 재정렬 (v8)
 // ============================================================
-let dragSrc=null;
+let dragSrc=null,_dragStartX=null;
 document.addEventListener('dragstart',e=>{
   const el=e.target.closest('[draggable="true"]');if(!el||!el.dataset.dragType)return;
   dragSrc=el;el.classList.add('dragging');
+  _dragStartX=e.clientX; // v52 — 좌측 드래그 promote 판정용
   e.dataTransfer.effectAllowed='move';try{e.dataTransfer.setData('text/plain',el.dataset.dragType);}catch(err){}
 });
 function _clearDropTargets(){document.querySelectorAll('.drop-target,.drop-target-before,.drop-target-after,.drop-target-nest,.drop-target-into').forEach(el=>el.classList.remove('drop-target','drop-target-before','drop-target-after','drop-target-nest','drop-target-into'));}
@@ -3374,6 +3372,7 @@ document.addEventListener('dragend',e=>{
   _clearDropTargets();
   clearNestPreview();
   _lastDropState='';
+  _dragStartX=null;
   dragSrc=null;
 });
 // v48 — zone 계산은 .init-row-main 기준 (preview row가 추가되어도 높이 변하지 않음 → 깜빡임 차단)
@@ -3412,13 +3411,13 @@ document.addEventListener('dragover',e=>{
   tgt=_retargetForNest(tgt,dragSrc);
   if(!tgt||tgt===dragSrc)return;
   const srcType=dragSrc.dataset.dragType,tgtType=tgt.dataset.dragType;
-  // 같은 타입 + 같은 부모 (기본 reorder) OR init-task → init (promote/move)
   const sameType=srcType===tgtType;
   const isPromote=srcType==='init-task'&&tgtType==='init';
   if(!sameType&&!isPromote)return;
-  if(sameType&&tgt.dataset.dragParent!==dragSrc.dataset.dragParent)return;
   e.preventDefault();
   const{zone}=_resolveDragZone(tgt,e.clientY,dragSrc);
+  // v52 — reorder(before/after)만 같은 부모 검증, nest는 KR 가로질러도 허용
+  if(zone!=='nest'&&sameType&&tgt.dataset.dragParent!==dragSrc.dataset.dragParent)return;
   const newState=tgt.dataset.dragType+':'+(tgt.dataset.initId||tgt.dataset.taskId||tgt.dataset.krId||tgt.dataset.objId||tgt.dataset.memId||'')+':'+zone;
   if(newState===_lastDropState)return; // 변화 없음 → 아무것도 안 함 (깜빡임 차단)
   _lastDropState=newState;
@@ -3433,6 +3432,21 @@ document.addEventListener('dragover',e=>{
 });
 document.addEventListener('drop',async e=>{
   if(!dragSrc)return;
+  const srcType0=dragSrc.dataset.dragType;
+  // v52 — task를 제자리에서 좌측으로 드래그하면 부모의 sibling init으로 승격
+  if(srcType0==='init-task'&&_dragStartX!=null){
+    const dx=e.clientX-_dragStartX;
+    const tmpTgt=e.target.closest('[draggable="true"]');
+    const noUsefulTgt=!tmpTgt||tmpTgt===dragSrc||tmpTgt.dataset.dragParent===dragSrc.dataset.dragParent;
+    if(dx<-50&&noUsefulTgt){
+      e.preventDefault();
+      const src=dragSrc;dragSrc=null;_lastDropState='';_dragStartX=null;
+      _clearDropTargets();clearNestPreview();
+      // 부모를 target init으로, after=true → 부모 바로 아래에 sibling init으로 삽입
+      await promoteTaskToInit(src.dataset.dragParent,src.dataset.taskId,src.dataset.dragParent,true);
+      return;
+    }
+  }
   let tgt=e.target.closest('[draggable="true"]');if(!tgt||tgt===dragSrc)return;
   tgt=_retargetForNest(tgt,dragSrc);
   if(!tgt||tgt===dragSrc)return;
@@ -3440,9 +3454,9 @@ document.addEventListener('drop',async e=>{
   const sameType=srcType===tgtType;
   const isPromote=srcType==='init-task'&&tgtType==='init';
   if(!sameType&&!isPromote)return;
-  if(sameType&&tgt.dataset.dragParent!==dragSrc.dataset.dragParent)return;
   e.preventDefault();
   const{zone}=_resolveDragZone(tgt,e.clientY,dragSrc);
+  if(zone!=='nest'&&sameType&&tgt.dataset.dragParent!==dragSrc.dataset.dragParent)return;
   const after=zone==='after';
   // v44 — Init 가운데 zone = demote-to-task
   if(srcType==='init'&&zone==='nest'){
