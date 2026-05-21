@@ -283,14 +283,12 @@ html.dark .member-card.is-readonly .member-head::after{background:#22252F;color:
 .krl-task-link-chip:focus{box-shadow:0 0 0 2px var(--primary-soft)}
 /* v32 — 상위 KR/Init 칩을 입력란 위로 (브레드크럼 스타일) — 입력란이 행 너비를 충분히 갖도록 */
 .krl-task-link-row{display:flex;align-items:center;gap:5px;margin:2px 0 2px 24px;line-height:1.3;min-width:0;flex-wrap:wrap}
-.krl-task-link-icon{color:var(--primary);font-size:11.5px;font-weight:700;flex-shrink:0;opacity:.7}
 .krl-task-link-row .krl-task-link-chip{margin-top:0;max-width:100%;flex:0 1 auto;background:transparent;color:var(--primary);border-color:transparent;font-size:11px;padding:2px 6px;text-overflow:ellipsis;overflow:hidden}
 .krl-task-link-row .krl-task-link-chip:hover{background:var(--primary-soft);border-color:#D9CFFB;filter:none;box-shadow:none}
 .krl-task-link-row .krl-task-link-chip:focus{background:white;border-color:var(--primary);box-shadow:0 0 0 2px var(--primary-soft)}
 @media(max-width:760px){.krl-task-link-row{margin-left:20px}}
 html.dark .krl-task-link-row .krl-task-link-chip{color:#A89BF5}
 html.dark .krl-task-link-row .krl-task-link-chip:hover{background:#2A2245;border-color:#3A2F5A}
-html.dark .krl-task-link-icon{color:#A89BF5}
 /* v26 — 할일 댓글 (토글 없이 상시 노출 · 짧은 글은 이름 옆에 인라인) */
 .krl-task-container,.recent-task-container{position:relative}
 .krl-cmt-thread{margin:2px 0 8px 26px;padding:5px 10px;background:rgba(98,65,245,.04);border-left:2px solid var(--primary-soft);border-radius:0 6px 6px 0}
@@ -3415,7 +3413,7 @@ init();
     if(editable&&(task.k||task.i)){
       const allKR=collectAllKR();
       const selVal=task.i?'init:'+task.i:'kr:'+task.k;
-      linkRow='<div class="krl-task-link-row"><span class="krl-task-link-icon">↳</span><select class="krl-task-link-chip" data-krl-field="task-link" data-mid="'+mid+'" data-kind="'+kind+'" data-tid="'+task.id+'" title="이 할일의 KR/Initiative 변경">'+buildKROptions(selVal,allKR)+'</select></div>';
+      linkRow='<div class="krl-task-link-row"><select class="krl-task-link-chip" data-krl-field="task-link" data-mid="'+mid+'" data-kind="'+kind+'" data-tid="'+task.id+'" title="이 할일의 KR/Initiative 변경">'+buildKROptions(selVal,allKR)+'</select></div>';
     }
     // v26 — 댓글은 토글 없이 행 아래에 바로 표시
     return '<div class="krl-task-container" data-task-container="'+task.id+'">'+
