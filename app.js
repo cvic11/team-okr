@@ -277,6 +277,10 @@ html.dark .member-card.is-readonly .member-head::after{background:#22252F;color:
 .krl-group-head .krl-group-caret{font-size:11px;font-weight:800;opacity:.85;line-height:1;flex-shrink:0;transition:transform .12s ease,opacity .12s ease}
 .krl-group-head.is-interactive:hover .krl-group-caret{opacity:1}
 .krl-group-head.is-interactive:active .krl-group-caret{transform:translateY(1px)}
+/* v29 — 할일 행의 KR/Init 변경 chip (작은 select) */
+.krl-task-link-chip{flex-shrink:0;margin-top:6px;background:#EEEAFE;color:#6241F5;border:1px solid #D9CFFB;border-radius:5px;cursor:pointer;font-size:11px;padding:3px 6px;font-family:inherit;font-weight:700;-webkit-appearance:none;appearance:none;max-width:140px;outline:none;line-height:1.3}
+.krl-task-link-chip:hover{filter:brightness(.96);box-shadow:0 0 0 2px rgba(98,65,245,.15)}
+.krl-task-link-chip:focus{box-shadow:0 0 0 2px var(--primary-soft)}
 /* v26 — 할일 댓글 (토글 없이 상시 노출 · 짧은 글은 이름 옆에 인라인) */
 .krl-task-container,.recent-task-container{position:relative}
 .krl-cmt-thread{margin:2px 0 8px 26px;padding:5px 10px;background:rgba(98,65,245,.04);border-left:2px solid var(--primary-soft);border-radius:0 6px 6px 0}
@@ -3234,11 +3238,23 @@ init();
     const dis=editable?'':' disabled';
     const tip=editable?'':' title="본인이 작성한 항목만 수정할 수 있습니다"';
     const textStyle='width:100%;padding:9px 12px;border:1px solid var(--line);border-radius:6px;background:#FAFAFA;outline:none;font-size:13.5px;line-height:1.6;font-family:inherit;color:var(--text);resize:none;overflow:hidden;min-height:60px;box-sizing:border-box;'+(task.d?'text-decoration:line-through;color:var(--text-soft);':'');
+    // v29 — 컨텍스트별 placeholder: KR 선택→Init 입력, Init 선택→할일 입력
+    let placeholder='할일 내용을 적어주세요';
+    if(task.i)placeholder='할일을 적어주세요';
+    else if(task.k)placeholder='이니셔티브를 입력하세요';
+    // v29 — KR/Init이 설정된 행에는 변경용 작은 select chip (한 번 정해도 다시 바꿀 수 있게)
+    let linkChip='';
+    if(editable&&(task.k||task.i)){
+      const allKR=collectAllKR();
+      const selVal=task.i?'init:'+task.i:'kr:'+task.k;
+      linkChip='<select class="krl-task-link-chip" data-krl-field="task-link" data-mid="'+mid+'" data-kind="'+kind+'" data-tid="'+task.id+'" title="이 할일의 KR/Initiative 변경">'+buildKROptions(selVal,allKR)+'</select>';
+    }
     // v26 — 댓글은 토글 없이 행 아래에 바로 표시
     return '<div class="krl-task-container" data-task-container="'+task.id+'">'+
       '<div class="krl-task-row" data-tid="'+task.id+'" data-mid="'+mid+'" data-kind="'+kind+'" style="display:flex;align-items:flex-start;gap:6px;padding:6px 0;border-bottom:1px dashed #F0F0F2;">'+
         '<button class="rt-check '+(task.d?'checked':'')+'" style="width:18px;height:18px;border-width:1.5px;border-radius:4px;flex-shrink:0;margin-top:9px;" data-act="krl-toggle-task" data-mid="'+mid+'" data-kind="'+kind+'" data-tid="'+task.id+'"'+dis+tip+'>'+(task.d?'✓':'')+'</button>'+
-        '<textarea data-krl-field="task-text" data-krl-autogrow data-mid="'+mid+'" data-kind="'+kind+'" data-tid="'+task.id+'" rows="2" placeholder="할일 내용을 적어주세요" style="'+textStyle+'"'+ro+tip+'>'+escapeHtml(task.t||'')+'</textarea>'+
+        '<textarea data-krl-field="task-text" data-krl-autogrow data-mid="'+mid+'" data-kind="'+kind+'" data-tid="'+task.id+'" rows="2" placeholder="'+placeholder+'" style="'+textStyle+'"'+ro+tip+'>'+escapeHtml(task.t||'')+'</textarea>'+
+        linkChip+
         (editable?'<button data-act="krl-del-task" data-mid="'+mid+'" data-kind="'+kind+'" data-tid="'+task.id+'" style="padding:4px 6px;margin-top:6px;background:none;border:1px solid transparent;border-radius:5px;cursor:pointer;color:var(--text-soft);font-size:12px;flex-shrink:0;line-height:1;" title="이 작업 삭제">✕</button>':'')+
       '</div>'+
       renderCommentsThread(task,mid,kind)+
@@ -3743,15 +3759,17 @@ init();
       scheduleDistributionUpdate();
       return;
     }
-    // 구버전 per-task select 호환 (혹시 남아 있으면)
-    if(el.dataset.krlField!=='task-kr')return;
-    const mid=el.dataset.mid,kind=el.dataset.kind,tid=el.dataset.tid;
-    const data=getMemberTasks(mid,kind);
-    const t=data.tasks.find(x=>x.id===tid);if(!t)return;
-    const sel=parseKRSelectValue(el.value||'');t.k=sel.k;t.i=sel.i;
-    updateMemberTasks(mid,kind,data.legacy,data.tasks);
-    rerenderTaskBlock(mid,kind);
-    scheduleDistributionUpdate();
+    // v29 — 할일 행 안의 KR/Init 변경 chip (개별 task 재배치)
+    if(el.dataset.krlField==='task-link'||el.dataset.krlField==='task-kr'){
+      const mid=el.dataset.mid,kind=el.dataset.kind,tid=el.dataset.tid;
+      const data=getMemberTasks(mid,kind);
+      const t=data.tasks.find(x=>x.id===tid);if(!t)return;
+      const sel=parseKRSelectValue(el.value||'');t.k=sel.k;t.i=sel.i;
+      updateMemberTasks(mid,kind,data.legacy,data.tasks);
+      rerenderTaskBlock(mid,kind);
+      scheduleDistributionUpdate();
+      return;
+    }
   });
   document.addEventListener('focusin',function(e){const el=e.target;if(el.tagName==='TEXTAREA'&&el.dataset.krlField==='task-text'){el.style.background='white';el.style.borderColor='#6241F5';}});
   document.addEventListener('focusout',function(e){const el=e.target;if(el.tagName==='TEXTAREA'&&el.dataset.krlField==='task-text'){el.style.background='#FAFAFA';el.style.borderColor='var(--line)';}});
