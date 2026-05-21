@@ -1866,6 +1866,9 @@ function renderWBS(){
   const view=window._wbsView||(window._wbsView='week');
   const pxPerDay=view==='day'?16:view==='month'?3:7;
   window._wbsPxPerDay=pxPerDay; // 드래그 핸들러에서 사용
+  // v41 — 인플레이스 업데이트(깜빡임 제거)에서 사용할 범위 정보 노출
+  window._wbsStartD=startD;
+  window._wbsTotalDays=totalDays;
   const timelineW=totalDays*pxPerDay;
 
   // 월/주 헤더 빌드
@@ -2159,7 +2162,16 @@ function renderWBS(){
       setTimeout(()=>{try{delete d.bar.dataset.justDragged;}catch(_){}},300);
       if(window._wbsJumpTimer){clearTimeout(window._wbsJumpTimer);window._wbsJumpTimer=null;}
     }
-    if(!d.moved||d.days===0)return;
+    if(!d.moved||d.days===0){
+      // v41 — 움직이긴 했지만 날짜 변경 없음 → 원위치로 부드럽게 되돌림
+      if(d.moved){
+        d.bar.style.transition='left .15s ease, width .15s ease';
+        d.bar.style.left=d.origLeft+'px';
+        d.bar.style.width=d.origWidth+'px';
+        setTimeout(()=>{d.bar.style.transition='';},200);
+      }
+      return;
+    }
     const it=d.found.item;
     if(d.mode==='move'){
       if(d.origStart)it.startDate=shiftYMD(d.origStart,d.days);
@@ -2174,7 +2186,52 @@ function renderWBS(){
       else if(d.found.kind==='KR'&&typeof saveKR==='function')saveKR(d.found.oid,it);
       else if(d.found.kind==='I'&&typeof saveInitiative==='function')saveInitiative(d.found.krid,it);
     }catch(err){console.warn('[WBS drag] save failed',err);}
-    if(typeof render==='function')render();
+    // v41 — 깜빡임 제거: render() 호출 안 함. 막대 시각 상태는 이미 드래그 중 업데이트됨.
+    // 드래그한 막대의 data 속성과 propagation으로 갱신된 상위 막대만 인플레이스 업데이트.
+    if(it.startDate)d.bar.dataset.start=it.startDate;
+    if(it.dueDate)d.bar.dataset.end=it.dueDate;
+    if(typeof updateAncestorBars==='function')updateAncestorBars(d.found);
+  }
+  // v41 — propagation 영향 상위 막대를 인플레이스로 부드럽게 갱신 (전체 render 없이)
+  function updateBarVisual(barEl,item){
+    if(!barEl||!item||!item.startDate||!item.dueDate)return;
+    const startD=window._wbsStartD,ppd=window._wbsPxPerDay,totalDays=window._wbsTotalDays;
+    if(!startD||!ppd||!totalDays)return;
+    const sOff=Math.max(0,daysBetween(startD,item.startDate));
+    const eOff=Math.min(totalDays-1,daysBetween(startD,item.dueDate));
+    const bw=Math.max(ppd,(eOff-sOff+1)*ppd);
+    const bl=sOff*ppd;
+    barEl.style.transition='left .25s ease, width .25s ease';
+    barEl.style.left=bl+'px';
+    barEl.style.width=bw+'px';
+    barEl.dataset.start=item.startDate;
+    barEl.dataset.end=item.dueDate;
+    setTimeout(()=>{barEl.style.transition='';},320);
+  }
+  function updateAncestorBars(found){
+    if(!found)return;
+    if(found.kind==='I'){
+      // 부모 KR
+      const krBar=document.querySelector('.wbs-bar[data-type="KR"][data-id="'+found.krid+'"]');
+      const krFound=findItem('KR',found.krid);
+      if(krBar&&krFound)updateBarVisual(krBar,krFound.item);
+      // 조부모 O
+      if(krFound){
+        let parentOid=null;
+        if(state&&state.objectives){
+          for(const o of state.objectives){if((o.keyResults||[]).some(k=>k.id===found.krid)){parentOid=o.id;break;}}
+        }
+        if(parentOid){
+          const oBar=document.querySelector('.wbs-bar[data-type="O"][data-id="'+parentOid+'"]');
+          const oFound=findItem('O',parentOid);
+          if(oBar&&oFound)updateBarVisual(oBar,oFound.item);
+        }
+      }
+    }else if(found.kind==='KR'){
+      const oBar=document.querySelector('.wbs-bar[data-type="O"][data-id="'+found.oid+'"]');
+      const oFound=findItem('O',found.oid);
+      if(oBar&&oFound)updateBarVisual(oBar,oFound.item);
+    }
   }
   function cancelDrag(e){
     if(!drag)return;
