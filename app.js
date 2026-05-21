@@ -309,6 +309,58 @@ html.dark .krl-cmt-item{border-bottom-color:rgba(255,255,255,.06)}
 .date-bar-member-icon:active{transform:translateY(0)}
 .member-card.highlight-flash{animation:mcFlash 1.5s ease-out}
 @keyframes mcFlash{0%{box-shadow:0 0 0 3px var(--primary),0 0 18px rgba(98,65,245,.4)}100%{box-shadow:0 0 0 0 transparent}}
+/* v24 — 팀원 간 1:1 메시지 채팅 (우측 하단 플로팅) */
+.chat-launcher{position:fixed;right:20px;bottom:20px;z-index:9000;width:52px;height:52px;border-radius:50%;background:var(--primary);color:white;border:none;cursor:pointer;font-size:22px;box-shadow:0 4px 14px rgba(98,65,245,.4);display:flex;align-items:center;justify-content:center;transition:transform .15s,box-shadow .15s;line-height:1;font-family:inherit}
+.chat-launcher:hover{transform:translateY(-2px);box-shadow:0 6px 20px rgba(98,65,245,.55)}
+.chat-launcher.has-unread{animation:chatPulse 2s infinite}
+@keyframes chatPulse{0%,100%{box-shadow:0 4px 14px rgba(98,65,245,.4)}50%{box-shadow:0 4px 14px rgba(98,65,245,.4),0 0 0 9px rgba(98,65,245,.15)}}
+.chat-launcher-badge{position:absolute;top:-2px;right:-2px;background:#E5484D;color:white;font-size:10.5px;font-weight:800;padding:1px 6px;border-radius:999px;min-width:18px;text-align:center;line-height:1.4;border:2px solid white}
+.chat-panel{position:fixed;right:20px;bottom:84px;z-index:9001;width:340px;max-width:calc(100vw - 40px);height:520px;max-height:calc(100vh - 120px);background:white;border:1px solid var(--line);border-radius:14px;box-shadow:0 14px 40px rgba(0,0,0,.2);display:flex;flex-direction:column;overflow:hidden;font-family:inherit}
+.chat-panel[hidden]{display:none}
+.chat-panel-head{padding:11px 14px;background:var(--primary);color:white;font-weight:700;font-size:13px;display:flex;align-items:center;gap:8px;flex-shrink:0}
+.chat-close,.chat-back{background:transparent;border:none;color:white;cursor:pointer;font-size:13px;padding:4px 8px;border-radius:5px;font-family:inherit;line-height:1}
+.chat-close{margin-left:auto}
+.chat-close:hover,.chat-back:hover{background:rgba(255,255,255,.18)}
+.chat-back{font-size:17px;padding:2px 8px}
+.chat-head-name{font-weight:700;font-size:13px}
+.chat-head-avatar{width:26px;height:26px;font-size:11px;border:1.5px solid white}
+.chat-head-badge{background:rgba(255,255,255,.25);font-size:11px;padding:1px 7px;border-radius:999px;font-weight:800;margin-left:4px}
+.chat-panel-body{flex:1;overflow-y:auto;background:#FAFAFB}
+.chat-empty{padding:30px 18px;text-align:center;color:var(--text-soft);font-size:12.5px;line-height:1.7}
+.chat-list-body{padding:6px 0}
+.chat-list-item{width:100%;display:flex;align-items:center;gap:10px;padding:10px 14px;background:transparent;border:none;cursor:pointer;text-align:left;border-bottom:1px solid #F0F0F2;font-family:inherit}
+.chat-list-item:hover{background:#F4F4F5}
+.chat-list-item.has-unread{background:#FFFBEF}
+.chat-list-item.has-unread:hover{background:#FFF6D9}
+.chat-avatar{width:36px;height:36px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;color:white;font-weight:800;font-size:13.5px;flex-shrink:0;line-height:1}
+.chat-list-meta{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.chat-list-name{font-size:13px;font-weight:700;color:var(--text);display:inline-flex;align-items:center;gap:5px}
+.chat-list-unread{background:#E5484D;color:white;font-size:10px;padding:1px 6px;border-radius:999px;font-weight:800}
+.chat-list-preview{font-size:11.5px;color:var(--text-soft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.4}
+.chat-list-time{font-size:10.5px;color:var(--text-soft);flex-shrink:0}
+.chat-conv-body{padding:12px 14px;display:flex;flex-direction:column;gap:6px}
+.chat-date-sep{text-align:center;font-size:10.5px;color:var(--text-soft);padding:8px 0 4px;font-weight:600}
+.chat-msg{max-width:78%;padding:7px 11px;border-radius:14px;font-size:13px;line-height:1.45;display:inline-flex;flex-direction:column;gap:1px;word-break:break-word;white-space:pre-wrap}
+.chat-msg.mine{align-self:flex-end;background:var(--primary);color:white;border-bottom-right-radius:4px}
+.chat-msg.theirs{align-self:flex-start;background:white;color:var(--text);border:1px solid var(--line);border-bottom-left-radius:4px}
+.chat-msg-time{font-size:9.5px;opacity:.65;text-align:right;margin-top:2px}
+.chat-msg.theirs .chat-msg-time{text-align:left}
+.chat-input-wrap{display:flex;gap:5px;padding:10px 12px;background:white;border-top:1px solid var(--line);flex-shrink:0;align-items:flex-end}
+.chat-input{flex:1;min-width:0;border:1px solid var(--line);border-radius:16px;padding:8px 12px;font-size:13px;line-height:1.4;resize:none;outline:none;font-family:inherit;background:#FAFAFB;max-height:120px}
+.chat-input:focus{border-color:var(--primary);background:white;box-shadow:0 0 0 2px var(--primary-soft)}
+.chat-send{background:var(--primary);color:white;border:none;border-radius:16px;padding:8px 14px;font-weight:700;font-size:12px;cursor:pointer;font-family:inherit;flex-shrink:0;line-height:1.3}
+.chat-send:hover{filter:brightness(1.08)}
+@media(max-width:480px){
+  .chat-panel{right:10px;left:10px;width:auto;bottom:80px;height:70vh}
+}
+html.dark .chat-panel{background:#15171F;border-color:#22252F}
+html.dark .chat-panel-body{background:#0F1117}
+html.dark .chat-list-item{border-bottom-color:#1F222B}
+html.dark .chat-list-item:hover{background:#1A1D27}
+html.dark .chat-list-item.has-unread{background:#2A2410}
+html.dark .chat-msg.theirs{background:#1A1D27;color:#D1D5DB;border-color:#22252F}
+html.dark .chat-input-wrap{background:#15171F;border-top-color:#22252F}
+html.dark .chat-input{background:#1A1D27;color:#D1D5DB;border-color:#22252F}
 `;document.head.appendChild(s);
 // 다크 모드 즉시 적용 (FOUC 방지)
 document.documentElement.classList.toggle('dark',localStorage.getItem('team-okr-dark')==='1');
@@ -3478,4 +3530,159 @@ init();
   });
   document.addEventListener('focusin',function(e){const el=e.target;if(el.tagName==='TEXTAREA'&&el.dataset.krlField==='task-text'){el.style.background='white';el.style.borderColor='#6241F5';}});
   document.addEventListener('focusout',function(e){const el=e.target;if(el.tagName==='TEXTAREA'&&el.dataset.krlField==='task-text'){el.style.background='#FAFAFA';el.style.borderColor='var(--line)';}});
+})();
+// v24 — 팀원 간 1:1 메시지 + 우측 하단 플로팅 채팅 (messages 테이블 사용)
+(function(){
+  let messages=[],chatOpen=false,chatView='list',chatPeer=null;
+  let lastBootTeamId=null,realtimeReady=false;
+  function me(){return(typeof selfMember==='function')?selfMember():null;}
+  function tid(){return state&&state.currentTeamId;}
+  function nowIso(){return new Date().toISOString();}
+  function newMsgId(){return'm_'+Math.random().toString(36).slice(2,9)+Date.now().toString(36).slice(-4);}
+  function _esc(s){return(typeof escapeHtml==='function')?escapeHtml(s):String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+  function fmtTime(ts){if(!ts)return'';const d=new Date(ts);const tod=new Date();if(d.toDateString()===tod.toDateString())return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');return(d.getMonth()+1)+'/'+d.getDate()+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');}
+  async function loadMessages(){
+    const m=me();if(!m||!tid())return;
+    try{
+      const{data,error}=await sb.from('messages').select('*').eq('team_id',tid()).or('from_id.eq.'+m.id+',to_id.eq.'+m.id).order('created_at',{ascending:true});
+      if(error){console.warn('[chat] load error',error.message);messages=[];return;}
+      messages=data||[];
+    }catch(e){console.warn('[chat] load fail',e);messages=[];}
+  }
+  async function sendMessage(toId,body){
+    const m=me();if(!m||!toId||!body)return;
+    const row={id:newMsgId(),team_id:tid(),from_id:m.id,to_id:toId,body:body,created_at:nowIso()};
+    messages.push(row);renderChatPanel();
+    try{const{error}=await sb.from('messages').insert(row);if(error){console.warn('[chat] send error',error.message);if(typeof showToast==='function')showToast('메시지 전송 실패: messages 테이블이 없거나 권한 문제일 수 있습니다',true);}}
+    catch(e){console.warn('[chat] send fail',e);}
+  }
+  async function markRead(peerId){
+    const m=me();if(!m)return;
+    const unread=messages.filter(x=>x.from_id===peerId&&x.to_id===m.id&&!x.read_at);
+    if(unread.length===0)return;
+    const now=nowIso();unread.forEach(x=>x.read_at=now);
+    updateBadge();
+    try{await sb.from('messages').update({read_at:now}).eq('to_id',m.id).eq('from_id',peerId).is('read_at',null);}catch(e){}
+  }
+  function getMessagesWith(peerId){const m=me();if(!m)return[];return messages.filter(x=>(x.from_id===m.id&&x.to_id===peerId)||(x.from_id===peerId&&x.to_id===m.id));}
+  function getTotalUnread(){const m=me();if(!m)return 0;return messages.filter(x=>x.to_id===m.id&&!x.read_at).length;}
+  function ensureUI(){
+    if(document.getElementById('chat-launcher'))return;
+    const b=document.createElement('button');
+    b.id='chat-launcher';b.className='chat-launcher';b.title='메시지';
+    b.innerHTML='💬<span class="chat-launcher-badge" id="chat-launcher-badge" hidden>0</span>';
+    b.addEventListener('click',()=>{if(!me()){if(typeof showToast==='function')showToast('로그인 후 이용 가능합니다.',false);return;}chatOpen=!chatOpen;if(chatOpen)chatView='list';renderChatPanel();});
+    document.body.appendChild(b);
+    const p=document.createElement('div');p.id='chat-panel';p.className='chat-panel';p.hidden=true;
+    document.body.appendChild(p);
+  }
+  function updateBadge(){
+    const lc=document.getElementById('chat-launcher');if(!lc)return;
+    const m=me();
+    lc.style.display=m?'flex':'none';
+    if(!m)return;
+    const bd=document.getElementById('chat-launcher-badge');if(!bd)return;
+    const n=getTotalUnread();
+    if(n>0){bd.hidden=false;bd.textContent=n>99?'99+':String(n);lc.classList.add('has-unread');}
+    else{bd.hidden=true;lc.classList.remove('has-unread');}
+  }
+  function renderChatPanel(){
+    ensureUI();
+    const panel=document.getElementById('chat-panel');if(!panel)return;
+    panel.hidden=!chatOpen;updateBadge();
+    if(!chatOpen)return;
+    const m=me();if(!m){panel.innerHTML='<div class="chat-panel-head"><span>메시지</span><button class="chat-close" data-chat-act="close">✕</button></div><div class="chat-panel-body"><div class="chat-empty">로그인 후 이용 가능합니다.</div></div>';return;}
+    if(chatView==='list'){
+      const peers=new Map();
+      messages.forEach(x=>{
+        const peer=x.from_id===m.id?x.to_id:x.from_id;
+        if(!peers.has(peer))peers.set(peer,{last:x,unread:0,peerId:peer});
+        else{const e=peers.get(peer);if(new Date(x.created_at)>new Date(e.last.created_at))e.last=x;}
+        if(x.from_id!==m.id&&!x.read_at)peers.get(peer).unread++;
+      });
+      state.members.filter(mm=>!mm.isObserver&&mm.id!==m.id).forEach(mm=>{if(!peers.has(mm.id))peers.set(mm.id,{last:null,unread:0,peerId:mm.id});});
+      const list=Array.from(peers.values()).sort((a,b)=>{if(a.unread&&!b.unread)return-1;if(!a.unread&&b.unread)return 1;const at=a.last?new Date(a.last.created_at).getTime():0;const bt=b.last?new Date(b.last.created_at).getTime():0;return bt-at;});
+      const totU=getTotalUnread();
+      panel.innerHTML='<div class="chat-panel-head"><span>메시지'+(totU>0?' <span class="chat-head-badge">'+totU+'</span>':'')+'</span><button class="chat-close" data-chat-act="close">✕</button></div><div class="chat-panel-body chat-list-body">'+(list.length===0?'<div class="chat-empty">대화 가능한 팀원이 없습니다.</div>':list.map(p=>{
+        const mem=state.members.find(x=>x.id===p.peerId);if(!mem)return'';
+        const last=p.last;
+        const preview=last?(last.from_id===m.id?'나: ':'')+_esc(String(last.body||'').slice(0,42))+(String(last.body||'').length>42?'…':''):'<span style="opacity:.55;">대화 없음</span>';
+        const time=last?fmtTime(last.created_at):'';
+        return'<button class="chat-list-item'+(p.unread>0?' has-unread':'')+'" data-chat-act="open-conv" data-peer="'+mem.id+'">'+
+          '<span class="chat-avatar" style="background:'+(mem.color||'#6241F5')+';">'+_esc((mem.name||'?').slice(0,1).toUpperCase())+'</span>'+
+          '<span class="chat-list-meta"><span class="chat-list-name">'+_esc(mem.name||'')+(p.unread>0?' <span class="chat-list-unread">'+p.unread+'</span>':'')+'</span><span class="chat-list-preview">'+preview+'</span></span>'+
+          (time?'<span class="chat-list-time">'+time+'</span>':'')+
+        '</button>';
+      }).join(''))+'</div>';
+    }else if(chatView==='conv'&&chatPeer){
+      const peer=state.members.find(x=>x.id===chatPeer);
+      if(!peer){chatView='list';renderChatPanel();return;}
+      const msgs=getMessagesWith(chatPeer);
+      const bodyHtml=msgs.length===0?'<div class="chat-empty">아직 메시지가 없습니다.<br>첫 메시지를 보내보세요.</div>':msgs.map((x,i)=>{
+        const mine=x.from_id===m.id;
+        const showDate=i===0||(new Date(x.created_at).toDateString()!==new Date(msgs[i-1].created_at).toDateString());
+        const dateSep=showDate?'<div class="chat-date-sep">'+new Date(x.created_at).toLocaleDateString('ko-KR')+'</div>':'';
+        return dateSep+'<div class="chat-msg '+(mine?'mine':'theirs')+'"><span class="chat-msg-body">'+_esc(x.body||'')+'</span><span class="chat-msg-time">'+fmtTime(x.created_at)+(mine&&x.read_at?' · 읽음':'')+'</span></div>';
+      }).join('');
+      panel.innerHTML='<div class="chat-panel-head"><button class="chat-back" data-chat-act="back" title="목록">←</button><span class="chat-avatar chat-head-avatar" style="background:'+(peer.color||'#6241F5')+';">'+_esc((peer.name||'?').slice(0,1).toUpperCase())+'</span><span class="chat-head-name">'+_esc(peer.name||'')+'</span><button class="chat-close" data-chat-act="close">✕</button></div>'+
+        '<div class="chat-panel-body chat-conv-body" id="chat-conv-body">'+bodyHtml+'</div>'+
+        '<div class="chat-input-wrap"><textarea class="chat-input" id="chat-input" rows="1" placeholder="메시지... (Enter 보내기 · Shift+Enter 줄바꿈)"></textarea><button class="chat-send" data-chat-act="send">보내기</button></div>';
+      const cb=document.getElementById('chat-conv-body');if(cb)cb.scrollTop=cb.scrollHeight;
+      const inp=document.getElementById('chat-input');if(inp)setTimeout(()=>inp.focus(),40);
+      markRead(chatPeer);
+    }
+  }
+  function openChatWith(peerId){chatOpen=true;chatView='conv';chatPeer=peerId;renderChatPanel();}
+  document.addEventListener('click',function(e){
+    const t=e.target.closest('[data-chat-act]');if(!t)return;
+    const act=t.dataset.chatAct;
+    if(act==='close'){chatOpen=false;renderChatPanel();}
+    else if(act==='back'){chatView='list';chatPeer=null;renderChatPanel();}
+    else if(act==='open-conv'){chatView='conv';chatPeer=t.dataset.peer;renderChatPanel();}
+    else if(act==='send'){
+      const inp=document.getElementById('chat-input');if(!inp||!chatPeer)return;
+      const body=inp.value.trim();if(!body)return;
+      sendMessage(chatPeer,body);inp.value='';
+    }
+  });
+  document.addEventListener('keydown',function(e){
+    if(e.target&&e.target.id==='chat-input'&&e.key==='Enter'&&!e.shiftKey){
+      e.preventDefault();const inp=e.target;const body=inp.value.trim();if(!body||!chatPeer)return;
+      sendMessage(chatPeer,body);inp.value='';
+    }
+  });
+  // 우클릭 (담당자 아이콘) → 그 멤버와 채팅 열기
+  document.addEventListener('contextmenu',function(e){
+    const icon=e.target.closest('.date-bar-member-icon');if(!icon)return;
+    const mid=icon.dataset.mid;if(!mid)return;
+    e.preventDefault();
+    const m=me();if(!m){if(typeof showToast==='function')showToast('메시지는 로그인 후 가능합니다.',false);return;}
+    if(mid===m.id){if(typeof showToast==='function')showToast('본인에게는 메시지를 보낼 수 없습니다.',false);return;}
+    openChatWith(mid);
+  });
+  function setupChatRealtime(){
+    if(realtimeReady)return;realtimeReady=true;
+    try{
+      sb.channel('messages-rt').on('postgres_changes',{event:'*',schema:'public',table:'messages'},function(p){
+        const r=p.new||p.old;if(!r||r.team_id!==tid())return;
+        const m=me();if(!m)return;
+        if(r.from_id!==m.id&&r.to_id!==m.id)return;
+        if(p.eventType==='DELETE'){messages=messages.filter(x=>x.id!==r.id);}
+        else if(p.eventType==='UPDATE'){const i=messages.findIndex(x=>x.id===r.id);if(i>=0)messages[i]=r;else messages.push(r);}
+        else{if(!messages.find(x=>x.id===r.id))messages.push(r);}
+        messages.sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
+        if(chatOpen)renderChatPanel();else updateBadge();
+      }).subscribe();
+    }catch(e){console.warn('[chat] realtime setup fail',e);}
+  }
+  async function bootChat(){
+    if(!me()||!tid()){updateBadge();return;}
+    if(lastBootTeamId===tid())return;
+    lastBootTeamId=tid();
+    messages=[];chatOpen=false;chatView='list';chatPeer=null;
+    await loadMessages();
+    renderChatPanel();updateBadge();setupChatRealtime();
+  }
+  // 폴링 부트스트랩 (앱 init·로그인·팀전환에 모두 대응)
+  setInterval(bootChat,1500);
 })();
