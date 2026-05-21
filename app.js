@@ -127,6 +127,12 @@ body.present .headline-input{font-size:28px}
 .drag-handle:hover{color:var(--primary)}
 .dragging{opacity:.5;cursor:grabbing}
 .drop-target{border-top:3px solid var(--primary)}
+/* v29 — 드래그 드롭 위치 인디케이터 (before·after 양쪽 모두 명확히 표시) */
+[draggable="true"].drop-target-before,[draggable="true"].drop-target-after{position:relative}
+[draggable="true"].drop-target-before::before,[draggable="true"].drop-target-after::after{content:'';position:absolute;left:4px;right:4px;height:4px;background:var(--primary);border-radius:3px;box-shadow:0 0 10px rgba(98,65,245,.55),0 0 0 1px white;z-index:50;pointer-events:none;animation:dropPulse 1s ease-in-out infinite}
+[draggable="true"].drop-target-before::before{top:-3px}
+[draggable="true"].drop-target-after::after{bottom:-3px}
+@keyframes dropPulse{0%,100%{opacity:.85}50%{opacity:1}}
 /* v8 — 검색 */
 .search-bar{position:relative;display:inline-flex;align-items:center;background:white;border:1px solid var(--line);border-radius:8px;padding:5px 11px;gap:6px;flex:1;max-width:400px}
 .search-bar:focus-within{border-color:var(--primary);box-shadow:0 0 0 2px var(--primary-soft)}
@@ -2809,9 +2815,10 @@ document.addEventListener('dragstart',e=>{
   dragSrc=el;el.classList.add('dragging');
   e.dataTransfer.effectAllowed='move';try{e.dataTransfer.setData('text/plain',el.dataset.dragType);}catch(err){}
 });
+function _clearDropTargets(){document.querySelectorAll('.drop-target,.drop-target-before,.drop-target-after').forEach(el=>el.classList.remove('drop-target','drop-target-before','drop-target-after'));}
 document.addEventListener('dragend',e=>{
   if(dragSrc)dragSrc.classList.remove('dragging');
-  document.querySelectorAll('.drop-target').forEach(el=>el.classList.remove('drop-target'));
+  _clearDropTargets();
   dragSrc=null;
 });
 document.addEventListener('dragover',e=>{
@@ -2820,8 +2827,11 @@ document.addEventListener('dragover',e=>{
   if(tgt.dataset.dragType!==dragSrc.dataset.dragType)return;
   if(tgt.dataset.dragParent!==dragSrc.dataset.dragParent)return; // 같은 부모만
   e.preventDefault();
-  document.querySelectorAll('.drop-target').forEach(el=>el.classList.remove('drop-target'));
-  tgt.classList.add('drop-target');
+  // v29 — 마우스 Y가 target 중간보다 위면 before, 아래면 after
+  const r=tgt.getBoundingClientRect();
+  const after=e.clientY>r.top+r.height/2;
+  _clearDropTargets();
+  tgt.classList.add(after?'drop-target-after':'drop-target-before');
 });
 document.addEventListener('drop',async e=>{
   if(!dragSrc)return;
@@ -2829,45 +2839,54 @@ document.addEventListener('drop',async e=>{
   if(tgt.dataset.dragType!==dragSrc.dataset.dragType)return;
   if(tgt.dataset.dragParent!==dragSrc.dataset.dragParent)return;
   e.preventDefault();
+  const r=tgt.getBoundingClientRect();
+  const after=e.clientY>r.top+r.height/2;
   const type=dragSrc.dataset.dragType;
-  if(type==='obj'){await reorderObjectives(dragSrc.dataset.objId,tgt.dataset.objId);}
-  else if(type==='kr'){await reorderKRs(dragSrc.dataset.dragParent,dragSrc.dataset.krId,tgt.dataset.krId);}
-  else if(type==='init'){await reorderInits(dragSrc.dataset.dragParent,dragSrc.dataset.initId,tgt.dataset.initId);}
-  else if(type==='member'){await reorderMembers(dragSrc.dataset.memId,tgt.dataset.memId);}
-  document.querySelectorAll('.drop-target').forEach(el=>el.classList.remove('drop-target'));
+  if(type==='obj'){await reorderObjectives(dragSrc.dataset.objId,tgt.dataset.objId,after);}
+  else if(type==='kr'){await reorderKRs(dragSrc.dataset.dragParent,dragSrc.dataset.krId,tgt.dataset.krId,after);}
+  else if(type==='init'){await reorderInits(dragSrc.dataset.dragParent,dragSrc.dataset.initId,tgt.dataset.initId,after);}
+  else if(type==='member'){await reorderMembers(dragSrc.dataset.memId,tgt.dataset.memId,after);}
+  _clearDropTargets();
   dragSrc=null;
 });
-async function reorderObjectives(srcId,tgtId){
+function _reinsert(arr,sIdx,tIdx,after){
+  const[item]=arr.splice(sIdx,1);
+  let insertIdx=tIdx;
+  if(sIdx<tIdx)insertIdx--; // src 제거로 인한 보정
+  if(after)insertIdx++;
+  arr.splice(insertIdx,0,item);
+}
+async function reorderObjectives(srcId,tgtId,after){
   const arr=state.objectives;const sIdx=arr.findIndex(o=>o.id===srcId);const tIdx=arr.findIndex(o=>o.id===tgtId);
   if(sIdx<0||tIdx<0)return;
-  const[item]=arr.splice(sIdx,1);arr.splice(tIdx,0,item);
+  _reinsert(arr,sIdx,tIdx,after);
   render();
   // sort_order 업데이트
   for(let i=0;i<arr.length;i++){markLocal('objectives',arr[i].id);await sb.from('objectives').update({sort_order:i}).eq('id',arr[i].id);}
   showToast('순서 저장됨');
 }
-async function reorderKRs(oid,srcId,tgtId){
+async function reorderKRs(oid,srcId,tgtId,after){
   const o=state.objectives.find(x=>x.id===oid);if(!o)return;
   const sIdx=o.keyResults.findIndex(k=>k.id===srcId);const tIdx=o.keyResults.findIndex(k=>k.id===tgtId);
   if(sIdx<0||tIdx<0)return;
-  const[item]=o.keyResults.splice(sIdx,1);o.keyResults.splice(tIdx,0,item);
+  _reinsert(o.keyResults,sIdx,tIdx,after);
   render();
   for(let i=0;i<o.keyResults.length;i++){markLocal('key_results',o.keyResults[i].id);await sb.from('key_results').update({sort_order:i}).eq('id',o.keyResults[i].id);}
   showToast('순서 저장됨');
 }
-async function reorderInits(krid,srcId,tgtId){
+async function reorderInits(krid,srcId,tgtId,after){
   let kr=null;state.objectives.forEach(o=>o.keyResults.forEach(k=>{if(k.id===krid)kr=k;}));if(!kr)return;
   const sIdx=kr.initiatives.findIndex(i=>i.id===srcId);const tIdx=kr.initiatives.findIndex(i=>i.id===tgtId);
   if(sIdx<0||tIdx<0)return;
-  const[item]=kr.initiatives.splice(sIdx,1);kr.initiatives.splice(tIdx,0,item);
+  _reinsert(kr.initiatives,sIdx,tIdx,after);
   render();
   for(let i=0;i<kr.initiatives.length;i++){markLocal('initiatives',kr.initiatives[i].id);await sb.from('initiatives').update({sort_order:i}).eq('id',kr.initiatives[i].id);}
   showToast('순서 저장됨');
 }
-async function reorderMembers(srcId,tgtId){
+async function reorderMembers(srcId,tgtId,after){
   const arr=state.members;const sIdx=arr.findIndex(m=>m.id===srcId);const tIdx=arr.findIndex(m=>m.id===tgtId);
   if(sIdx<0||tIdx<0||srcId===tgtId)return;
-  const[item]=arr.splice(sIdx,1);arr.splice(tIdx,0,item);
+  _reinsert(arr,sIdx,tIdx,after);
   render();
   for(let i=0;i<arr.length;i++){markLocal('members',arr[i].id);await sb.from('members').update({sort_order:i}).eq('id',arr[i].id);}
   showToast('팀원 순서 저장됨');
