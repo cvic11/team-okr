@@ -431,24 +431,25 @@ html.dark .chat-input{background:#1A1D27;color:#D1D5DB;border-color:#22252F}
 /* v44 — Init 행 가운데에 떨어뜨리면 nest (해당 Init의 할일로 demote) */
 [draggable="true"].drop-target-nest{background:var(--primary-soft) !important;outline:2px dashed var(--primary);outline-offset:-3px;border-radius:8px;position:relative}
 [draggable="true"].drop-target-nest::before,[draggable="true"].drop-target-nest::after{display:none}
-/* v45 — 드롭 전 라이브 프리뷰 (source 페이드 + target sub-list에 ghost row) */
-.drag-source-nesting{opacity:.32 !important;transform:scale(.97) !important;transition:opacity .15s,transform .15s !important;filter:grayscale(.3)}
-.nest-preview-wrap{margin:6px 0 4px 28px !important;padding:8px 12px !important;background:rgba(98,65,245,.08) !important;border-left:3px solid var(--primary) !important;border-radius:0 8px 8px 0}
-.nest-preview-ghost{display:flex;align-items:center;gap:8px;padding:7px 10px;background:linear-gradient(90deg,rgba(98,65,245,.16),rgba(98,65,245,.06));border:1px dashed var(--primary);border-radius:6px;animation:nestPreviewIn .2s ease-out;margin-top:4px}
-.nest-preview-arrow{color:var(--primary);font-weight:700;font-size:14px;flex-shrink:0}
-.nest-preview-title{flex:1;font-size:13px;font-weight:700;color:var(--primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.nest-preview-hint{font-size:10.5px;color:var(--primary);opacity:.7;font-weight:600;flex-shrink:0;background:white;padding:2px 7px;border-radius:5px}
-@keyframes nestPreviewIn{from{opacity:0;transform:translateY(-4px) scale(.96)}to{opacity:1;transform:translateY(0) scale(1)}}
-/* sub-task 행 — 제목 input 우선, 메타 작게 */
-.init-sub-row{display:flex;align-items:center;gap:6px;padding:5px 0;border-bottom:1px dashed rgba(0,0,0,.06)}
-.init-sub-row .init-sub-title{flex:1 1 auto;min-width:0;font-size:13px;padding:6px 10px;background:white;border:1px solid var(--line);border-radius:6px;font-family:inherit;outline:none;transition:border-color .12s,box-shadow .12s}
-.init-sub-row .init-sub-title:focus{border-color:var(--primary);box-shadow:0 0 0 2px var(--primary-soft)}
-.init-sub-row .init-sub-meta{font-size:11px;padding:4px 7px;background:#FAFAFA;border:1px solid var(--line);border-radius:6px;flex-shrink:0;color:var(--text-soft);outline:none;font-family:inherit;cursor:pointer;font-weight:600;height:28px}
-.init-sub-row .init-sub-meta:hover{border-color:var(--primary);color:var(--primary)}
-.init-sub-row select.init-sub-meta{width:82px;max-width:82px}
-.init-sub-row input.init-sub-due{width:104px}
-.init-sub-row input.init-sub-due.overdue{color:var(--warning);border-color:#F5C2C5;background:var(--warning-soft)}
-.init-sub-list{width:auto !important;margin:6px 0 4px 28px !important;padding:10px 14px !important;background:rgba(98,65,245,.04);border-left:3px solid var(--primary-soft);border-radius:0 8px 8px 0}
+/* v47 — 드롭 전 라이브 프리뷰: source 자체를 숨기고 target sub-list에 실제 task 형태로 표시 */
+.drag-source-hidden{opacity:0 !important;height:0 !important;padding:0 !important;margin:0 !important;border:0 !important;overflow:hidden !important;pointer-events:none}
+.nest-preview-wrap{margin:6px 0 4px 28px !important;padding:6px 8px !important;background:rgba(98,65,245,.08) !important;border-left:3px solid var(--primary) !important;border-radius:0 8px 8px 0}
+.nest-preview-row{animation:nestPreviewIn .22s ease-out;background:linear-gradient(90deg,rgba(98,65,245,.14),rgba(98,65,245,.05)) !important;border:1px dashed var(--primary);border-radius:6px;margin:2px 0;position:relative}
+.nest-preview-row::after{content:'미리보기 — 놓으면 확정';position:absolute;right:8px;top:50%;transform:translateY(-50%);background:var(--primary);color:white;font-size:9.5px;font-weight:700;padding:2px 7px;border-radius:4px;pointer-events:none;white-space:nowrap;box-shadow:0 2px 5px rgba(98,65,245,.35)}
+@keyframes nestPreviewIn{from{opacity:0;transform:translateY(-6px) scale(.97)}to{opacity:1;transform:translateY(0) scale(1)}}
+/* v47 — sub-task 행: init-row-main과 동일 레이아웃, 축소판 */
+.init-sub-row{display:block;border-bottom:1px dashed rgba(0,0,0,.04);position:relative}
+.init-sub-row+.init-sub-row{margin-top:1px}
+.init-sub-row .init-row-main{padding:6px 14px 6px 36px;gap:4px}
+.init-sub-row .init-title-input{font-size:12.5px;padding:4px 7px;min-width:120px}
+.init-sub-row .init-status{font-size:10px;padding:2px 6px}
+.init-sub-row .kr-owner-select{font-size:10px;padding:2px 6px;max-width:84px}
+.init-sub-row .init-meta-date{font-size:9.5px;padding:2px 5px;height:22px}
+.init-sub-row .init-meta-date input[type="date"]{width:80px;font-size:10px}
+.init-sub-row .btn-icon{padding:2px 4px}
+.init-sub-row .drag-handle{font-size:9px}
+.init-sub-row .rt-check{width:16px;height:16px;border-width:1.5px}
+.init-sub-list{width:auto !important;margin:6px 0 4px 28px !important;padding:6px 8px !important;background:rgba(98,65,245,.04);border-left:3px solid var(--primary-soft);border-radius:0 8px 8px 0}
 @media(max-width:760px){
   .init-row{padding:10px 12px !important}
   .init-row-meta{padding-left:0;gap:5px}
@@ -1754,13 +1755,25 @@ function renderInitiative(krId,init){
     +`</div>`;
   return `<div class="init-row" data-init-id="${init.id}" draggable="${initEdit?'true':'false'}" data-drag-type="init" data-drag-parent="${krId}">${mainLine}${ro?`<div style="width:100%;">${renderRealityBox('initiative',init.id,init.realityBlocker,init.realityHelp)}</div>`:''}${subBody}</div>`;
 }
-// v31 — Initiative 하위 sub-task 행 (컴팩트 칩 스타일 — 제목 input이 행 너비 우선)
+// v47 — Initiative 하위 sub-task 행: 이니셔티브와 동일 레이아웃(축소판), 드래그 핸들 포함
 function renderInitSubTaskRow(initId,t,editable){
   const done=t.status==='done';
   const ro=editable?'':' readonly';
   const dis=editable?'':' disabled';
   const overdue=isOverdue(t.due_date,t.status);
-  return `<div class="init-sub-row" data-init-sub-id="${t.id}"><button class="rt-check ${done?'checked':''}" style="width:18px;height:18px;border-width:1.5px;border-radius:4px;flex-shrink:0;" data-act="toggle-init-sub-done" data-iid="${initId}" data-stid="${t.id}"${dis} title="완료">${done?'✓':''}</button><input class="init-sub-title" data-field="init-sub-title" data-iid="${initId}" data-stid="${t.id}" value="${esc(t.title||'')}" placeholder="할일 내용" style="${done?'text-decoration:line-through;color:var(--text-soft);':''}"${ro}/><select class="init-sub-meta" data-field="init-sub-owner" data-iid="${initId}" data-stid="${t.id}"${dis} title="담당자"><option value="">담당</option>${state.members.map(m=>`<option value="${m.id}" ${t.owner_id===m.id?'selected':''}>${esc(m.name)}</option>`).join('')}</select><input type="date" class="init-sub-meta init-sub-due ${overdue?'overdue':''}" data-field="init-sub-due" data-iid="${initId}" data-stid="${t.id}" value="${t.due_date||''}"${ro} title="마감"/>${editable?`<button class="btn-icon" data-act="del-init-sub" data-iid="${initId}" data-stid="${t.id}" title="삭제">${I.x}</button>`:''}</div>`;
+  const ownerOpt=state.members.map(m=>`<option value="${m.id}" ${t.owner_id===m.id?'selected':''}>${esc(m.name)}</option>`).join('');
+  const statusOpt=Object.entries(STATUS_LABELS).map(([k,v])=>`<option value="${k}" ${(t.status||'todo')===k?'selected':''}>${v}</option>`).join('');
+  return `<div class="init-sub-row" data-init-sub-id="${t.id}" data-task-id="${t.id}" draggable="${editable?'true':'false'}" data-drag-type="init-task" data-drag-parent="${initId}">`
+    +`<div class="init-row-main">`
+    +`<span class="drag-handle" style="font-size:10px;${editable?'':'opacity:.3;'}" title="드래그로 순서 변경">⋮⋮</span>`
+    +`<button class="rt-check ${done?'checked':''}" style="width:18px;height:18px;border-width:1.5px;border-radius:4px;flex-shrink:0;" data-act="toggle-init-sub-done" data-iid="${initId}" data-stid="${t.id}"${dis} title="완료">${done?'✓':''}</button>`
+    +`<select class="init-status ${t.status||'todo'}" data-field="init-sub-status" data-iid="${initId}" data-stid="${t.id}"${dis}>${statusOpt}</select>`
+    +`<input class="init-title-input" data-field="init-sub-title" data-iid="${initId}" data-stid="${t.id}" value="${esc(t.title||'')}" placeholder="할일 내용" style="${done?'text-decoration:line-through;color:var(--text-soft);':''}"${ro}/>`
+    +`<select class="kr-owner-select" data-field="init-sub-owner" data-iid="${initId}" data-stid="${t.id}"${dis} title="담당자"><option value="">담당</option>${ownerOpt}</select>`
+    +`<label class="init-meta-date" title="시작일"><span>시작</span><input type="date" data-field="init-sub-start" data-iid="${initId}" data-stid="${t.id}" value="${t.start_date||''}"${ro} /></label>`
+    +`<label class="init-meta-date ${overdue?'overdue':''}" title="마감일"><span>마감</span><input type="date" data-field="init-sub-due" data-iid="${initId}" data-stid="${t.id}" value="${t.due_date||''}"${ro} /></label>`
+    +(editable?`<button class="btn-icon" data-act="del-init-sub" data-iid="${initId}" data-stid="${t.id}" title="삭제" style="color:var(--warning);">${I.x}</button>`:'')
+    +`</div></div>`;
 }
 // v16 — Initiative 담당자 선택 모달 (다중 + 팀 전원)
 function openInitOwnersPicker(krId,iid){
@@ -3269,35 +3282,60 @@ document.addEventListener('dragstart',e=>{
   e.dataTransfer.effectAllowed='move';try{e.dataTransfer.setData('text/plain',el.dataset.dragType);}catch(err){}
 });
 function _clearDropTargets(){document.querySelectorAll('.drop-target,.drop-target-before,.drop-target-after,.drop-target-nest,.drop-target-into').forEach(el=>el.classList.remove('drop-target','drop-target-before','drop-target-after','drop-target-nest','drop-target-into'));}
-// v45 — 드롭 전 라이브 프리뷰: source를 숨기고 target의 sub-list에 ghost row 삽입
+// v47 — 드롭 전 강화된 라이브 프리뷰: source를 숨기고 target sub-list에 실제 task 형태 행 표시
 let _nestPreview=null;
 function showNestPreview(srcEl,tgtEl){
   const tgtIid=tgtEl.dataset.initId;
-  if(_nestPreview&&_nestPreview.tgtIid===tgtIid)return; // 동일 대상이면 유지
+  if(_nestPreview&&_nestPreview.tgtIid===tgtIid)return;
   clearNestPreview();
-  const titleInput=srcEl.querySelector('input[data-field="init-title"]');
-  const title=titleInput?titleInput.value:'(이니셔티브)';
-  const escFn=(typeof esc==='function')?esc:(typeof escapeHtml==='function'?escapeHtml:String);
-  const ghost=document.createElement('div');
-  ghost.className='nest-preview-ghost';
-  ghost.innerHTML='<span class="nest-preview-arrow">↳</span><span class="nest-preview-title">'+escFn(title||'(제목 없음)')+'</span><span class="nest-preview-hint">놓으면 이 위치로 이동</span>';
-  // sub-list가 이미 펼쳐져 있으면 그 안에, 없으면 임시 wrap 생성
+  // source init 데이터 찾기
+  const srcIid=srcEl.dataset.initId;
+  let srcInit=null;
+  (state.objectives||[]).forEach(o=>(o.keyResults||[]).forEach(k=>(k.initiatives||[]).forEach(i=>{
+    if(i.id===srcIid)srcInit=i;
+  })));
+  if(!srcInit)return;
+  // demote 결과와 동일한 task 객체 시뮬레이션
+  const ownerIds=(srcInit.ownerId||'').split(',').map(s=>s.trim()).filter(Boolean);
+  const ownerId=(ownerIds[0]&&ownerIds[0]!=='__team_all__')?ownerIds[0]:null;
+  const fakeTask={
+    id:'__nest-preview__',
+    title:srcInit.title||'',
+    status:srcInit.status||'todo',
+    owner_id:ownerId,
+    start_date:srcInit.startDate||null,
+    due_date:srcInit.dueDate||null
+  };
+  // 실제 task 행 HTML 생성 (renderInitSubTaskRow 재사용)
+  let html='';
+  try{html=renderInitSubTaskRow(tgtIid,fakeTask,false);}catch(_){return;}
+  // 대상 sub-list 찾기 (없으면 임시 wrap 생성)
   let subList=tgtEl.querySelector('.init-sub-list');
   let tempWrap=null;
-  if(subList){subList.appendChild(ghost);}
-  else{
+  if(!subList){
     tempWrap=document.createElement('div');
     tempWrap.className='init-sub-list nest-preview-wrap';
-    tempWrap.appendChild(ghost);
+    tempWrap.dataset.dropZone='init-sub-list';
+    tempWrap.dataset.parentIid=tgtIid;
     tgtEl.appendChild(tempWrap);
+    subList=tempWrap;
   }
-  srcEl.classList.add('drag-source-nesting');
-  _nestPreview={srcEl,tgtEl,tgtIid,ghost,tempWrap};
+  const wrapper=document.createElement('div');
+  wrapper.innerHTML=html;
+  const previewRow=wrapper.firstElementChild;
+  if(!previewRow)return;
+  previewRow.classList.add('nest-preview-row');
+  previewRow.removeAttribute('draggable');
+  previewRow.style.pointerEvents='none';
+  subList.appendChild(previewRow);
+  // source 완전 숨김 (실제 사라진 듯)
+  srcEl.classList.add('drag-source-hidden');
+  _nestPreview={srcEl,tgtEl,tgtIid,previewRow,tempWrap};
 }
 function clearNestPreview(){
   if(!_nestPreview)return;
-  try{_nestPreview.srcEl.classList.remove('drag-source-nesting');}catch(_){}
-  try{_nestPreview.ghost.remove();}catch(_){}
+  try{_nestPreview.srcEl.classList.remove('drag-source-hidden');}catch(_){}
+  try{_nestPreview.previewRow.remove();}catch(_){}
   if(_nestPreview.tempWrap){try{_nestPreview.tempWrap.remove();}catch(_){}}
   _nestPreview=null;
 }
@@ -3384,6 +3422,7 @@ document.addEventListener('drop',async e=>{
   if(type==='obj'){await reorderObjectives(dragSrc.dataset.objId,tgt.dataset.objId,after);}
   else if(type==='kr'){await reorderKRs(dragSrc.dataset.dragParent,dragSrc.dataset.krId,tgt.dataset.krId,after);}
   else if(type==='init'){await reorderInits(dragSrc.dataset.dragParent,dragSrc.dataset.initId,tgt.dataset.initId,after);}
+  else if(type==='init-task'){await reorderInitTasks(dragSrc.dataset.dragParent,dragSrc.dataset.taskId,tgt.dataset.taskId,after);}
   else if(type==='member'){await reorderMembers(dragSrc.dataset.memId,tgt.dataset.memId,after);}
   _clearDropTargets();
   dragSrc=null;
@@ -3472,6 +3511,19 @@ async function reorderInits(krid,srcId,tgtId,after){
   for(let i=0;i<kr.initiatives.length;i++){markLocal('initiatives',kr.initiatives[i].id);await sb.from('initiatives').update({sort_order:i}).eq('id',kr.initiatives[i].id);}
   showToast('순서 저장됨');
 }
+async function reorderInitTasks(initId,srcId,tgtId,after){
+  const arr=state.initiativeTasks[initId]||[];
+  const sIdx=arr.findIndex(t=>t.id===srcId);const tIdx=arr.findIndex(t=>t.id===tgtId);
+  if(sIdx<0||tIdx<0)return;
+  _reinsert(arr,sIdx,tIdx,after);
+  scheduleRender();
+  for(let i=0;i<arr.length;i++){
+    arr[i].sort_order=i;
+    markLocal('initiative_tasks',arr[i].id);
+    try{await sb.from('initiative_tasks').update({sort_order:i}).eq('id',arr[i].id);}catch(_){}
+  }
+  showToast('할일 순서 저장됨');
+}
 async function reorderMembers(srcId,tgtId,after){
   const arr=state.members;const sIdx=arr.findIndex(m=>m.id===srcId);const tIdx=arr.findIndex(m=>m.id===tgtId);
   if(sIdx<0||tIdx<0||srcId===tgtId)return;
@@ -3530,6 +3582,7 @@ document.addEventListener('input',e=>{
   // v30 — Initiative 하위 sub-task 필드
   else if(f==='init-sub-title'){const iid=el.dataset.iid,stid=el.dataset.stid;const t=(state.initiativeTasks[iid]||[]).find(x=>x.id===stid);if(t){t.title=el.value;saveInitiativeTask(t);}}
   else if(f==='init-sub-due'){const iid=el.dataset.iid,stid=el.dataset.stid;const t=(state.initiativeTasks[iid]||[]).find(x=>x.id===stid);if(t){t.due_date=el.value||null;saveInitiativeTask(t);}}
+  else if(f==='init-sub-start'){const iid=el.dataset.iid,stid=el.dataset.stid;const t=(state.initiativeTasks[iid]||[]).find(x=>x.id===stid);if(t){t.start_date=el.value||null;saveInitiativeTask(t);}}
   else if(f==='rt-note'){saveRoutineLog(el.dataset.rid,viewingDate,!!(state.routineLogs[viewingDate]?.[el.dataset.rid]?.completed),el.value);}
   else if(f==='r-summary'){if(window._editingReview)window._editingReview.summary=el.value;}
   else if(f==='r-worked'){if(window._editingReview)window._editingReview.what_worked=el.value;}
@@ -3556,6 +3609,7 @@ document.addEventListener('change',async e=>{
   else if(f==='rt-owner'){const r=state.routines.find(x=>x.id===el.dataset.rid);if(r){r.owner_id=el.value||null;saveRoutine(r);}}
   // v30 — Initiative 하위 sub-task 담당자
   else if(f==='init-sub-owner'){const iid=el.dataset.iid,stid=el.dataset.stid;const t=(state.initiativeTasks[iid]||[]).find(x=>x.id===stid);if(t){t.owner_id=el.value||null;saveInitiativeTask(t);}}
+  else if(f==='init-sub-status'){const iid=el.dataset.iid,stid=el.dataset.stid;const t=(state.initiativeTasks[iid]||[]).find(x=>x.id===stid);if(t){t.status=el.value;saveInitiativeTask(t);scheduleRender();}}
   else if(f==='member-color'){const m=state.members.find(x=>x.id===el.dataset.mid);if(m){m.color=el.value;saveMember(m);}}
   else if(f==='helper-member'){saveEntry(viewingDate,el.dataset.mid,'helper_member_id',el.value);}
 });
