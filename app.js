@@ -298,9 +298,15 @@ html.dark .krl-cmt-thread{background:rgba(98,65,245,.12);border-left-color:var(-
 html.dark .krl-cmt-input{background:#1B1E27;color:#D1D5DB;border-color:#22252F}
 html.dark .krl-cmt-item{border-bottom-color:rgba(255,255,255,.06)}
 /* v21 — WBS 막대 드래그 */
-.wbs-bar{cursor:grab;user-select:none;touch-action:none;transition:box-shadow .12s,filter .12s}
+.wbs-bar{cursor:grab;user-select:none;touch-action:none;transition:box-shadow .12s,filter .12s;position:absolute}
 .wbs-bar:hover{filter:brightness(1.05);box-shadow:0 2px 6px rgba(0,0,0,.18)!important}
 .wbs-bar.dragging{cursor:grabbing;opacity:.88;box-shadow:0 6px 14px rgba(0,0,0,.28)!important;z-index:10;transition:none}
+.wbs-bar.dragging.drag-resize-start,.wbs-bar.dragging.drag-resize-end{cursor:ew-resize}
+/* v27 — 끝 가까이 hover 시 미세한 시각 힌트 */
+.wbs-bar::before,.wbs-bar::after{content:'';position:absolute;top:2px;bottom:2px;width:3px;background:rgba(255,255,255,.0);border-radius:2px;pointer-events:none;transition:background .12s}
+.wbs-bar::before{left:2px}
+.wbs-bar::after{right:2px}
+.wbs-bar:hover::before,.wbs-bar:hover::after{background:rgba(255,255,255,.45)}
 .wbs-drag-tip{position:fixed;z-index:9999;background:#26215C;color:white;padding:6px 10px;border-radius:6px;font-size:11.5px;font-weight:700;pointer-events:none;box-shadow:0 4px 12px rgba(0,0,0,.3);white-space:nowrap;font-family:inherit;line-height:1.45}
 /* v23 — 상단 날짜바의 담당자 아이콘 (클릭 점프) */
 .date-bar-members{display:inline-flex;gap:5px;align-items:center;margin-left:6px;flex-wrap:wrap}
@@ -1894,6 +1900,23 @@ function renderWBS(){
     if(typeof selfMember==='function'&&!selfMember())return false;
     return true;
   }
+  function detectMode(bar,clientX){
+    const r=bar.getBoundingClientRect();
+    const handle=r.width<16?0:Math.min(10,r.width/3);
+    if(handle>0){
+      if(clientX-r.left<handle)return'resize-start';
+      if(r.right-clientX<handle)return'resize-end';
+    }
+    return'move';
+  }
+  // v27 — 호버 시 끝 가까우면 커서 변경
+  document.addEventListener('mousemove',function(e){
+    if(drag)return;
+    const bar=e.target.closest('.wbs-bar');
+    if(!bar)return;
+    const m=detectMode(bar,e.clientX);
+    bar.style.cursor=m==='move'?'grab':'ew-resize';
+  });
   document.addEventListener('pointerdown',function(e){
     if(e.button!==0&&e.pointerType==='mouse')return; // 좌클릭만
     const bar=e.target.closest('.wbs-bar');
@@ -1903,17 +1926,23 @@ function renderWBS(){
     const found=findItem(type,id);
     if(!found||!found.item)return;
     const it=found.item;
-    if(!it.startDate&&!it.dueDate)return; // 양쪽 다 없으면 이동 무의미
+    const mode=detectMode(bar,e.clientX);
+    // 모드별 필수 날짜 검사
+    if(mode==='resize-start'&&!it.startDate)return;
+    if(mode==='resize-end'&&!it.dueDate)return;
+    if(mode==='move'&&!it.startDate&&!it.dueDate)return;
     drag={
-      bar,type,id,found,
+      bar,type,id,found,mode,
       origStart:it.startDate,origEnd:it.dueDate,
       startX:e.clientX,
       origLeft:parseFloat(bar.style.left)||0,
+      origWidth:parseFloat(bar.style.width)||bar.getBoundingClientRect().width,
       moved:false,days:0,
       pointerId:e.pointerId
     };
     try{bar.setPointerCapture(e.pointerId);}catch(_){}
     bar.classList.add('dragging');
+    bar.classList.add('drag-'+mode);
   },true);
   document.addEventListener('pointermove',function(e){
     if(!drag)return;
@@ -1921,13 +1950,31 @@ function renderWBS(){
     if(!drag.moved&&Math.abs(dx)<4)return;
     drag.moved=true;
     const ppd=pxPerDay();
-    const days=Math.round(dx/ppd);
+    let days=Math.round(dx/ppd);
+    if(drag.mode==='move'){
+      drag.bar.style.left=(drag.origLeft+days*ppd)+'px';
+    }else if(drag.mode==='resize-start'){
+      // 시작을 뒤로 밀수록 width 축소, 최소 1일 보장
+      const maxDays=Math.floor((drag.origWidth-ppd)/ppd);
+      if(days>maxDays)days=maxDays;
+      drag.bar.style.left=(drag.origLeft+days*ppd)+'px';
+      drag.bar.style.width=(drag.origWidth-days*ppd)+'px';
+    }else if(drag.mode==='resize-end'){
+      // 마감을 앞으로 당기면 width 축소, 최소 1일 보장
+      const minDays=-Math.floor((drag.origWidth-ppd)/ppd);
+      if(days<minDays)days=minDays;
+      drag.bar.style.width=(drag.origWidth+days*ppd)+'px';
+    }
     drag.days=days;
-    drag.bar.style.left=(drag.origLeft+days*ppd)+'px';
-    const ns=drag.origStart?shiftYMD(drag.origStart,days):null;
-    const ne=drag.origEnd?shiftYMD(drag.origEnd,days):null;
+    // 툴팁 — 모드에 따라 표시 다름
+    const moveStart=drag.mode==='move'||drag.mode==='resize-start';
+    const moveEnd=drag.mode==='move'||drag.mode==='resize-end';
+    const ns=drag.origStart&&moveStart?shiftYMD(drag.origStart,days):drag.origStart;
+    const ne=drag.origEnd&&moveEnd?shiftYMD(drag.origEnd,days):drag.origEnd;
     let html='';
-    if(ns&&ne)html=fmtMD(ns)+' ~ '+fmtMD(ne);
+    if(drag.mode==='resize-start'&&ns)html='시작 '+fmtMD(ns);
+    else if(drag.mode==='resize-end'&&ne)html='마감 '+fmtMD(ne);
+    else if(ns&&ne)html=fmtMD(ns)+' ~ '+fmtMD(ne);
     else if(ne)html='마감 '+fmtMD(ne);
     else if(ns)html='시작 '+fmtMD(ns);
     html+='<span style="opacity:.7;margin-left:6px;">('+(days>0?'+':'')+days+'일)</span>';
@@ -1937,16 +1984,22 @@ function renderWBS(){
     if(!drag)return;
     const d=drag;drag=null;
     try{d.bar.releasePointerCapture(e.pointerId);}catch(_){}
-    d.bar.classList.remove('dragging');
+    d.bar.classList.remove('dragging','drag-move','drag-resize-start','drag-resize-end');
     hideTip();
     if(!d.moved||d.days===0)return;
     // 후속 click 이벤트(wbs-jump) 차단
     d.bar.dataset.justDragged='1';
     setTimeout(()=>{try{delete d.bar.dataset.justDragged;}catch(_){}},300);
-    // 상태 반영 + 저장
+    // 상태 반영 + 저장 (모드별 날짜만 변경)
     const it=d.found.item;
-    if(it.startDate)it.startDate=shiftYMD(it.startDate,d.days);
-    if(it.dueDate)it.dueDate=shiftYMD(it.dueDate,d.days);
+    if(d.mode==='move'){
+      if(it.startDate)it.startDate=shiftYMD(it.startDate,d.days);
+      if(it.dueDate)it.dueDate=shiftYMD(it.dueDate,d.days);
+    }else if(d.mode==='resize-start'){
+      if(it.startDate)it.startDate=shiftYMD(it.startDate,d.days);
+    }else if(d.mode==='resize-end'){
+      if(it.dueDate)it.dueDate=shiftYMD(it.dueDate,d.days);
+    }
     try{
       if(d.found.kind==='O'&&typeof saveObjective==='function')saveObjective(it);
       else if(d.found.kind==='KR'&&typeof saveKR==='function')saveKR(d.found.oid,it);
@@ -1957,7 +2010,7 @@ function renderWBS(){
   document.addEventListener('pointercancel',function(e){
     if(!drag)return;
     try{drag.bar.releasePointerCapture(e.pointerId);}catch(_){}
-    drag.bar.classList.remove('dragging');
+    drag.bar.classList.remove('dragging','drag-move','drag-resize-start','drag-resize-end');
     hideTip();
     drag=null;
   },true);
