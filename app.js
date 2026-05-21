@@ -2150,9 +2150,13 @@ function renderWBS(){
     d.bar.classList.remove('dragging','drag-move','drag-resize-start','drag-resize-end');
     hideTip();
     if(DBG())console.log('[wbs-drag] end',{moved:d.moved,days:d.days});
+    // v39 — 사용자가 움직였다면 이후 클릭은 무조건 차단 (날짜 변경 없는 작은 드래그라도 점프 방지)
+    if(d.moved){
+      d.bar.dataset.justDragged='1';
+      setTimeout(()=>{try{delete d.bar.dataset.justDragged;}catch(_){}},300);
+      if(window._wbsJumpTimer){clearTimeout(window._wbsJumpTimer);window._wbsJumpTimer=null;}
+    }
     if(!d.moved||d.days===0)return;
-    d.bar.dataset.justDragged='1';
-    setTimeout(()=>{try{delete d.bar.dataset.justDragged;}catch(_){}},300);
     const it=d.found.item;
     if(d.mode==='move'){
       if(d.origStart)it.startDate=shiftYMD(d.origStart,d.days);
@@ -2280,6 +2284,8 @@ function renderWBS(){
     const bar=e.target.closest('.wbs-bar');
     if(!bar)return;
     e.stopImmediatePropagation();e.preventDefault();
+    // v39 — 예약된 단일클릭 점프 취소 (더블클릭이 우선)
+    if(window._wbsJumpTimer){clearTimeout(window._wbsJumpTimer);window._wbsJumpTimer=null;}
     openDatePopover(bar);
   },true);
 })();
@@ -2762,26 +2768,31 @@ document.addEventListener('click',async e=>{
   if(a==='wbs-toggle'){const key=btn.dataset.key;const set=window._wbsToggled||(window._wbsToggled=new Set());set.has(key)?set.delete(key):set.add(key);render();return;}
   if(a==='wbs-view'){window._wbsView=btn.dataset.mode;render();return;}
   if(a==='wbs-jump'){
+    // v39 — 더블클릭(날짜 팝오버) 가능성을 위해 280ms 지연, dblclick 발동 시 취소
     const type=btn.dataset.type;const id=btn.dataset.id;
-    currentView='okr';
-    if(type==='O'){expanded.add(id);}
-    else if(type==='KR'){expanded.add(btn.dataset.oid);krCollapsed.delete(id);}
-    else if(type==='I'){expanded.add(btn.dataset.oid);krCollapsed.delete(btn.dataset.krid);}
-    render();
-    // v38 — 점프 후 펄스 하이라이트로 시각 cue 강화
-    setTimeout(()=>{
-      const sel=type==='O'?`[data-obj-id="${id}"]`:type==='KR'?`[data-kr-id="${id}"]`:`[data-init-id="${id}"]`;
-      const el=document.querySelector(sel);
-      if(!el)return;
-      el.scrollIntoView({behavior:'smooth',block:'center'});
-      // 스크롤 안정화 후 애니메이션 (재실행을 위해 클래스 제거→추가)
+    const oid=btn.dataset.oid;const krid=btn.dataset.krid;
+    if(window._wbsJumpTimer){clearTimeout(window._wbsJumpTimer);window._wbsJumpTimer=null;}
+    window._wbsJumpTimer=setTimeout(()=>{
+      window._wbsJumpTimer=null;
+      currentView='okr';
+      if(type==='O'){expanded.add(id);}
+      else if(type==='KR'){expanded.add(oid);krCollapsed.delete(id);}
+      else if(type==='I'){expanded.add(oid);krCollapsed.delete(krid);}
+      render();
+      // v38 — 점프 후 펄스 하이라이트로 시각 cue 강화
       setTimeout(()=>{
-        el.classList.remove('jump-flash');
-        void el.offsetWidth; // reflow 강제로 애니메이션 재시작 보장
-        el.classList.add('jump-flash');
-        setTimeout(()=>el.classList.remove('jump-flash'),1900);
-      },200);
-    },150);
+        const sel=type==='O'?`[data-obj-id="${id}"]`:type==='KR'?`[data-kr-id="${id}"]`:`[data-init-id="${id}"]`;
+        const el=document.querySelector(sel);
+        if(!el)return;
+        el.scrollIntoView({behavior:'smooth',block:'center'});
+        setTimeout(()=>{
+          el.classList.remove('jump-flash');
+          void el.offsetWidth;
+          el.classList.add('jump-flash');
+          setTimeout(()=>el.classList.remove('jump-flash'),1900);
+        },200);
+      },150);
+    },280);
     return;
   }
   if(a==='toggle-kr-menu'){const k=btn.dataset.krid;krMenuOpen.has(k)?krMenuOpen.delete(k):krMenuOpen.add(k);render();return;}
