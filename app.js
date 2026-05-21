@@ -271,6 +271,32 @@ html.dark .member-card.is-readonly .member-head::after{background:#22252F;color:
 .krl-group-head .krl-group-caret{font-size:11px;font-weight:800;opacity:.85;line-height:1;flex-shrink:0;transition:transform .12s ease,opacity .12s ease}
 .krl-group-head.is-interactive:hover .krl-group-caret{opacity:1}
 .krl-group-head.is-interactive:active .krl-group-caret{transform:translateY(1px)}
+/* v20 — 할일 댓글 스레드 */
+.krl-task-container{position:relative}
+.krl-cmt-btn{padding:4px 7px;margin-top:7px;background:transparent;border:1px solid transparent;border-radius:5px;cursor:pointer;color:var(--text-soft);font-size:11.5px;flex-shrink:0;line-height:1.2;font-weight:600;display:inline-flex;align-items:center;gap:3px;font-family:inherit;transition:background-color .12s,border-color .12s,color .12s}
+.krl-cmt-btn:hover{background:rgba(98,65,245,.06);color:var(--primary)}
+.krl-cmt-btn.has-cmts{color:var(--primary);background:var(--primary-soft)}
+.krl-cmt-thread{margin:2px 0 8px 26px;padding:8px 12px;background:rgba(98,65,245,.04);border-left:2px solid var(--primary-soft);border-radius:0 6px 6px 0}
+.krl-cmt-thread[hidden]{display:none}
+.krl-cmt-item{padding:5px 0;border-bottom:1px dashed rgba(0,0,0,.06);font-size:12.5px;line-height:1.5}
+.krl-cmt-item:last-of-type{border-bottom:none}
+.krl-cmt-meta{display:flex;align-items:center;gap:6px;margin-bottom:2px;font-size:11px;color:var(--text-soft)}
+.krl-cmt-author{font-weight:700;color:var(--text)}
+.krl-cmt-body{white-space:pre-wrap;word-break:break-word;color:var(--text)}
+.krl-cmt-actions{display:inline-flex;gap:2px;margin-left:auto;opacity:0;transition:opacity .15s}
+.krl-cmt-item:hover .krl-cmt-actions,.krl-cmt-item:focus-within .krl-cmt-actions{opacity:1}
+.krl-cmt-act{background:transparent;border:none;cursor:pointer;color:var(--text-soft);font-size:11px;padding:2px 5px;border-radius:3px;line-height:1;font-family:inherit}
+.krl-cmt-act:hover{background:rgba(0,0,0,.05);color:var(--text)}
+.krl-cmt-input-wrap{margin-top:8px;display:flex;gap:5px;align-items:flex-start}
+.krl-cmt-input{flex:1;min-width:0;padding:6px 9px;border:1px solid var(--line);border-radius:5px;font-size:12.5px;line-height:1.5;font-family:inherit;background:white;resize:none;outline:none;min-height:32px;box-sizing:border-box;transition:border-color .12s,background-color .12s,box-shadow .12s}
+.krl-cmt-input:focus{border-color:var(--primary);background:#FAFAFB;box-shadow:0 0 0 2px var(--primary-soft)}
+.krl-cmt-submit{padding:6px 11px;background:var(--primary);color:white;border:none;border-radius:5px;cursor:pointer;font-size:11.5px;font-weight:700;line-height:1.4;flex-shrink:0;font-family:inherit;white-space:nowrap}
+.krl-cmt-submit:hover{filter:brightness(1.08)}
+.krl-cmt-submit:disabled{opacity:.5;cursor:not-allowed}
+.krl-cmt-empty{color:var(--text-soft);font-size:11.5px;font-style:italic;padding:3px 0}
+html.dark .krl-cmt-thread{background:rgba(98,65,245,.12);border-left-color:var(--primary)}
+html.dark .krl-cmt-input{background:#1B1E27;color:#D1D5DB;border-color:#22252F}
+html.dark .krl-cmt-item{border-bottom-color:rgba(255,255,255,.06)}
 `;document.head.appendChild(s);
 // 다크 모드 즉시 적용 (FOUC 방지)
 document.documentElement.classList.toggle('dark',localStorage.getItem('team-okr-dark')==='1');
@@ -2821,6 +2847,71 @@ init();
     });
     return html;
   }
+  // v20 — 댓글 유틸 & 렌더
+  function newCommentId(){return'c_'+Math.random().toString(36).slice(2,9)+Date.now().toString(36).slice(-3);}
+  function formatCmtTime(ts){
+    if(!ts)return'';
+    const diff=Date.now()-ts;
+    if(diff<60000)return'방금 전';
+    if(diff<3600000)return Math.floor(diff/60000)+'분 전';
+    if(diff<86400000)return Math.floor(diff/3600000)+'시간 전';
+    const d=new Date(ts);
+    return(d.getMonth()+1)+'/'+d.getDate()+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+  }
+  function findTaskRef(mid,kind,tid){
+    const data=getMemberTasks(mid,kind);
+    return{data,task:(data.tasks||[]).find(x=>x.id===tid)};
+  }
+  function renderCommentItem(c,task,mid,kind){
+    const me=(typeof selfMember==='function')?selfMember():null;
+    const isMine=!!(me&&c.uid===me.id);
+    const editedMark=c.e?' <span style="opacity:.6;font-size:10px;">(수정됨)</span>':'';
+    return '<div class="krl-cmt-item" data-cmt-id="'+escapeHtml(c.id)+'">'+
+      '<div class="krl-cmt-meta">'+
+        '<span class="krl-cmt-author">'+escapeHtml(c.uname||'(이름없음)')+'</span>'+
+        '<span>·</span>'+
+        '<span>'+escapeHtml(formatCmtTime(c.ts))+'</span>'+
+        editedMark+
+        (isMine?'<span class="krl-cmt-actions">'+
+          '<button class="krl-cmt-act" data-act="cmt-edit-start" data-mid="'+mid+'" data-kind="'+kind+'" data-tid="'+task.id+'" data-cid="'+escapeHtml(c.id)+'" title="수정">✎</button>'+
+          '<button class="krl-cmt-act" data-act="cmt-del" data-mid="'+mid+'" data-kind="'+kind+'" data-tid="'+task.id+'" data-cid="'+escapeHtml(c.id)+'" title="삭제">✕</button>'+
+        '</span>':'')+
+      '</div>'+
+      '<div class="krl-cmt-body">'+escapeHtml(c.t||'')+'</div>'+
+    '</div>';
+  }
+  function renderCommentsThread(task,mid,kind){
+    const comments=Array.isArray(task.c)?task.c:[];
+    const obs=(typeof isObserver==='function')&&isObserver();
+    const me=(typeof selfMember==='function')?selfMember():null;
+    const canWrite=!!me;
+    const itemsHtml=comments.length>0
+      ? comments.map(c=>renderCommentItem(c,task,mid,kind)).join('')
+      : '<div class="krl-cmt-empty">아직 댓글이 없습니다.</div>';
+    const inputHtml=canWrite
+      ? '<div class="krl-cmt-input-wrap">'+
+          '<textarea class="krl-cmt-input" data-cmt-input data-mid="'+mid+'" data-kind="'+kind+'" data-tid="'+task.id+'" placeholder="댓글 추가..." rows="1"></textarea>'+
+          '<button class="krl-cmt-submit" data-act="cmt-submit" data-mid="'+mid+'" data-kind="'+kind+'" data-tid="'+task.id+'">등록</button>'+
+        '</div>'
+      : (obs?'<div class="krl-cmt-empty" style="margin-top:6px;">옵저버는 댓글을 읽기만 할 수 있습니다.</div>':'');
+    return '<div class="krl-cmt-thread" data-cmt-tid="'+task.id+'" hidden>'+itemsHtml+inputHtml+'</div>';
+  }
+  function rerenderTaskCommentsThread(mid,kind,tid){
+    const ref=findTaskRef(mid,kind,tid);if(!ref.task)return;
+    const oldThread=document.querySelector('.krl-cmt-thread[data-cmt-tid="'+tid+'"]');
+    if(!oldThread)return;
+    const wasOpen=!oldThread.hasAttribute('hidden');
+    const tmp=document.createElement('div');tmp.innerHTML=renderCommentsThread(ref.task,mid,kind);
+    const newThread=tmp.firstElementChild;if(!newThread)return;
+    if(wasOpen)newThread.removeAttribute('hidden');
+    oldThread.replaceWith(newThread);
+    const btn=document.querySelector('.krl-cmt-btn[data-tid="'+tid+'"][data-mid="'+mid+'"][data-kind="'+kind+'"]');
+    if(btn){
+      const n=Array.isArray(ref.task.c)?ref.task.c.length:0;
+      btn.classList.toggle('has-cmts',n>0);
+      btn.textContent='💬'+(n>0?' '+n:'');
+    }
+  }
   // v16 — 그룹화된 작업 행 (KR/Init 칩은 상위 그룹 헤더에 한 번만 표시 → 행 자체는 간결)
   function renderTaskRowGrouped(task,mid,kind){
     const editable=(typeof canEditAs==='function')?canEditAs(mid):true;
@@ -2828,12 +2919,19 @@ init();
     const dis=editable?'':' disabled';
     const tip=editable?'':' title="본인이 작성한 항목만 수정할 수 있습니다"';
     const textStyle='width:100%;padding:9px 12px;border:1px solid var(--line);border-radius:6px;background:#FAFAFA;outline:none;font-size:13.5px;line-height:1.6;font-family:inherit;color:var(--text);resize:none;overflow:hidden;min-height:60px;box-sizing:border-box;'+(task.d?'text-decoration:line-through;color:var(--text-soft);':'');
-    // v17 — 우측 KR 드롭다운 제거 (그룹 헤더에서 선택). 행은 체크 + 본문 + 삭제만
-    return '<div class="krl-task-row" data-tid="'+task.id+'" data-mid="'+mid+'" data-kind="'+kind+'" style="display:flex;align-items:flex-start;gap:6px;padding:6px 0;border-bottom:1px dashed #F0F0F2;">'+
-      '<button class="rt-check '+(task.d?'checked':'')+'" style="width:18px;height:18px;border-width:1.5px;border-radius:4px;flex-shrink:0;margin-top:9px;" data-act="krl-toggle-task" data-mid="'+mid+'" data-kind="'+kind+'" data-tid="'+task.id+'"'+dis+tip+'>'+(task.d?'✓':'')+'</button>'+
-      '<textarea data-krl-field="task-text" data-krl-autogrow data-mid="'+mid+'" data-kind="'+kind+'" data-tid="'+task.id+'" rows="2" placeholder="할일 내용을 적어주세요" style="'+textStyle+'"'+ro+tip+'>'+escapeHtml(task.t||'')+'</textarea>'+
-      (editable?'<button data-act="krl-del-task" data-mid="'+mid+'" data-kind="'+kind+'" data-tid="'+task.id+'" style="padding:4px 6px;margin-top:6px;background:none;border:1px solid transparent;border-radius:5px;cursor:pointer;color:var(--text-soft);font-size:12px;flex-shrink:0;line-height:1;" title="이 작업 삭제">✕</button>':'')+
-      '</div>';
+    // v20 — 댓글 토글 (개수 표시 · 누구나 보임 · 입력은 로그인 멤버만)
+    const cmtCount=Array.isArray(task.c)?task.c.length:0;
+    const cmtBtn='<button class="krl-cmt-btn'+(cmtCount>0?' has-cmts':'')+'" data-act="cmt-toggle" data-mid="'+mid+'" data-kind="'+kind+'" data-tid="'+task.id+'" title="댓글">💬'+(cmtCount>0?' '+cmtCount:'')+'</button>';
+    // v17 — 우측 KR 드롭다운 제거 (그룹 헤더에서 선택). 행은 체크 + 본문 + 댓글 + 삭제
+    return '<div class="krl-task-container" data-task-container="'+task.id+'">'+
+      '<div class="krl-task-row" data-tid="'+task.id+'" data-mid="'+mid+'" data-kind="'+kind+'" style="display:flex;align-items:flex-start;gap:6px;padding:6px 0;border-bottom:1px dashed #F0F0F2;">'+
+        '<button class="rt-check '+(task.d?'checked':'')+'" style="width:18px;height:18px;border-width:1.5px;border-radius:4px;flex-shrink:0;margin-top:9px;" data-act="krl-toggle-task" data-mid="'+mid+'" data-kind="'+kind+'" data-tid="'+task.id+'"'+dis+tip+'>'+(task.d?'✓':'')+'</button>'+
+        '<textarea data-krl-field="task-text" data-krl-autogrow data-mid="'+mid+'" data-kind="'+kind+'" data-tid="'+task.id+'" rows="2" placeholder="할일 내용을 적어주세요" style="'+textStyle+'"'+ro+tip+'>'+escapeHtml(task.t||'')+'</textarea>'+
+        cmtBtn+
+        (editable?'<button data-act="krl-del-task" data-mid="'+mid+'" data-kind="'+kind+'" data-tid="'+task.id+'" style="padding:4px 6px;margin-top:6px;background:none;border:1px solid transparent;border-radius:5px;cursor:pointer;color:var(--text-soft);font-size:12px;flex-shrink:0;line-height:1;" title="이 작업 삭제">✕</button>':'')+
+      '</div>'+
+      renderCommentsThread(task,mid,kind)+
+    '</div>';
   }
   // 호환성 — 기존 호출은 그룹 헤더가 없는 단독 행 (예: krl-add-task 후 신규 행 추가)
   function renderTaskRowHtml(task,mid,kind){return renderTaskRowGrouped(task,mid,kind);}
@@ -3072,6 +3170,77 @@ init();
       }catch(err){console.warn('[KR-Link] clear-all-yesterday failed',err);}
       return;
     }
+    // v20 — 할일 댓글 동작
+    if(a==='cmt-toggle'){
+      const tid=btn.dataset.tid;
+      const thread=document.querySelector('.krl-cmt-thread[data-cmt-tid="'+tid+'"]');
+      if(!thread)return;
+      if(thread.hasAttribute('hidden')){
+        thread.removeAttribute('hidden');
+        const inp=thread.querySelector('[data-cmt-input]');
+        if(inp)setTimeout(()=>{inp.focus();if(typeof autoGrow==='function')autoGrow(inp);},0);
+      }else thread.setAttribute('hidden','');
+      return;
+    }
+    if(a==='cmt-submit'){
+      const mid=btn.dataset.mid,kind=btn.dataset.kind,tid=btn.dataset.tid;
+      const thread=document.querySelector('.krl-cmt-thread[data-cmt-tid="'+tid+'"]');
+      const inp=thread&&thread.querySelector('[data-cmt-input]');
+      if(!inp)return;
+      const text=String(inp.value||'').trim();if(!text)return;
+      const me=(typeof selfMember==='function')?selfMember():null;if(!me)return;
+      const ref=findTaskRef(mid,kind,tid);if(!ref.task)return;
+      if(!Array.isArray(ref.task.c))ref.task.c=[];
+      ref.task.c.push({id:newCommentId(),uid:me.id,uname:me.name||'',t:text,ts:Date.now()});
+      updateMemberTasks(mid,kind,ref.data.legacy,ref.data.tasks);
+      inp.value='';
+      rerenderTaskCommentsThread(mid,kind,tid);
+      return;
+    }
+    if(a==='cmt-edit-start'){
+      const mid=btn.dataset.mid,kind=btn.dataset.kind,tid=btn.dataset.tid,cid=btn.dataset.cid;
+      const item=document.querySelector('.krl-cmt-thread[data-cmt-tid="'+tid+'"] .krl-cmt-item[data-cmt-id="'+cid+'"]');
+      if(!item)return;
+      const body=item.querySelector('.krl-cmt-body');if(!body)return;
+      const orig=body.textContent;
+      const editHtml='<div class="krl-cmt-input-wrap" data-cmt-edit-wrap>'+
+        '<textarea class="krl-cmt-input" data-cmt-edit-input rows="1">'+escapeHtml(orig)+'</textarea>'+
+        '<button class="krl-cmt-submit" data-act="cmt-edit-save" data-mid="'+mid+'" data-kind="'+kind+'" data-tid="'+tid+'" data-cid="'+escapeHtml(cid)+'">저장</button>'+
+        '<button class="krl-cmt-act" data-act="cmt-edit-cancel" data-mid="'+mid+'" data-kind="'+kind+'" data-tid="'+tid+'" data-cid="'+escapeHtml(cid)+'" style="margin-top:6px;">취소</button>'+
+      '</div>';
+      body.outerHTML=editHtml;
+      const ta=item.querySelector('[data-cmt-edit-input]');
+      if(ta){ta.focus();ta.setSelectionRange(ta.value.length,ta.value.length);if(typeof autoGrow==='function')autoGrow(ta);}
+      return;
+    }
+    if(a==='cmt-edit-save'){
+      const mid=btn.dataset.mid,kind=btn.dataset.kind,tid=btn.dataset.tid,cid=btn.dataset.cid;
+      const ta=document.querySelector('.krl-cmt-thread[data-cmt-tid="'+tid+'"] .krl-cmt-item[data-cmt-id="'+cid+'"] [data-cmt-edit-input]');
+      if(!ta)return;
+      const text=String(ta.value||'').trim();if(!text)return;
+      const me=(typeof selfMember==='function')?selfMember():null;if(!me)return;
+      const ref=findTaskRef(mid,kind,tid);if(!ref.task||!Array.isArray(ref.task.c))return;
+      const c=ref.task.c.find(x=>x.id===cid);if(!c||c.uid!==me.id)return;
+      c.t=text;c.e=Date.now();
+      updateMemberTasks(mid,kind,ref.data.legacy,ref.data.tasks);
+      rerenderTaskCommentsThread(mid,kind,tid);
+      return;
+    }
+    if(a==='cmt-edit-cancel'){
+      rerenderTaskCommentsThread(btn.dataset.mid,btn.dataset.kind,btn.dataset.tid);
+      return;
+    }
+    if(a==='cmt-del'){
+      const mid=btn.dataset.mid,kind=btn.dataset.kind,tid=btn.dataset.tid,cid=btn.dataset.cid;
+      if(!confirm('이 댓글을 삭제할까요?'))return;
+      const me=(typeof selfMember==='function')?selfMember():null;if(!me)return;
+      const ref=findTaskRef(mid,kind,tid);if(!ref.task||!Array.isArray(ref.task.c))return;
+      const idx=ref.task.c.findIndex(x=>x.id===cid&&x.uid===me.id);if(idx<0)return;
+      ref.task.c.splice(idx,1);
+      updateMemberTasks(mid,kind,ref.data.legacy,ref.data.tasks);
+      rerenderTaskCommentsThread(mid,kind,tid);
+      return;
+    }
     if(a!=='krl-add-task'&&a!=='krl-toggle-task'&&a!=='krl-del-task'&&a!=='krl-clear-legacy')return;
     const mid=btn.dataset.mid,kind=btn.dataset.kind,tid=btn.dataset.tid;
     const data=getMemberTasks(mid,kind);
@@ -3117,7 +3286,10 @@ init();
     }
   });
   document.addEventListener('input',function(e){
-    const el=e.target;if(el.dataset.krlField!=='task-text')return;
+    const el=e.target;
+    // v20 — 댓글 입력란 자동 확장
+    if(el.classList&&(el.classList.contains('krl-cmt-input'))){autoGrow(el);return;}
+    if(el.dataset.krlField!=='task-text')return;
     autoGrow(el);
     const mid=el.dataset.mid,kind=el.dataset.kind,tid=el.dataset.tid;
     const data=getMemberTasks(mid,kind);
