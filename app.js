@@ -1,3 +1,4 @@
+// Claude Code 워크플로우 이전 완료 2026-05-21
 'use strict';
 // v6 CSS injection — index.html 변경 없이 새 스타일 추가
 (function(){const s=document.createElement('style');s.textContent=`
