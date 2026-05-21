@@ -432,7 +432,7 @@ html.dark .chat-input{background:#1A1D27;color:#D1D5DB;border-color:#22252F}
 [draggable="true"].drop-target-nest{background:var(--primary-soft) !important;outline:2px dashed var(--primary);outline-offset:-3px;border-radius:8px;position:relative}
 [draggable="true"].drop-target-nest::before,[draggable="true"].drop-target-nest::after{display:none}
 /* v47 — 드롭 전 라이브 프리뷰: source 자체를 숨기고 target sub-list에 실제 task 형태로 표시 */
-.drag-source-hidden{opacity:0 !important;height:0 !important;padding:0 !important;margin:0 !important;border:0 !important;overflow:hidden !important;pointer-events:none}
+.drag-source-hidden{opacity:0 !important;pointer-events:none;visibility:hidden}
 .nest-preview-wrap{margin:6px 0 4px 28px !important;padding:6px 8px !important;background:rgba(98,65,245,.08) !important;border-left:3px solid var(--primary) !important;border-radius:0 8px 8px 0}
 .nest-preview-row{animation:nestPreviewIn .22s ease-out;background:linear-gradient(90deg,rgba(98,65,245,.14),rgba(98,65,245,.05)) !important;border:1px dashed var(--primary);border-radius:6px;margin:2px 0;position:relative}
 .nest-preview-row::after{content:'미리보기 — 놓으면 확정';position:absolute;right:8px;top:50%;transform:translateY(-50%);background:var(--primary);color:white;font-size:9.5px;font-weight:700;padding:2px 7px;border-radius:4px;pointer-events:none;white-space:nowrap;box-shadow:0 2px 5px rgba(98,65,245,.35)}
@@ -3355,34 +3355,38 @@ document.addEventListener('dragend',e=>{
   if(dragSrc)dragSrc.classList.remove('dragging');
   _clearDropTargets();
   clearNestPreview();
+  _lastDropState='';
   dragSrc=null;
 });
-// v44 — 마우스 Y 위치로 zone 결정 (init만 nest 가능)
-function _resolveDragZone(tgt,clientY){
-  const r=tgt.getBoundingClientRect();
-  const rel=(clientY-r.top)/r.height;
-  // Init에 한해 가운데 1/3 영역은 'nest' (demote-to-task)
-  if(tgt.dataset.dragType==='init'&&rel>=0.33&&rel<=0.67)return{zone:'nest',rect:r};
+// v48 — zone 계산은 .init-row-main 기준 (preview row가 추가되어도 높이 변하지 않음 → 깜빡임 차단)
+function _resolveDragZone(tgt,clientY,src){
+  const main=tgt.querySelector(':scope > .init-row-main')||tgt;
+  const r=main.getBoundingClientRect();
+  const rel=(clientY-r.top)/Math.max(1,r.height);
+  const sameType=src&&src.dataset.dragType===tgt.dataset.dragType;
+  // init→init: 가운데 1/3 또는 main 아래(preview 영역) = nest
+  if(sameType&&src.dataset.dragType==='init'&&tgt.dataset.dragType==='init'){
+    if(clientY>r.bottom)return{zone:'nest',rect:r};
+    if(rel>=0.33&&rel<=0.67)return{zone:'nest',rect:r};
+  }
   return{zone:rel>0.5?'after':'before',rect:r};
 }
+// v48 — drop 상태 캐시 (불필요한 class toggle 차단)
+let _lastDropState='';
 document.addEventListener('dragover',e=>{
   if(!dragSrc)return;
-  // v43 — Init이 다른 Init의 펼쳐진 sub-list에 직접 떨어지는 경우 (보조 경로)
-  if(dragSrc.dataset.dragType==='init'){
-    const zone=e.target.closest('[data-drop-zone="init-sub-list"]');
-    if(zone && zone.dataset.parentIid !== dragSrc.dataset.initId){
-      e.preventDefault();
-      _clearDropTargets();
-      zone.classList.add('drop-target-into');
-      return;
-    }
-  }
-  // 같은 부모 안에서 reorder / nest
   const tgt=e.target.closest('[draggable="true"]');if(!tgt||tgt===dragSrc)return;
-  if(tgt.dataset.dragType!==dragSrc.dataset.dragType)return;
-  if(tgt.dataset.dragParent!==dragSrc.dataset.dragParent)return;
+  const srcType=dragSrc.dataset.dragType,tgtType=tgt.dataset.dragType;
+  // 같은 타입 + 같은 부모 (기본 reorder) OR init-task → init (promote)
+  const sameType=srcType===tgtType;
+  const isPromote=srcType==='init-task'&&tgtType==='init';
+  if(!sameType&&!isPromote)return;
+  if(sameType&&tgt.dataset.dragParent!==dragSrc.dataset.dragParent)return;
   e.preventDefault();
-  const{zone}=_resolveDragZone(tgt,e.clientY);
+  const{zone}=_resolveDragZone(tgt,e.clientY,dragSrc);
+  const newState=tgt.dataset.dragType+':'+(tgt.dataset.initId||tgt.dataset.taskId||tgt.dataset.krId||tgt.dataset.objId||tgt.dataset.memId||'')+':'+zone;
+  if(newState===_lastDropState)return; // 변화 없음 → 아무것도 안 함 (깜빡임 차단)
+  _lastDropState=newState;
   _clearDropTargets();
   if(zone==='nest'){
     tgt.classList.add('drop-target-nest');
@@ -3394,37 +3398,40 @@ document.addEventListener('dragover',e=>{
 });
 document.addEventListener('drop',async e=>{
   if(!dragSrc)return;
-  // v43 — Init을 펼쳐진 sub-list에 직접 떨어뜨린 경우 (보조 경로)
-  if(dragSrc.dataset.dragType==='init'){
-    const zone=e.target.closest('[data-drop-zone="init-sub-list"]');
-    if(zone && zone.dataset.parentIid !== dragSrc.dataset.initId){
-      e.preventDefault();
-      _clearDropTargets();
-      const src=dragSrc;dragSrc=null;
-      await demoteInitToTask(src.dataset.initId,zone.dataset.parentIid,src.dataset.dragParent);
-      return;
-    }
-  }
   const tgt=e.target.closest('[draggable="true"]');if(!tgt||tgt===dragSrc)return;
-  if(tgt.dataset.dragType!==dragSrc.dataset.dragType)return;
-  if(tgt.dataset.dragParent!==dragSrc.dataset.dragParent)return;
+  const srcType=dragSrc.dataset.dragType,tgtType=tgt.dataset.dragType;
+  const sameType=srcType===tgtType;
+  const isPromote=srcType==='init-task'&&tgtType==='init';
+  if(!sameType&&!isPromote)return;
+  if(sameType&&tgt.dataset.dragParent!==dragSrc.dataset.dragParent)return;
   e.preventDefault();
-  const{zone}=_resolveDragZone(tgt,e.clientY);
-  const type=dragSrc.dataset.dragType;
+  const{zone}=_resolveDragZone(tgt,e.clientY,dragSrc);
+  const after=zone==='after';
   // v44 — Init 가운데 zone = demote-to-task
-  if(type==='init'&&zone==='nest'){
-    const src=dragSrc;dragSrc=null;
-    _clearDropTargets();
+  if(srcType==='init'&&zone==='nest'){
+    const src=dragSrc;dragSrc=null;_lastDropState='';
+    _clearDropTargets();clearNestPreview();
     await demoteInitToTask(src.dataset.initId,tgt.dataset.initId,src.dataset.dragParent);
     return;
   }
-  const after=zone==='after';
-  if(type==='obj'){await reorderObjectives(dragSrc.dataset.objId,tgt.dataset.objId,after);}
-  else if(type==='kr'){await reorderKRs(dragSrc.dataset.dragParent,dragSrc.dataset.krId,tgt.dataset.krId,after);}
-  else if(type==='init'){await reorderInits(dragSrc.dataset.dragParent,dragSrc.dataset.initId,tgt.dataset.initId,after);}
-  else if(type==='init-task'){await reorderInitTasks(dragSrc.dataset.dragParent,dragSrc.dataset.taskId,tgt.dataset.taskId,after);}
-  else if(type==='member'){await reorderMembers(dragSrc.dataset.memId,tgt.dataset.memId,after);}
+  // v48 — Task → Init: top/bottom = sibling init으로 promote, middle = 다른 init의 task로 이동
+  if(isPromote){
+    const src=dragSrc;dragSrc=null;_lastDropState='';
+    _clearDropTargets();clearNestPreview();
+    if(zone==='nest'){
+      await moveTaskToInit(src.dataset.dragParent,src.dataset.taskId,tgt.dataset.initId);
+    }else{
+      await promoteTaskToInit(src.dataset.dragParent,src.dataset.taskId,tgt.dataset.initId,after);
+    }
+    return;
+  }
+  if(srcType==='obj'){await reorderObjectives(dragSrc.dataset.objId,tgt.dataset.objId,after);}
+  else if(srcType==='kr'){await reorderKRs(dragSrc.dataset.dragParent,dragSrc.dataset.krId,tgt.dataset.krId,after);}
+  else if(srcType==='init'){await reorderInits(dragSrc.dataset.dragParent,dragSrc.dataset.initId,tgt.dataset.initId,after);}
+  else if(srcType==='init-task'){await reorderInitTasks(dragSrc.dataset.dragParent,dragSrc.dataset.taskId,tgt.dataset.taskId,after);}
+  else if(srcType==='member'){await reorderMembers(dragSrc.dataset.memId,tgt.dataset.memId,after);}
   _clearDropTargets();
+  _lastDropState='';
   dragSrc=null;
 });
 // v43 — Initiative을 다른 Init의 할일(sub-task)로 변환
@@ -3476,6 +3483,72 @@ async function demoteInitToTask(srcInitId,targetParentIid,sourceKrId){
     else showToast('할일로 변환됨'+(orphanTasks.length?` (하위 ${orphanTasks.length}건 같이 이동)`:''));
     logChange('initiative',srcInitId,'delete','demote-to-task',srcInit.title||'',`→ ${targetInit.title||''}의 할일`,srcInit.title||'');
   }catch(err){console.warn('[demote] failed',err);showToast('변환 실패',true);}
+}
+// v48 — Task를 Initiative로 promote (드래그하여 init 행 위/아래에 떨어뜨림)
+async function promoteTaskToInit(srcInitId,taskId,targetInitId,after){
+  const list=state.initiativeTasks[srcInitId]||[];
+  const task=list.find(t=>t.id===taskId);
+  if(!task){showToast('할일을 찾을 수 없습니다',true);return;}
+  // target init이 속한 KR 찾기
+  let targetKR=null,targetIdx=-1;
+  state.objectives.forEach(o=>o.keyResults.forEach(k=>{
+    const idx=(k.initiatives||[]).findIndex(i=>i.id===targetInitId);
+    if(idx>=0){targetKR=k;targetIdx=idx;}
+  }));
+  if(!targetKR){showToast('대상 KR을 찾을 수 없습니다',true);return;}
+  if(!confirm(`"${task.title||'(제목 없음)'}"을(를) 이니셔티브로 변환할까요?\n\n할일이 ${targetKR.title?'"'+targetKR.title+'"':''} KR의 이니셔티브가 됩니다.`))return;
+  // 새 initiative 생성
+  const newInit={
+    id:uid(),title:task.title||'',status:task.status||'todo',
+    ownerId:task.owner_id||null,startDate:task.start_date||null,dueDate:task.due_date||null,
+    confidence:'mid',realityBlocker:'',realityHelp:''
+  };
+  const insertIdx=after?targetIdx+1:targetIdx;
+  targetKR.initiatives.splice(insertIdx,0,newInit);
+  // task 제거
+  state.initiativeTasks[srcInitId]=list.filter(t=>t.id!==taskId);
+  scheduleRender();
+  // DB 작업
+  try{
+    markLocal('initiatives',newInit.id);
+    const{error:e1}=await sb.from('initiatives').insert({
+      id:newInit.id,kr_id:targetKR.id,title:newInit.title,status:newInit.status,
+      owner_id:newInit.ownerId,start_date:newInit.startDate,due_date:newInit.dueDate,
+      confidence:'mid',sort_order:insertIdx
+    });
+    if(e1){showToast('이니셔티브 생성 실패',true);console.warn(e1);return;}
+    // 같은 KR의 다른 init들 sort_order 재정렬
+    for(let i=0;i<targetKR.initiatives.length;i++){
+      if(targetKR.initiatives[i].id!==newInit.id){
+        markLocal('initiatives',targetKR.initiatives[i].id);
+        await sb.from('initiatives').update({sort_order:i}).eq('id',targetKR.initiatives[i].id);
+      }
+    }
+    // 원래 task 삭제
+    markLocal('initiative_tasks',taskId);
+    await sb.from('initiative_tasks').delete().eq('id',taskId);
+    showToast('이니셔티브로 변환됨');
+    logChange('initiative',newInit.id,'create','promote-from-task','',newInit.title,newInit.title);
+  }catch(err){console.warn('[promote] failed',err);showToast('변환 실패',true);}
+}
+// v48 — Task를 다른 Init의 할일로 이동 (부모만 바꿈)
+async function moveTaskToInit(srcInitId,taskId,targetInitId){
+  if(srcInitId===targetInitId)return;
+  const srcList=state.initiativeTasks[srcInitId]||[];
+  const task=srcList.find(t=>t.id===taskId);
+  if(!task)return;
+  state.initiativeTasks[srcInitId]=srcList.filter(t=>t.id!==taskId);
+  if(!state.initiativeTasks[targetInitId])state.initiativeTasks[targetInitId]=[];
+  task.initiative_id=targetInitId;
+  task.sort_order=state.initiativeTasks[targetInitId].length;
+  state.initiativeTasks[targetInitId].push(task);
+  scheduleRender();
+  try{
+    markLocal('initiative_tasks',taskId);
+    const{error}=await sb.from('initiative_tasks').update({initiative_id:targetInitId,sort_order:task.sort_order}).eq('id',taskId);
+    if(error){showToast('이동 실패',true);console.warn(error);}
+    else showToast('다른 이니셔티브의 할일로 이동');
+  }catch(err){console.warn('[moveTaskToInit] failed',err);}
 }
 function _reinsert(arr,sIdx,tIdx,after){
   const[item]=arr.splice(sIdx,1);
