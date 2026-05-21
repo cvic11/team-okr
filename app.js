@@ -528,6 +528,13 @@ body.present .obj-title-input{font-size:36px !important}
 /* v55 — 사람 아이콘 클릭 시 sticky 헤더에 가리지 않도록 스크롤 여백 */
 .member-card{scroll-margin-top:130px}
 [data-obj-id],.kr-row,.init-row{scroll-margin-top:130px}
+/* v56 — Objective 1개 솔로 모드: KR 행도 살짝 크게 */
+.obj-solo{padding:24px 26px !important}
+.obj-solo .kr-inline-row{padding:14px 0}
+.obj-solo .kr-inline-row > div:first-child > span:first-child{font-size:17px;font-weight:700;letter-spacing:-0.2px}
+.obj-solo .kr-inline-row .kr-strip-pct{font-size:16px !important}
+.obj-solo .kr-inline-row .kr-num-input{font-size:15px !important;width:80px !important}
+@media(max-width:760px){.obj-solo{padding:18px 16px !important} .obj-solo .obj-shimmer{font-size:22px !important}}
 /* KR 두 번째로 큰 */
 .kr-title-input{font-size:17px !important;font-weight:700 !important;letter-spacing:-0.2px !important;padding:6px 4px !important}
 body.present .kr-title-input{font-size:20px !important}
@@ -1569,26 +1576,53 @@ function renderObjectivePanel(o,slotIdx){
   }
   const krs=o.keyResults||[];
   const objAvg=krs.length?Math.round(krs.reduce((s,k)=>s+pct(k.current,k.target),0)/krs.length):0;
+  // v56 — 'KR N개' 라인 제거. 평균 진척 뱃지에 (N) 작게 통합.
   return `<section class="card" style="margin:0;display:flex;flex-direction:column;">
     <div class="section-head" style="align-items:flex-start;gap:8px;">
       <span style="color:var(--primary);flex-shrink:0;margin-top:2px;">${I.target}</span>
       <span class="section-title obj-shimmer" style="line-height:1.45;flex:1;min-width:0;font-size:16px;">${esc(o.title||'(Objective 미작성)')}</span>
-      <span style="font-size:11.5px;color:var(--text-soft);font-weight:600;flex-shrink:0;">평균 <strong style="color:${progressColor(objAvg)};font-size:13px;">${objAvg}%</strong></span>
+      <span style="font-size:11.5px;color:var(--text-soft);font-weight:600;flex-shrink:0;text-align:right;">평균 <strong style="color:${progressColor(objAvg)};font-size:13px;">${objAvg}%</strong><br><span style="font-size:10px;opacity:.7;">KR ${krs.length}</span></span>
     </div>
-    <div style="font-size:11px;color:var(--text-soft);margin-bottom:4px;">KR ${krs.length}개</div>
     <div style="flex:1;">
       ${krs.length===0?'<div style="font-size:13px;color:var(--text-soft);padding:14px 0;text-align:center;">KR을 추가하세요.</div>':krs.map(k=>renderInlineKRRow(k,o.id)).join('')}
     </div>
   </section>`;
 }
+// v56 — Objective 1개일 때 OKR 탭급 크기로 풀폭 표시
+function renderObjectiveSolo(o){
+  const krs=o.keyResults||[];
+  const objAvg=krs.length?Math.round(krs.reduce((s,k)=>s+pct(k.current,k.target),0)/krs.length):0;
+  return `<section class="card obj-solo" style="margin:0;">
+    <div style="display:flex;align-items:flex-start;gap:14px;padding-bottom:14px;border-bottom:1px solid var(--line);margin-bottom:10px;">
+      <span style="color:var(--primary);flex-shrink:0;margin-top:8px;">${I.target}</span>
+      <div style="flex:1;min-width:0;">
+        <div class="obj-shimmer" style="font-size:28px;font-weight:900;letter-spacing:-0.6px;line-height:1.25;">${esc(o.title||'(Objective 미작성)')}</div>
+        ${o.description?`<div style="font-size:13.5px;color:var(--text-soft);margin-top:8px;font-style:italic;line-height:1.55;">${esc(o.description)}</div>`:''}
+      </div>
+      <div style="text-align:right;flex-shrink:0;">
+        <div style="font-size:11px;color:var(--text-soft);font-weight:600;letter-spacing:.3px;">평균 진척</div>
+        <div style="font-size:26px;font-weight:900;letter-spacing:-0.5px;color:${progressColor(objAvg)};margin-top:2px;line-height:1;">${objAvg}%</div>
+        <div style="font-size:10.5px;color:var(--text-soft);margin-top:4px;">KR ${krs.length}</div>
+      </div>
+    </div>
+    <div>
+      ${krs.length===0?'<div style="font-size:13px;color:var(--text-soft);padding:14px 0;text-align:center;">KR을 추가하세요.</div>':krs.map(k=>renderInlineKRRow(k,o.id)).join('')}
+    </div>
+  </section>`;
+}
 function renderObjectivePairRow(){
-  const first=state.objectives[0]||null;
-  const second=state.objectives[1]||null;
-  const extra=state.objectives.length>2;
+  const objs=state.objectives||[];
+  if(objs.length===0)return '';
+  // v56 — 1개면 풀폭 OKR-탭급 사이즈
+  if(objs.length===1){
+    return `<div class="objectives-solo-row" style="margin-top:14px;">${renderObjectiveSolo(objs[0])}</div>`;
+  }
+  const first=objs[0],second=objs[1];
+  const extra=objs.length>2;
   return `<div class="objectives-pair-row" style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px;">
     ${renderObjectivePanel(first,0)}
     ${renderObjectivePanel(second,1)}
-  </div>${extra?`<div style="font-size:11.5px;color:var(--text-soft);margin-top:6px;text-align:right;">+ ${state.objectives.length-2}개 Objective는 OKR 탭에서 확인 → <button class="btn-mode" data-act="view" data-view="okr" style="font-size:11px;padding:3px 9px;">OKR 탭으로</button></div>`:''}`;
+  </div>${extra?`<div style="font-size:11.5px;color:var(--text-soft);margin-top:6px;text-align:right;">+ ${objs.length-2}개 Objective는 OKR 탭에서 확인 → <button class="btn-mode" data-act="view" data-view="okr" style="font-size:11px;padding:3px 9px;">OKR 탭으로</button></div>`:''}`;
 }
 function renderMemberCard(m,e){
   const has=!!(e.blockers&&e.blockers.trim());
