@@ -2010,7 +2010,8 @@ function renderWBS(){
   function shiftYMD(ymd,days){if(!ymd)return ymd;const d=new Date(ymd+'T00:00:00');d.setDate(d.getDate()+days);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
   function fmtMD(ymd){return ymd?ymd.slice(5).replace('-','/'):'—';}
   function findItem(type,id){
-    if(!window.state||!state.objectives)return null;
+    // v37 — state는 top-level let이라 window.state에 안 붙음 → lexical scope의 state 직접 사용
+    if(typeof state==='undefined'||!state||!state.objectives)return null;
     for(const o of state.objectives){
       if(type==='O'&&o.id===id)return{kind:'O',item:o};
       for(const k of(o.keyResults||[])){
