@@ -329,7 +329,7 @@ function setSelfId(id){if(id==='__observer__'){localStorage.setItem(SELF_KEY,id)
 function selfMember(){if(!state.selfId||state.selfId==='__observer__')return null;return state.members.find(m=>m.id===state.selfId)||null;}
 function isObserver(){return state.selfId==='__observer__';}
 // v11 — 본인만 본인이 작성한 것 수정 가능
-function canEditAs(memberId){const s=selfMember();return !!(s&&memberId&&s.id===memberId);}
+function canEditAs(memberId){const s=selfMember();if(!s||!memberId)return false;return s.id===memberId||!!s.isAdmin;}
 // v16 — 세션 추적 (로그인 시작·하트비트)
 let _currentSessionId=null,_heartbeatTimer=null;
 async function startMemberSession(){
