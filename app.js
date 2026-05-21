@@ -475,15 +475,18 @@ function canEditAs(memberId){const s=selfMember();if(!s||!memberId)return false;
 let _currentSessionId=null,_heartbeatTimer=null;
 async function startMemberSession(){
   const me=selfMember();if(!me||me.isObserver)return; // 옵저버는 세션 기록 안 함
+  // v42 — 클라이언트 ID 사용. select().single() 의존 제거로 RLS SELECT 권한 없어도 heartbeat 작동
+  const sessionId=(crypto&&crypto.randomUUID)?crypto.randomUUID():uid();
   try{
-    const{data}=await sb.from('member_sessions').insert({
-      team_id:state.currentTeamId,member_id:me.id,member_name:me.name,
+    const{error}=await sb.from('member_sessions').insert({
+      id:sessionId,team_id:state.currentTeamId,member_id:me.id,member_name:me.name,
       login_at:new Date().toISOString(),last_active_at:new Date().toISOString(),
       user_agent:(navigator.userAgent||'').slice(0,200)
-    }).select().single();
-    if(data)_currentSessionId=data.id;
+    });
+    if(error){console.warn('[session] insert error',error.message||error);}
+    _currentSessionId=sessionId;
     startHeartbeat();
-  }catch(e){console.warn('[session] start fail',e);}
+  }catch(e){console.warn('[session] start fail',e);_currentSessionId=sessionId;startHeartbeat();}
 }
 function startHeartbeat(){
   if(_heartbeatTimer)clearInterval(_heartbeatTimer);
@@ -1060,8 +1063,12 @@ async function loadIDLRange(start,end){
 }
 function rangeBack(days){const e=todayKey();const sd=new Date(e);sd.setDate(sd.getDate()-days);const s=`${sd.getFullYear()}-${String(sd.getMonth()+1).padStart(2,'0')}-${String(sd.getDate()).padStart(2,'0')}`;return{start:s,end:e};}
 
+// v42 — realtime 재연결 백오프 (CHANNEL_ERROR/TIMED_OUT/CLOSED 후 자동 재시도)
+let _realtimeChannel=null,_realtimeReconnectTimer=null,_realtimeReconnectDelay=2000;
 function setupRealtime(){
-  sb.channel('okr-app-v2')
+  if(_realtimeChannel){try{sb.removeChannel(_realtimeChannel);}catch(_){}_realtimeChannel=null;}
+  connStatus='connecting';updateConnDot();
+  _realtimeChannel=sb.channel('okr-app-v2')
     .on('postgres_changes',{event:'*',schema:'public',table:'teams'},onTeamsChange)
     .on('postgres_changes',{event:'*',schema:'public',table:'members'},onMembersChange)
     .on('postgres_changes',{event:'*',schema:'public',table:'objectives'},onObjectivesChange)
@@ -1074,7 +1081,19 @@ function setupRealtime(){
     .on('postgres_changes',{event:'*',schema:'public',table:'reviews'},onReviewChange)
     .on('postgres_changes',{event:'*',schema:'public',table:'initiative_daily_logs'},onIDLChange)
     .on('postgres_changes',{event:'*',schema:'public',table:'initiative_tasks'},onInitTaskChange)
-    .subscribe(s=>{if(s==='SUBSCRIBED'){connStatus='online';updateConnDot();}else if(['CHANNEL_ERROR','TIMED_OUT','CLOSED'].includes(s)){connStatus='offline';updateConnDot();}});
+    .subscribe(s=>{
+      if(s==='SUBSCRIBED'){connStatus='online';updateConnDot();_realtimeReconnectDelay=2000;}
+      else if(['CHANNEL_ERROR','TIMED_OUT','CLOSED'].includes(s)){
+        connStatus='offline';updateConnDot();
+        // 지수 백오프로 재연결 (최대 30초)
+        if(_realtimeReconnectTimer)clearTimeout(_realtimeReconnectTimer);
+        _realtimeReconnectTimer=setTimeout(()=>{
+          _realtimeReconnectTimer=null;
+          _realtimeReconnectDelay=Math.min(_realtimeReconnectDelay*1.5,30000);
+          setupRealtime();
+        },_realtimeReconnectDelay);
+      }
+    });
 }
 function onInitTaskChange(p){
   const r=p.new||p.old;if(!r)return;
@@ -1095,10 +1114,10 @@ function onInitTaskChange(p){
 }
 async function saveInitiativeTask(it){debouncedSave(`init-task-${it.id}`,async()=>{markLocal('initiative_tasks',it.id);const{error}=await sb.from('initiative_tasks').upsert({id:it.id,initiative_id:it.initiative_id,title:it.title,status:it.status||'todo',owner_id:it.owner_id||null,start_date:it.start_date||null,due_date:it.due_date||null,sort_order:it.sort_order||0,updated_at:new Date().toISOString()});if(error)showToast('할일 저장 실패',true);});}
 async function deleteInitiativeTask(id){const{error}=await sb.from('initiative_tasks').delete().eq('id',id);if(error)showToast('삭제 실패',true);}
-function onIDLChange(p){const r=p.new||p.old;if(!r)return;if(isLocal('initiative_daily_logs',`${r.initiative_id}-${r.member_id}-${r.date}`))return;if(!state.initiativeDailyLogs[r.date])state.initiativeDailyLogs[r.date]={};if(!state.initiativeDailyLogs[r.date][r.member_id])state.initiativeDailyLogs[r.date][r.member_id]={};if(p.eventType==='DELETE'){delete state.initiativeDailyLogs[r.date][r.member_id][r.initiative_id];}else{state.initiativeDailyLogs[r.date][r.member_id][r.initiative_id]={checked:!!r.checked,note:r.note||''};}if(currentView==='today'&&r.date===viewingDate)render();}
-function onTeamsChange(p){const r=p.new||p.old;if(!r)return;if(isLocal('teams',r.id))return;if(p.eventType==='DELETE'){state.teams=state.teams.filter(t=>t.id!==r.id);}else{const i=state.teams.findIndex(t=>t.id===r.id);if(i>=0)state.teams[i]={...r};else state.teams.push({...r});state.teams.sort((a,b)=>(a.sort_order||0)-(b.sort_order||0));}render();}
-function onMembersChange(p){const r=p.new||p.old;if(r.team_id&&r.team_id!==state.currentTeamId)return;if(isLocal('members',r.id))return;if(p.eventType==='DELETE'){state.members=state.members.filter(m=>m.id!==r.id);}else{const i=state.members.findIndex(m=>m.id===r.id);if(i>=0)state.members[i]={...r};else state.members.push({...r});state.members.sort((a,b)=>(a.sort_order||0)-(b.sort_order||0));}if(['today','manage','eval'].includes(currentView))render();}
-function onObjectivesChange(p){const r=p.new||p.old;if(r.team_id&&r.team_id!==state.currentTeamId)return;if(isLocal('objectives',r.id))return;if(p.eventType==='DELETE'){state.objectives=state.objectives.filter(o=>o.id!==r.id);}else{const i=state.objectives.findIndex(o=>o.id===r.id);if(i>=0){Object.assign(state.objectives[i],{title:r.title,description:r.description,ownerId:r.owner_id,confidence:r.confidence||'mid',realityBlocker:r.reality_blocker||'',realityHelp:r.reality_help||''});}else{state.objectives.push({id:r.id,title:r.title,description:r.description||'',ownerId:r.owner_id,confidence:r.confidence||'mid',realityBlocker:r.reality_blocker||'',realityHelp:r.reality_help||'',keyResults:[]});expanded.add(r.id);}}render();}
+function onIDLChange(p){const r=p.new||p.old;if(!r)return;if(isLocal('initiative_daily_logs',`${r.initiative_id}-${r.member_id}-${r.date}`))return;if(!state.initiativeDailyLogs[r.date])state.initiativeDailyLogs[r.date]={};if(!state.initiativeDailyLogs[r.date][r.member_id])state.initiativeDailyLogs[r.date][r.member_id]={};if(p.eventType==='DELETE'){delete state.initiativeDailyLogs[r.date][r.member_id][r.initiative_id];}else{state.initiativeDailyLogs[r.date][r.member_id][r.initiative_id]={checked:!!r.checked,note:r.note||''};}if(currentView==='today'&&r.date===viewingDate)scheduleRender();}
+function onTeamsChange(p){const r=p.new||p.old;if(!r)return;if(isLocal('teams',r.id))return;if(p.eventType==='DELETE'){state.teams=state.teams.filter(t=>t.id!==r.id);}else{const i=state.teams.findIndex(t=>t.id===r.id);if(i>=0)state.teams[i]={...r};else state.teams.push({...r});state.teams.sort((a,b)=>(a.sort_order||0)-(b.sort_order||0));}scheduleRender();}
+function onMembersChange(p){const r=p.new||p.old;if(r.team_id&&r.team_id!==state.currentTeamId)return;if(isLocal('members',r.id))return;if(p.eventType==='DELETE'){state.members=state.members.filter(m=>m.id!==r.id);}else{const i=state.members.findIndex(m=>m.id===r.id);if(i>=0)state.members[i]={...r};else state.members.push({...r});state.members.sort((a,b)=>(a.sort_order||0)-(b.sort_order||0));}if(['today','manage','eval'].includes(currentView))scheduleRender();}
+function onObjectivesChange(p){const r=p.new||p.old;if(r.team_id&&r.team_id!==state.currentTeamId)return;if(isLocal('objectives',r.id))return;if(p.eventType==='DELETE'){state.objectives=state.objectives.filter(o=>o.id!==r.id);}else{const i=state.objectives.findIndex(o=>o.id===r.id);if(i>=0){Object.assign(state.objectives[i],{title:r.title,description:r.description,ownerId:r.owner_id,confidence:r.confidence||'mid',realityBlocker:r.reality_blocker||'',realityHelp:r.reality_help||''});}else{state.objectives.push({id:r.id,title:r.title,description:r.description||'',ownerId:r.owner_id,confidence:r.confidence||'mid',realityBlocker:r.reality_blocker||'',realityHelp:r.reality_help||'',keyResults:[]});expanded.add(r.id);}}scheduleRender();}
 function onKRChange(p){const r=p.new||p.old;if(isLocal('key_results',r.id))return;const o=state.objectives.find(x=>x.id===r.objective_id);if(!o&&p.eventType!=='DELETE')return;if(p.eventType==='DELETE'){if(o)o.keyResults=o.keyResults.filter(k=>k.id!==r.id);}else{if(!o)return;const idx=o.keyResults.findIndex(k=>k.id===r.id);const exist=idx>=0?o.keyResults[idx].initiatives:[];const oldCur=idx>=0?o.keyResults[idx].current:null;const kr={id:r.id,title:r.title,target:Number(r.target||0),current:Number(r.current||0),unit:r.unit||'',ownerId:r.owner_id,dueDate:r.due_date,confidence:r.confidence||'mid',realityBlocker:r.reality_blocker||'',realityHelp:r.reality_help||'',initiatives:exist};if(idx>=0)o.keyResults[idx]=kr;else o.keyResults.push(kr);
   // 충돌 감지: 본인이 같은 KR을 입력 중이고 다른 사람이 current를 바꿨다면 경고
   const focusedKR=document.activeElement?.dataset?.krid;
@@ -1106,13 +1125,13 @@ function onKRChange(p){const r=p.new||p.old;if(isLocal('key_results',r.id))retur
     const who=state.members.find(m=>m.id===r.last_progress_by);
     showToast(`⚠ ${who?who.name:'다른 사용자'}가 이 KR 진척을 ${oldCur}→${kr.current}로 변경했습니다. 본인 입력 충돌 가능`,true);
   }
-}render();}
-function onInitChange(p){const r=p.new||p.old;if(isLocal('initiatives',r.id))return;let kr=null;state.objectives.forEach(o=>o.keyResults.forEach(k=>{if(k.id===r.kr_id)kr=k;}));if(!kr){state.objectives.forEach(o=>o.keyResults.forEach(k=>{k.initiatives=k.initiatives.filter(i=>i.id!==r.id);}));render();return;}if(p.eventType==='DELETE'){kr.initiatives=kr.initiatives.filter(i=>i.id!==r.id);}else{const init={id:r.id,title:r.title,ownerId:r.owner_id,status:r.status||'todo',dueDate:r.due_date,confidence:r.confidence||'mid',realityBlocker:r.reality_blocker||'',realityHelp:r.reality_help||''};const i=kr.initiatives.findIndex(x=>x.id===r.id);if(i>=0)kr.initiatives[i]=init;else kr.initiatives.push(init);}render();}
+}scheduleRender();}
+function onInitChange(p){const r=p.new||p.old;if(isLocal('initiatives',r.id))return;let kr=null;state.objectives.forEach(o=>o.keyResults.forEach(k=>{if(k.id===r.kr_id)kr=k;}));if(!kr){state.objectives.forEach(o=>o.keyResults.forEach(k=>{k.initiatives=k.initiatives.filter(i=>i.id!==r.id);}));scheduleRender();return;}if(p.eventType==='DELETE'){kr.initiatives=kr.initiatives.filter(i=>i.id!==r.id);}else{const init={id:r.id,title:r.title,ownerId:r.owner_id,status:r.status||'todo',dueDate:r.due_date,confidence:r.confidence||'mid',realityBlocker:r.reality_blocker||'',realityHelp:r.reality_help||''};const i=kr.initiatives.findIndex(x=>x.id===r.id);if(i>=0)kr.initiatives[i]=init;else kr.initiatives.push(init);}scheduleRender();}
 function onStandupChange(p){const r=p.new||p.old;if(!r)return;if(r.team_id&&r.team_id!==state.currentTeamId)return;if(isLocal('standups',`${r.team_id}-${r.date}`))return;ensureStandup(r.date);if(p.eventType!=='DELETE')state.standups[r.date].headline=r.headline||'';if(currentView==='today'&&r.date===viewingDate){const ta=document.querySelector(`textarea[data-field="headline"][data-date="${viewingDate}"]`);if(ta&&document.activeElement!==ta)ta.value=r.headline||'';}}
 function onEntryChange(p){const r=p.new||p.old;if(!r)return;if(r.team_id&&r.team_id!==state.currentTeamId)return;if(isLocal('standup_entries',`${r.team_id}-${r.date}-${r.member_id}`))return;ensureStandup(r.date);if(p.eventType==='DELETE'){delete state.standups[r.date].entries[r.member_id];}else{state.standups[r.date].entries[r.member_id]={yesterday:r.yesterday||'',today:r.today||'',blockers:r.blockers||'',helper_member_id:r.helper_member_id||'',helper_name:r.helper_name||'',support_type:r.support_type||'',support_detail:r.support_detail||''};}if(currentView==='today'&&r.date===viewingDate){['yesterday','today','blockers'].forEach(f=>{const ta=document.querySelector(`textarea[data-field="standup"][data-mid="${r.member_id}"][data-fieldname="${f}"][data-date="${viewingDate}"]`);if(ta&&document.activeElement!==ta)ta.value=(state.standups[r.date].entries[r.member_id]||{})[f]||'';});const c=document.querySelector(`[data-member-card="${r.member_id}"]`);if(c){c.classList.remove('remote-edit');void c.offsetWidth;c.classList.add('remote-edit');setTimeout(()=>c.classList.remove('remote-edit'),1500);}updateBlockerUI(r.date,r.member_id);}}
-function onRoutineChange(p){const r=p.new||p.old;if(r.team_id&&r.team_id!==state.currentTeamId)return;if(isLocal('routines',r.id))return;if(p.eventType==='DELETE'){state.routines=state.routines.filter(x=>x.id!==r.id);}else{const i=state.routines.findIndex(x=>x.id===r.id);if(i>=0)state.routines[i]={...r};else state.routines.push({...r});}render();}
-function onRoutineLogChange(p){const r=p.new||p.old;if(isLocal('routine_logs',`${r.routine_id}-${r.date}`))return;ensureRoutineLog(r.date);if(p.eventType==='DELETE'){delete state.routineLogs[r.date][r.routine_id];}else{state.routineLogs[r.date][r.routine_id]={completed:!!r.completed,note:r.note||''};}if(['today','routines'].includes(currentView)&&r.date===viewingDate)render();}
-function onReviewChange(p){const r=p.new||p.old;if(r.team_id&&r.team_id!==state.currentTeamId)return;if(isLocal('reviews',r.id))return;if(p.eventType==='DELETE'){state.reviews=state.reviews.filter(x=>x.id!==r.id);}else{const i=state.reviews.findIndex(x=>x.id===r.id);if(i>=0)state.reviews[i]={...r};else state.reviews.unshift({...r});}if(currentView==='eval')render();}
+function onRoutineChange(p){const r=p.new||p.old;if(r.team_id&&r.team_id!==state.currentTeamId)return;if(isLocal('routines',r.id))return;if(p.eventType==='DELETE'){state.routines=state.routines.filter(x=>x.id!==r.id);}else{const i=state.routines.findIndex(x=>x.id===r.id);if(i>=0)state.routines[i]={...r};else state.routines.push({...r});}scheduleRender();}
+function onRoutineLogChange(p){const r=p.new||p.old;if(isLocal('routine_logs',`${r.routine_id}-${r.date}`))return;ensureRoutineLog(r.date);if(p.eventType==='DELETE'){delete state.routineLogs[r.date][r.routine_id];}else{state.routineLogs[r.date][r.routine_id]={completed:!!r.completed,note:r.note||''};}if(['today','routines'].includes(currentView)&&r.date===viewingDate)scheduleRender();}
+function onReviewChange(p){const r=p.new||p.old;if(r.team_id&&r.team_id!==state.currentTeamId)return;if(isLocal('reviews',r.id))return;if(p.eventType==='DELETE'){state.reviews=state.reviews.filter(x=>x.id!==r.id);}else{const i=state.reviews.findIndex(x=>x.id===r.id);if(i>=0)state.reviews[i]={...r};else state.reviews.unshift({...r});}if(currentView==='eval')scheduleRender();}
 function updateConnDot(){const e=document.getElementById('conn-dot');if(!e)return;e.className=`conn-dot ${connStatus}`;e.textContent=connStatus==='online'?'실시간 연결됨':connStatus==='connecting'?'연결 중':'오프라인';}
 
 const debouncers={};
@@ -1185,6 +1204,13 @@ function restoreFocus(sig){
     el.focus();
     if(sig.selStart!=null){try{el.setSelectionRange(sig.selStart,sig.selEnd);}catch(e){}}
   }
+}
+// v42 — realtime 이벤트 폭주 시 render() 합치기 (한 프레임에 1회만)
+let _renderScheduled=false;
+function scheduleRender(){
+  if(_renderScheduled)return;
+  _renderScheduled=true;
+  requestAnimationFrame(()=>{_renderScheduled=false;render();});
 }
 function render(){
   if(!initialized)return;
