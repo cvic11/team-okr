@@ -428,7 +428,14 @@ html.dark .chat-input{background:#1A1D27;color:#D1D5DB;border-color:#22252F}
 /* v44 — Init 행 가운데에 떨어뜨리면 nest (해당 Init의 할일로 demote) */
 [draggable="true"].drop-target-nest{background:var(--primary-soft) !important;outline:2px dashed var(--primary);outline-offset:-3px;border-radius:8px;position:relative}
 [draggable="true"].drop-target-nest::before,[draggable="true"].drop-target-nest::after{display:none}
-[draggable="true"].drop-target-nest .init-row-main::before{content:'↳ 이 이니셔티브의 할일로 이동';position:absolute;right:12px;top:50%;transform:translateY(-50%);background:var(--primary);color:white;padding:3px 9px;border-radius:5px;font-size:11px;font-weight:700;z-index:60;pointer-events:none;white-space:nowrap;box-shadow:0 2px 6px rgba(98,65,245,.35)}
+/* v45 — 드롭 전 라이브 프리뷰 (source 페이드 + target sub-list에 ghost row) */
+.drag-source-nesting{opacity:.32 !important;transform:scale(.97) !important;transition:opacity .15s,transform .15s !important;filter:grayscale(.3)}
+.nest-preview-wrap{margin:6px 0 4px 28px !important;padding:8px 12px !important;background:rgba(98,65,245,.08) !important;border-left:3px solid var(--primary) !important;border-radius:0 8px 8px 0}
+.nest-preview-ghost{display:flex;align-items:center;gap:8px;padding:7px 10px;background:linear-gradient(90deg,rgba(98,65,245,.16),rgba(98,65,245,.06));border:1px dashed var(--primary);border-radius:6px;animation:nestPreviewIn .2s ease-out;margin-top:4px}
+.nest-preview-arrow{color:var(--primary);font-weight:700;font-size:14px;flex-shrink:0}
+.nest-preview-title{flex:1;font-size:13px;font-weight:700;color:var(--primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.nest-preview-hint{font-size:10.5px;color:var(--primary);opacity:.7;font-weight:600;flex-shrink:0;background:white;padding:2px 7px;border-radius:5px}
+@keyframes nestPreviewIn{from{opacity:0;transform:translateY(-4px) scale(.96)}to{opacity:1;transform:translateY(0) scale(1)}}
 /* sub-task 행 — 제목 input 우선, 메타 작게 */
 .init-sub-row{display:flex;align-items:center;gap:6px;padding:5px 0;border-bottom:1px dashed rgba(0,0,0,.06)}
 .init-sub-row .init-sub-title{flex:1 1 auto;min-width:0;font-size:13px;padding:6px 10px;background:white;border:1px solid var(--line);border-radius:6px;font-family:inherit;outline:none;transition:border-color .12s,box-shadow .12s}
@@ -816,6 +823,11 @@ star:`<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="curren
 download:`<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`,
 print:`<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>`
 };
+// v45 — 접기/펼치기 토글 아이콘 통일 (아래 방향 chevron, 펼침 상태에선 180도 회전)
+function caret(open,size){
+  const sz=size||12;
+  return `<svg width="${sz}" height="${sz}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:-1px;transform:rotate(${open?180:0}deg);transition:transform .15s ease;flex-shrink:0;"><polyline points="6 9 12 15 18 9"/></svg>`;
+}
 function uid(){return Math.random().toString(36).slice(2,9)+Date.now().toString(36).slice(-3);}
 function todayKey(){const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
 function formatDateLong(key){const[y,m,d]=key.split('-').map(Number);const dt=new Date(y,m-1,d);const dn=['일','월','화','수','목','금','토'];return `${y}. ${m}. ${d}. ${dn[dt.getDay()]}요일`;}
@@ -884,7 +896,11 @@ async function loadTeamData(tid){
   state.members.forEach(m=>{m.isAdmin=!!m.is_admin;m.isObserver=!!m.is_observer;});
   state.routines=rr.data||[];
   state.reviews=rvr.data||[];
+  // v45 — OKR 탭 초기에는 모두 펼침 (사용자가 접으면 그 선택 유지)
   expanded=new Set(state.objectives.map(o=>o.id));
+  krCollapsed=new Set(); // KR도 모두 펼침
+  window._initSubOpen=new Set();
+  state.objectives.forEach(o=>(o.keyResults||[]).forEach(k=>(k.initiatives||[]).forEach(i=>window._initSubOpen.add(i.id))));
   state.standups={};state.routineLogs={};
   await Promise.all([loadStandup(viewingDate),loadRoutineLogs(viewingDate)]);
 }
@@ -1658,7 +1674,7 @@ function renderObjective(o,idx){
   const okrRo=okrEdit?'':' readonly';
   const okrDis=okrEdit?'':' disabled';
   const okrTip=okrEdit?'':' title="관리자만 수정 가능"';
-  return `<div class="obj-card" data-obj-id="${o.id}" draggable="${okrEdit?'true':'false'}" data-drag-type="obj"><div class="obj-head"><span class="drag-handle" title="드래그로 순서 변경" style="${okrEdit?'':'opacity:.3;'}">⋮⋮</span><button class="obj-toggle btn-icon" data-act="toggle-obj" data-oid="${o.id}">${open?I.chevUp:I.chevDown}</button><div class="obj-body"><div class="obj-tags"><span class="tag-id">O${idx+1}</span>${guideHelp('objective')}<select class="tag-owner" data-field="obj-owner" data-oid="${o.id}"${okrDis}><option value="">담당 미지정</option>${state.members.map(m=>`<option value="${m.id}" ${o.ownerId===m.id?'selected':''}>${esc(m.name)}</option>`).join('')}</select>${renderConfChip('objective',o.id,o.confidence||'mid')}<label style="font-size:10.5px;color:var(--text-soft);font-weight:600;">시작<input type="date" data-field="obj-start" data-oid="${o.id}" value="${o.startDate||''}"${okrRo}${okrTip} style="font-size:11px;padding:3px 6px;margin-left:4px;border:1px solid var(--line);border-radius:5px;font-family:inherit;" /></label><label style="font-size:10.5px;color:var(--text-soft);font-weight:600;">마감<input type="date" data-field="obj-due" data-oid="${o.id}" value="${o.dueDate||''}"${okrRo}${okrTip} style="font-size:11px;padding:3px 6px;margin-left:4px;border:1px solid var(--line);border-radius:5px;font-family:inherit;" /></label><button class="reality-toggle ${hr?'has-content':''}" data-act="toggle-reality" data-key="${rk}">${ro?'Reality ▴':'Reality ▾'}</button><button class="btn-icon" data-act="show-history" data-etype="objective" data-eid="${o.id}" title="이력">${I.clock}</button><button class="btn-icon" data-act="open-reflection" data-etype="objective" data-eid="${o.id}" data-period="final" title="회고 작성">${I.star}</button></div><input class="obj-title-input" data-field="obj-title" data-oid="${o.id}" value="${esc(o.title)}" placeholder="가슴 뛰는 도달점 (예: 편의점 창업 희망자들이 CU의 브리핑을 먼저 떠올리고 CU만을 희망한다)"${okrRo}${okrTip} /><input class="obj-desc-input" data-field="obj-desc" data-oid="${o.id}" placeholder="이 목표가 달성되었을 때 우리 팀·고객에게 어떤 변화가 있는가" value="${esc(o.description||'')}"${okrRo}${okrTip} />${ro?renderRealityBox('objective',o.id,o.realityBlocker,o.realityHelp):''}</div><div class="obj-avg-wrap"><div class="obj-avg-label">평균 진척</div><div class="obj-avg" data-obj-avg style="color:${progressColor(avg)};">${avg}%</div><div class="obj-actions">${okrEdit?`<button class="btn-icon" data-act="del-obj" data-oid="${o.id}" title="삭제">${I.trash}</button>`:''}</div></div></div>${open?`<div class="obj-krs">${o.keyResults.length===0?`<div style="padding:14px 22px;">${renderGuideCard('kr')}</div>`:''}${o.keyResults.map((kr,ki)=>renderKR(o.id,kr,ki)).join('')}<div class="add-line">${okrEdit?`<button class="btn btn-soft" data-act="add-kr" data-oid="${o.id}">${I.plus} KR 추가</button>`:'<span style="font-size:11.5px;color:var(--text-soft);">KR 추가는 관리자만 가능</span>'}${o.keyResults.length>5?'<span style="font-size:11px;color:var(--warning);font-weight:600;margin-left:8px;align-self:center;">⚠ 권장 3~5개</span>':o.keyResults.length<3&&o.keyResults.length>0?'<span style="font-size:11px;color:var(--text-soft);margin-left:8px;align-self:center;">권장 3~5개 (현재 '+o.keyResults.length+'개)</span>':''}</div></div>`:''}</div>`;
+  return `<div class="obj-card" data-obj-id="${o.id}" draggable="${okrEdit?'true':'false'}" data-drag-type="obj"><div class="obj-head"><span class="drag-handle" title="드래그로 순서 변경" style="${okrEdit?'':'opacity:.3;'}">⋮⋮</span><button class="obj-toggle btn-icon" data-act="toggle-obj" data-oid="${o.id}" title="${open?'접기':'펼치기'}">${caret(open,18)}</button><div class="obj-body"><div class="obj-tags"><span class="tag-id">O${idx+1}</span>${guideHelp('objective')}<select class="tag-owner" data-field="obj-owner" data-oid="${o.id}"${okrDis}><option value="">담당 미지정</option>${state.members.map(m=>`<option value="${m.id}" ${o.ownerId===m.id?'selected':''}>${esc(m.name)}</option>`).join('')}</select>${renderConfChip('objective',o.id,o.confidence||'mid')}<label style="font-size:10.5px;color:var(--text-soft);font-weight:600;">시작<input type="date" data-field="obj-start" data-oid="${o.id}" value="${o.startDate||''}"${okrRo}${okrTip} style="font-size:11px;padding:3px 6px;margin-left:4px;border:1px solid var(--line);border-radius:5px;font-family:inherit;" /></label><label style="font-size:10.5px;color:var(--text-soft);font-weight:600;">마감<input type="date" data-field="obj-due" data-oid="${o.id}" value="${o.dueDate||''}"${okrRo}${okrTip} style="font-size:11px;padding:3px 6px;margin-left:4px;border:1px solid var(--line);border-radius:5px;font-family:inherit;" /></label><button class="reality-toggle ${hr?'has-content':''}" data-act="toggle-reality" data-key="${rk}">${ro?'Reality ▴':'Reality ▾'}</button><button class="btn-icon" data-act="show-history" data-etype="objective" data-eid="${o.id}" title="이력">${I.clock}</button><button class="btn-icon" data-act="open-reflection" data-etype="objective" data-eid="${o.id}" data-period="final" title="회고 작성">${I.star}</button></div><input class="obj-title-input" data-field="obj-title" data-oid="${o.id}" value="${esc(o.title)}" placeholder="가슴 뛰는 도달점 (예: 편의점 창업 희망자들이 CU의 브리핑을 먼저 떠올리고 CU만을 희망한다)"${okrRo}${okrTip} /><input class="obj-desc-input" data-field="obj-desc" data-oid="${o.id}" placeholder="이 목표가 달성되었을 때 우리 팀·고객에게 어떤 변화가 있는가" value="${esc(o.description||'')}"${okrRo}${okrTip} />${ro?renderRealityBox('objective',o.id,o.realityBlocker,o.realityHelp):''}</div><div class="obj-avg-wrap"><div class="obj-avg-label">평균 진척</div><div class="obj-avg" data-obj-avg style="color:${progressColor(avg)};">${avg}%</div><div class="obj-actions">${okrEdit?`<button class="btn-icon" data-act="del-obj" data-oid="${o.id}" title="삭제">${I.trash}</button>`:''}</div></div></div>${open?`<div class="obj-krs">${o.keyResults.length===0?`<div style="padding:14px 22px;">${renderGuideCard('kr')}</div>`:''}${o.keyResults.map((kr,ki)=>renderKR(o.id,kr,ki)).join('')}<div class="add-line">${okrEdit?`<button class="btn btn-soft" data-act="add-kr" data-oid="${o.id}">${I.plus} KR 추가</button>`:'<span style="font-size:11.5px;color:var(--text-soft);">KR 추가는 관리자만 가능</span>'}${o.keyResults.length>5?'<span style="font-size:11px;color:var(--warning);font-weight:600;margin-left:8px;align-self:center;">⚠ 권장 3~5개</span>':o.keyResults.length<3&&o.keyResults.length>0?'<span style="font-size:11px;color:var(--text-soft);margin-left:8px;align-self:center;">권장 3~5개 (현재 '+o.keyResults.length+'개)</span>':''}</div></div>`:''}</div>`;
 }
 function renderKR(oid,kr,idx){
   const p=pct(kr.current,kr.target);const rk=`kr:${kr.id}`;const ro=realityOpen.has(rk);const hr=(kr.realityBlocker||kr.realityHelp);const ko=!krCollapsed.has(kr.id);
@@ -1671,7 +1687,7 @@ function renderKR(oid,kr,idx){
   const okrRo=okrEdit?'':' readonly';
   const okrDis=okrEdit?'':' disabled';
   const okrTip=okrEdit?'':' title="관리자만 수정 가능"';
-  return `<div class="kr-row" data-kr-id="${kr.id}" data-oid="${oid}" draggable="${okrEdit?'true':'false'}" data-drag-type="kr" data-drag-parent="${oid}"><div class="kr-row-line"><span class="drag-handle" style="font-size:13px;${okrEdit?'':'opacity:.3;'}" title="드래그로 순서 변경">⋮⋮</span><span class="kr-id">KR${idx+1}</span>${guideHelp('kr')}<input class="kr-title-input" data-field="kr-title" data-oid="${oid}" data-krid="${kr.id}" value="${esc(kr.title)}" placeholder="결과 측정 기준 (예: 매장당 평균 매출 GS25 대비 200% / NPS 70점 / 가맹문의 월 1,000건)"${okrRo}${okrTip} /><input type="number" class="kr-num-input" data-field="kr-current" data-oid="${oid}" data-krid="${kr.id}" value="${kr.current}" title="현재 진척" /><span style="color:var(--text-soft);font-size:12px;">/</span><input type="number" class="kr-num-input" data-field="kr-target" data-oid="${oid}" data-krid="${kr.id}" value="${kr.target}"${okrRo}${okrTip} />${renderConfChip('kr',kr.id,kr.confidence||'mid')}<span class="kr-pct" data-kr-pct style="color:${progressColor(p)};">${p}%</span>${startDisp?`<span style="font-size:11px;color:var(--text-soft);font-weight:600;" title="시작">${startDisp}</span>`:''}${dueDisp?`<span style="font-size:11px;color:${dueClr};font-weight:600;" title="마감">~${dueDisp}</span>`:''}${hr?`<span style="font-size:10.5px;color:var(--primary);font-weight:600;" title="Reality 작성됨">●</span>`:''}<button class="kr-menu-btn ${mo?'open':''}" data-act="toggle-kr-menu" data-krid="${kr.id}" title="추가 메뉴">⋯</button><button class="btn-icon" data-act="toggle-kr" data-krid="${kr.id}" title="이니셔티브 ${kr.initiatives.length}건">${ko?I.chevUp:I.chevDown}${kr.initiatives.length>0?`<span style="font-size:9px;margin-left:2px;color:var(--primary);font-weight:700;">${kr.initiatives.length}</span>`:''}</button></div><div class="kr-bar-wrap"><div class="kr-bar-track"><div class="progress-fill" data-kr-bar style="width:${p}%;background:${progressColor(p)};"></div></div></div>${mo?`<div class="kr-menu-panel"><label>단위 <input class="kr-unit-input" placeholder="%, 점, 건" data-field="kr-unit" data-oid="${oid}" data-krid="${kr.id}" value="${esc(kr.unit||'')}" style="width:80px;"${okrRo}${okrTip} /></label><label>시작 <input type="date" class="kr-due-input" data-field="kr-start" data-oid="${oid}" data-krid="${kr.id}" value="${kr.startDate||''}"${okrRo}${okrTip} /></label><label>마감 <input type="date" class="kr-due-input ${isOverdue(kr.dueDate)?'overdue':''}" data-field="kr-due" data-oid="${oid}" data-krid="${kr.id}" value="${kr.dueDate||''}"${okrRo}${okrTip} /></label><button class="reality-toggle ${hr?'has-content':''}" data-act="toggle-reality" data-key="${rk}" style="font-size:11.5px;">${ro?'Reality ▴':'Reality ▾'}</button><button class="btn-icon" data-act="show-history" data-etype="key_result" data-eid="${kr.id}" title="이력">${I.clock} 이력</button><button class="btn-icon" data-act="open-reflection" data-etype="key_result" data-eid="${kr.id}" data-period="final" title="회고 작성">${I.star} 회고</button>${okrEdit?`<button class="btn-icon" data-act="del-kr" data-oid="${oid}" data-krid="${kr.id}" title="삭제" style="color:var(--warning);margin-left:auto;">${I.trash} 삭제</button>`:''}</div>`:''}${ro?renderRealityBox('kr',kr.id,kr.realityBlocker,kr.realityHelp):''}${ko?renderInitiativesList(kr):''}</div>`;
+  return `<div class="kr-row" data-kr-id="${kr.id}" data-oid="${oid}" draggable="${okrEdit?'true':'false'}" data-drag-type="kr" data-drag-parent="${oid}"><div class="kr-row-line"><span class="drag-handle" style="font-size:13px;${okrEdit?'':'opacity:.3;'}" title="드래그로 순서 변경">⋮⋮</span><span class="kr-id">KR${idx+1}</span>${guideHelp('kr')}<input class="kr-title-input" data-field="kr-title" data-oid="${oid}" data-krid="${kr.id}" value="${esc(kr.title)}" placeholder="결과 측정 기준 (예: 매장당 평균 매출 GS25 대비 200% / NPS 70점 / 가맹문의 월 1,000건)"${okrRo}${okrTip} /><input type="number" class="kr-num-input" data-field="kr-current" data-oid="${oid}" data-krid="${kr.id}" value="${kr.current}" title="현재 진척" /><span style="color:var(--text-soft);font-size:12px;">/</span><input type="number" class="kr-num-input" data-field="kr-target" data-oid="${oid}" data-krid="${kr.id}" value="${kr.target}"${okrRo}${okrTip} />${renderConfChip('kr',kr.id,kr.confidence||'mid')}<span class="kr-pct" data-kr-pct style="color:${progressColor(p)};">${p}%</span>${startDisp?`<span style="font-size:11px;color:var(--text-soft);font-weight:600;" title="시작">${startDisp}</span>`:''}${dueDisp?`<span style="font-size:11px;color:${dueClr};font-weight:600;" title="마감">~${dueDisp}</span>`:''}${hr?`<span style="font-size:10.5px;color:var(--primary);font-weight:600;" title="Reality 작성됨">●</span>`:''}<button class="kr-menu-btn ${mo?'open':''}" data-act="toggle-kr-menu" data-krid="${kr.id}" title="추가 메뉴">⋯</button><button class="btn-icon" data-act="toggle-kr" data-krid="${kr.id}" title="이니셔티브 ${kr.initiatives.length}건">${caret(ko,16)}${kr.initiatives.length>0?`<span style="font-size:9px;margin-left:2px;color:var(--primary);font-weight:700;">${kr.initiatives.length}</span>`:''}</button></div><div class="kr-bar-wrap"><div class="kr-bar-track"><div class="progress-fill" data-kr-bar style="width:${p}%;background:${progressColor(p)};"></div></div></div>${mo?`<div class="kr-menu-panel"><label>단위 <input class="kr-unit-input" placeholder="%, 점, 건" data-field="kr-unit" data-oid="${oid}" data-krid="${kr.id}" value="${esc(kr.unit||'')}" style="width:80px;"${okrRo}${okrTip} /></label><label>시작 <input type="date" class="kr-due-input" data-field="kr-start" data-oid="${oid}" data-krid="${kr.id}" value="${kr.startDate||''}"${okrRo}${okrTip} /></label><label>마감 <input type="date" class="kr-due-input ${isOverdue(kr.dueDate)?'overdue':''}" data-field="kr-due" data-oid="${oid}" data-krid="${kr.id}" value="${kr.dueDate||''}"${okrRo}${okrTip} /></label><button class="reality-toggle ${hr?'has-content':''}" data-act="toggle-reality" data-key="${rk}" style="font-size:11.5px;">${ro?'Reality ▴':'Reality ▾'}</button><button class="btn-icon" data-act="show-history" data-etype="key_result" data-eid="${kr.id}" title="이력">${I.clock} 이력</button><button class="btn-icon" data-act="open-reflection" data-etype="key_result" data-eid="${kr.id}" data-period="final" title="회고 작성">${I.star} 회고</button>${okrEdit?`<button class="btn-icon" data-act="del-kr" data-oid="${oid}" data-krid="${kr.id}" title="삭제" style="color:var(--warning);margin-left:auto;">${I.trash} 삭제</button>`:''}</div>`:''}${ro?renderRealityBox('kr',kr.id,kr.realityBlocker,kr.realityHelp):''}${ko?renderInitiativesList(kr):''}</div>`;
 }
 function renderInitiativesList(kr){
   // v15·v16 — 본인이 본인 이니셔티브를 만들 수 있도록 (관리자 = 자유)
@@ -1699,7 +1715,7 @@ function renderInitiative(krId,init){
   const subTasks=state.initiativeTasks&&state.initiativeTasks[init.id]||[];
   const subOpen=window._initSubOpen&&window._initSubOpen.has(init.id);
   // v31 — 할일 칩 (메타 영역으로 이동)
-  const subHead=`<button class="init-meta-chip ${subTasks.length>0?'active':''}" data-act="toggle-init-sub" data-iid="${init.id}" title="${subOpen?'접기':'펼치기'}">${subOpen?'▼':'▶'} 할일 ${subTasks.length}</button>`;
+  const subHead=`<button class="init-meta-chip ${subTasks.length>0?'active':''}" data-act="toggle-init-sub" data-iid="${init.id}" title="${subOpen?'접기':'펼치기'}">${caret(subOpen)} 할일 ${subTasks.length}</button>`;
   let subBody='';
   if(subOpen){
     const subRows=subTasks.map(t=>renderInitSubTaskRow(init.id,t,initEdit)).join('');
@@ -1802,7 +1818,7 @@ function renderRoutinesView(){
   const noOwnerCard=noOwner.length>0?`<section class="card" style="margin-bottom:10px;"><div class="section-head"><span class="section-title">담당자 미지정</span><span class="section-meta">· ${noOwner.length}건</span></div>${noOwner.map(r=>renderRoutineCheck(r,log[r.id]||{})).join('')}</section>`:'';
   const empty=tr.length===0?`<section class="card"><div style="font-size:13px;color:var(--text-soft);padding:6px 0;">${isToday?'오늘':date}에 해당하는 루틴이 없습니다. 아래 ＋ 루틴 추가로 시작하세요.</div></section>`:'';
   // 하단 루틴 관리 (접힘 디폴트)
-  const mngHead=`<div class="section-head" style="cursor:pointer;user-select:none;" data-act="toggle-routines-mng" title="${mngOpen?'접기':'펼치기'}"><span class="section-title">${mngOpen?'▼':'▶'} 루틴 관리</span><span class="section-meta">· 전체 ${state.routines.length}건${mngOpen?'':' (펼치기)'}</span></div>`;
+  const mngHead=`<div class="section-head" style="cursor:pointer;user-select:none;" data-act="toggle-routines-mng" title="${mngOpen?'접기':'펼치기'}"><span class="section-title">${caret(mngOpen,14)} 루틴 관리</span><span class="section-meta">· 전체 ${state.routines.length}건${mngOpen?'':' (펼치기)'}</span></div>`;
   const mngBody=mngOpen?`<div style="margin-top:8px;">${state.routines.length===0?'<div style="font-size:13px;color:var(--text-soft);padding:6px 0;">＋ 루틴 추가로 새 항목을 만드세요.</div>':state.routines.map(r=>renderRoutineMng(r)).join('')}<div style="margin-top:10px;display:flex;justify-content:flex-end;"><button class="btn btn-primary" data-act="add-routine">${I.plus} 루틴 추가</button></div></div>`:`<div style="margin-top:6px;display:flex;justify-content:flex-end;"><button class="btn btn-soft" data-act="add-routine">${I.plus} 루틴 추가</button></div>`;
   return `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px;"><div><h2 style="font-weight:800;font-size:23px;margin:0;">루틴 · ${isToday?'오늘':date}</h2><div style="font-size:13px;color:var(--text-soft);margin-top:2px;">담당자별 반복 업무 · 진행 ${tr.length}건</div></div></div>${ownerCards}${noOwnerCard}${empty}<section class="card card-section">${mngHead}${mngBody}</section>`;
 }
@@ -2019,7 +2035,7 @@ function renderWBS(){
     const canCollapse=r.type==='O'||r.type==='KR';
     const collapseKey=r.type+':'+r.id;
     const isCollapsed=isWBSKidsHidden(r.type,r.id);
-    const toggleBtn=canCollapse?`<button class="btn-icon" data-act="wbs-toggle" data-key="${collapseKey}" style="padding:0 4px;font-size:10px;flex-shrink:0;">${isCollapsed?'▶':'▼'}</button>`:`<span style="display:inline-block;width:14px;"></span>`;
+    const toggleBtn=canCollapse?`<button class="btn-icon" data-act="wbs-toggle" data-key="${collapseKey}" style="padding:0 4px;flex-shrink:0;">${caret(!isCollapsed,11)}</button>`:`<span style="display:inline-block;width:14px;"></span>`;
     const rowBg=r.type==='O'?`background:hsl(${labelHue},60%,96%);`:'';
     const sideBar=`<span style="position:absolute;left:0;top:0;bottom:0;width:3px;background:hsl(${labelHue},60%,55%);"></span>`;
     labelsHtml+=`<div class="wbs-label-row" style="position:relative;height:${ROW_H}px;display:flex;align-items:center;gap:6px;padding:0 10px 0 ${lvIndent}px;border-bottom:1px solid #F4F4F5;font-size:${r.type==='O'?'13':r.type==='KR'?'12.5':'12'}px;${rowBg}${r.type==='O'?'font-weight:700;':r.type==='KR'?'font-weight:600;':''}">${sideBar}${toggleBtn}<span style="flex-shrink:0;">${icon}</span>${badge}<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${esc(r.label)}">${esc(r.label)}</span>${ownerChip}</div>`;
@@ -3239,6 +3255,38 @@ document.addEventListener('dragstart',e=>{
   e.dataTransfer.effectAllowed='move';try{e.dataTransfer.setData('text/plain',el.dataset.dragType);}catch(err){}
 });
 function _clearDropTargets(){document.querySelectorAll('.drop-target,.drop-target-before,.drop-target-after,.drop-target-nest,.drop-target-into').forEach(el=>el.classList.remove('drop-target','drop-target-before','drop-target-after','drop-target-nest','drop-target-into'));}
+// v45 — 드롭 전 라이브 프리뷰: source를 숨기고 target의 sub-list에 ghost row 삽입
+let _nestPreview=null;
+function showNestPreview(srcEl,tgtEl){
+  const tgtIid=tgtEl.dataset.initId;
+  if(_nestPreview&&_nestPreview.tgtIid===tgtIid)return; // 동일 대상이면 유지
+  clearNestPreview();
+  const titleInput=srcEl.querySelector('input[data-field="init-title"]');
+  const title=titleInput?titleInput.value:'(이니셔티브)';
+  const escFn=(typeof esc==='function')?esc:(typeof escapeHtml==='function'?escapeHtml:String);
+  const ghost=document.createElement('div');
+  ghost.className='nest-preview-ghost';
+  ghost.innerHTML='<span class="nest-preview-arrow">↳</span><span class="nest-preview-title">'+escFn(title||'(제목 없음)')+'</span><span class="nest-preview-hint">놓으면 이 위치로 이동</span>';
+  // sub-list가 이미 펼쳐져 있으면 그 안에, 없으면 임시 wrap 생성
+  let subList=tgtEl.querySelector('.init-sub-list');
+  let tempWrap=null;
+  if(subList){subList.appendChild(ghost);}
+  else{
+    tempWrap=document.createElement('div');
+    tempWrap.className='init-sub-list nest-preview-wrap';
+    tempWrap.appendChild(ghost);
+    tgtEl.appendChild(tempWrap);
+  }
+  srcEl.classList.add('drag-source-nesting');
+  _nestPreview={srcEl,tgtEl,tgtIid,ghost,tempWrap};
+}
+function clearNestPreview(){
+  if(!_nestPreview)return;
+  try{_nestPreview.srcEl.classList.remove('drag-source-nesting');}catch(_){}
+  try{_nestPreview.ghost.remove();}catch(_){}
+  if(_nestPreview.tempWrap){try{_nestPreview.tempWrap.remove();}catch(_){}}
+  _nestPreview=null;
+}
 // v29 — 헤더 실제 높이를 CSS 변수로 노출 (date-bar 등 sticky 요소가 정확한 오프셋 사용)
 (function(){
   function update(){const h=document.querySelector('header.app-header');if(h)document.documentElement.style.setProperty('--app-header-h',h.offsetHeight+'px');}
@@ -3254,6 +3302,7 @@ function _clearDropTargets(){document.querySelectorAll('.drop-target,.drop-targe
 document.addEventListener('dragend',e=>{
   if(dragSrc)dragSrc.classList.remove('dragging');
   _clearDropTargets();
+  clearNestPreview();
   dragSrc=null;
 });
 // v44 — 마우스 Y 위치로 zone 결정 (init만 nest 가능)
@@ -3283,8 +3332,13 @@ document.addEventListener('dragover',e=>{
   e.preventDefault();
   const{zone}=_resolveDragZone(tgt,e.clientY);
   _clearDropTargets();
-  if(zone==='nest')tgt.classList.add('drop-target-nest');
-  else tgt.classList.add(zone==='after'?'drop-target-after':'drop-target-before');
+  if(zone==='nest'){
+    tgt.classList.add('drop-target-nest');
+    showNestPreview(dragSrc,tgt);
+  }else{
+    clearNestPreview();
+    tgt.classList.add(zone==='after'?'drop-target-after':'drop-target-before');
+  }
 });
 document.addEventListener('drop',async e=>{
   if(!dragSrc)return;
