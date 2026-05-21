@@ -432,12 +432,12 @@ html.dark .chat-input{background:#1A1D27;color:#D1D5DB;border-color:#22252F}
 [draggable="true"].drop-target-nest{background:var(--primary-soft) !important;outline:2px dashed var(--primary);outline-offset:-3px;border-radius:8px;position:relative}
 [draggable="true"].drop-target-nest::before,[draggable="true"].drop-target-nest::after{display:none}
 /* v47 — 드롭 전 라이브 프리뷰: source 자체를 숨기고 target sub-list에 실제 task 형태로 표시 */
-/* v49 — source는 반투명 ghost로 (공간 유지하되 시각적으로 옮겨가는 느낌) */
-.drag-source-hidden{opacity:.18 !important;filter:saturate(.2) blur(.5px);pointer-events:none;transition:opacity .12s,filter .12s;position:relative}
-.drag-source-hidden::before{content:'이동 중…';position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);background:var(--text-soft);color:white;font-size:10.5px;font-weight:700;padding:3px 10px;border-radius:5px;z-index:5;opacity:.95;pointer-events:none;filter:none !important}
+/* v50 — source는 가볍게 페이드만 (공간 유지) */
+.drag-source-hidden{opacity:.22 !important;filter:saturate(.3);pointer-events:none;transition:opacity .12s,filter .12s}
 .nest-preview-wrap{margin:6px 0 4px 28px !important;padding:6px 8px !important;background:rgba(98,65,245,.08) !important;border-left:3px solid var(--primary) !important;border-radius:0 8px 8px 0}
-.nest-preview-row{animation:nestPreviewIn .22s ease-out;background:linear-gradient(90deg,rgba(98,65,245,.22),rgba(98,65,245,.08)) !important;border:2px dashed var(--primary) !important;border-radius:8px !important;margin:3px 0 !important;position:relative;box-shadow:0 4px 14px rgba(98,65,245,.28)}
-.nest-preview-row::after{content:'미리보기 — 놓으면 확정';position:absolute;right:10px;top:50%;transform:translateY(-50%);background:var(--primary);color:white;font-size:10px;font-weight:700;padding:3px 9px;border-radius:5px;pointer-events:none;white-space:nowrap;box-shadow:0 2px 8px rgba(98,65,245,.45);z-index:10}
+/* v50 — preview row: 확정 후 모습을 그대로 흐릿하게. 별도 배지·테두리 없이 fade만. */
+.nest-preview-row{animation:nestPreviewIn .2s ease-out;opacity:.55;filter:saturate(.7);position:relative}
+.nest-preview-row::before{content:'';position:absolute;left:-3px;top:2px;bottom:2px;width:3px;background:var(--primary);border-radius:2px;opacity:.6}
 @keyframes nestPreviewIn{from{opacity:0;transform:translateY(-6px) scale(.97)}to{opacity:1;transform:translateY(0) scale(1)}}
 /* v47 — sub-task 행: init-row-main과 동일 레이아웃, 축소판 */
 .init-sub-row{display:block;border-bottom:1px dashed rgba(0,0,0,.04);position:relative}
@@ -3284,30 +3284,46 @@ document.addEventListener('dragstart',e=>{
   e.dataTransfer.effectAllowed='move';try{e.dataTransfer.setData('text/plain',el.dataset.dragType);}catch(err){}
 });
 function _clearDropTargets(){document.querySelectorAll('.drop-target,.drop-target-before,.drop-target-after,.drop-target-nest,.drop-target-into').forEach(el=>el.classList.remove('drop-target','drop-target-before','drop-target-after','drop-target-nest','drop-target-into'));}
-// v47 — 드롭 전 강화된 라이브 프리뷰: source를 숨기고 target sub-list에 실제 task 형태 행 표시
+// v47/v50 — 드롭 전 라이브 프리뷰: source를 ghost로, target sub-list에 실제 task 형태 행 표시
+// v50 — task→init nest(부모 이동) 케이스도 동일 미리보기
 let _nestPreview=null;
 function showNestPreview(srcEl,tgtEl){
   const tgtIid=tgtEl.dataset.initId;
   if(_nestPreview&&_nestPreview.tgtIid===tgtIid)return;
   clearNestPreview();
-  // source init 데이터 찾기
-  const srcIid=srcEl.dataset.initId;
-  let srcInit=null;
-  (state.objectives||[]).forEach(o=>(o.keyResults||[]).forEach(k=>(k.initiatives||[]).forEach(i=>{
-    if(i.id===srcIid)srcInit=i;
-  })));
-  if(!srcInit)return;
-  // demote 결과와 동일한 task 객체 시뮬레이션
-  const ownerIds=(srcInit.ownerId||'').split(',').map(s=>s.trim()).filter(Boolean);
-  const ownerId=(ownerIds[0]&&ownerIds[0]!=='__team_all__')?ownerIds[0]:null;
-  const fakeTask={
-    id:'__nest-preview__',
-    title:srcInit.title||'',
-    status:srcInit.status||'todo',
-    owner_id:ownerId,
-    start_date:srcInit.startDate||null,
-    due_date:srcInit.dueDate||null
-  };
+  const srcType=srcEl.dataset.dragType;
+  let fakeTask=null;
+  if(srcType==='init'){
+    const srcIid=srcEl.dataset.initId;
+    let srcInit=null;
+    (state.objectives||[]).forEach(o=>(o.keyResults||[]).forEach(k=>(k.initiatives||[]).forEach(i=>{
+      if(i.id===srcIid)srcInit=i;
+    })));
+    if(!srcInit)return;
+    const ownerIds=(srcInit.ownerId||'').split(',').map(s=>s.trim()).filter(Boolean);
+    const ownerId=(ownerIds[0]&&ownerIds[0]!=='__team_all__')?ownerIds[0]:null;
+    fakeTask={
+      id:'__nest-preview__',
+      title:srcInit.title||'',
+      status:srcInit.status||'todo',
+      owner_id:ownerId,
+      start_date:srcInit.startDate||null,
+      due_date:srcInit.dueDate||null
+    };
+  }else if(srcType==='init-task'){
+    const srcParent=srcEl.dataset.dragParent;
+    const taskId=srcEl.dataset.taskId;
+    const task=(state.initiativeTasks[srcParent]||[]).find(t=>t.id===taskId);
+    if(!task)return;
+    fakeTask={
+      id:'__nest-preview__',
+      title:task.title||'',
+      status:task.status||'todo',
+      owner_id:task.owner_id||null,
+      start_date:task.start_date||null,
+      due_date:task.due_date||null
+    };
+  }else return;
   // 실제 task 행 HTML 생성 (renderInitSubTaskRow 재사용)
   let html='';
   try{html=renderInitSubTaskRow(tgtIid,fakeTask,false);}catch(_){return;}
@@ -3365,9 +3381,11 @@ function _resolveDragZone(tgt,clientY,src){
   const main=tgt.querySelector(':scope > .init-row-main')||tgt;
   const r=main.getBoundingClientRect();
   const rel=(clientY-r.top)/Math.max(1,r.height);
-  const sameType=src&&src.dataset.dragType===tgt.dataset.dragType;
-  // init→init: 가운데 1/3 또는 main 아래(preview 영역) = nest
-  if(sameType&&src.dataset.dragType==='init'&&tgt.dataset.dragType==='init'){
+  // v50 — nest 가능 케이스: init→init (demote), init-task→init (다른 init으로 이동)
+  const srcT=src&&src.dataset.dragType;
+  const tgtT=tgt.dataset.dragType;
+  const canNest=(srcT==='init'&&tgtT==='init')||(srcT==='init-task'&&tgtT==='init');
+  if(canNest){
     if(clientY>r.bottom)return{zone:'nest',rect:r};
     if(rel>=0.33&&rel<=0.67)return{zone:'nest',rect:r};
   }
