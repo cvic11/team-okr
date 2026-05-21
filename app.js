@@ -401,24 +401,30 @@ html.dark .chat-list-item.has-unread{background:#2A2410}
 html.dark .chat-msg.theirs{background:#1A1D27;color:#D1D5DB;border-color:#22252F}
 html.dark .chat-input-wrap{background:#15171F;border-top-color:#22252F}
 html.dark .chat-input{background:#1A1D27;color:#D1D5DB;border-color:#22252F}
-/* v31 — Initiative 행 2행 구조 (UI/UX 개선) — 제목 입력칸이 행 너비를 충분히 갖도록 메타 분리 */
-.init-row{flex-direction:column !important;align-items:stretch !important;padding:10px 22px !important;gap:6px !important;flex-wrap:nowrap !important}
-.init-row-line1{display:flex;align-items:center;gap:8px;width:100%;min-width:0}
-.init-row-line1 .init-title-input{flex:1 1 auto;min-width:0;width:auto;font-size:14.5px;padding:7px 9px;border-radius:7px;background:transparent;border:1px solid transparent;transition:background .12s,border-color .12s,box-shadow .12s}
-.init-row-line1 .init-title-input:hover:not([readonly]){background:#F4F4F5}
-.init-row-line1 .init-title-input:focus{background:white;border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-soft);outline:none}
-.init-row-line1 .init-status{flex-shrink:0}
-.init-row-meta{display:flex;align-items:center;gap:7px;flex-wrap:wrap;padding-left:34px}
-.init-meta-date{display:inline-flex;align-items:center;gap:5px;font-size:10.5px;color:var(--text-soft);padding:3px 7px;border-radius:6px;background:#FAFAFA;border:1px solid var(--line);font-weight:600;letter-spacing:.2px}
+/* v43 — Initiative 행 1줄 통합 (이전 2행 구조 폐기). 컴팩트 + 좁아지면 가로 스크롤 */
+.init-row{display:block !important;padding:0 !important;flex-direction:row !important;align-items:stretch !important}
+.init-row-main{display:flex;align-items:center;gap:5px;padding:8px 22px;flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;min-width:0}
+.init-row-main::-webkit-scrollbar{display:none}
+.init-row-main .init-title-input{flex:1 1 auto;min-width:140px;width:auto;font-size:13.5px;padding:5px 8px;border-radius:6px;background:transparent;border:1px solid transparent;transition:background .12s,border-color .12s,box-shadow .12s}
+.init-row-main .init-title-input:hover:not([readonly]){background:#F4F4F5}
+.init-row-main .init-title-input:focus{background:white;border-color:var(--primary);box-shadow:0 0 0 2px var(--primary-soft);outline:none}
+.init-row-main .init-status{flex-shrink:0;font-size:10.5px;padding:3px 7px}
+.init-row-main .kr-owner-select{flex-shrink:0;font-size:10.5px;padding:3px 7px;max-width:96px}
+.init-row-main .conf-chip{flex-shrink:0;font-size:10px;padding:2px 7px}
+.init-row-main .reality-toggle{flex-shrink:0;font-size:10.5px;padding:3px 6px}
+.init-row-main .btn-icon{flex-shrink:0;padding:3px 5px}
+.init-row-main .drag-handle{flex-shrink:0}
+.init-row-main .rt-check{flex-shrink:0}
+.init-meta-date{flex-shrink:0;display:inline-flex;align-items:center;gap:3px;font-size:10px;color:var(--text-soft);padding:2px 6px;border-radius:5px;background:#FAFAFA;border:1px solid var(--line);font-weight:600;letter-spacing:.1px;height:24px;line-height:1}
 .init-meta-date:hover{border-color:var(--primary);color:var(--primary)}
-.init-meta-date input[type="date"]{border:none;background:transparent;padding:0;font-size:11.5px;color:var(--text);outline:none;width:108px;font-family:inherit;font-weight:600}
+.init-meta-date input[type="date"]{border:none;background:transparent;padding:0;font-size:10.5px;color:var(--text);outline:none;width:88px;font-family:inherit;font-weight:600}
 .init-meta-date.overdue{border-color:#F5C2C5;background:var(--warning-soft);color:var(--warning)}
 .init-meta-date.overdue input[type="date"]{color:var(--warning)}
-.init-meta-chip{font-size:11px;padding:3px 9px;border-radius:6px;background:transparent;color:var(--text-soft);border:1px solid var(--line);cursor:pointer;font-family:inherit;font-weight:600;line-height:1.4}
+.init-meta-chip{flex-shrink:0;font-size:10.5px;padding:3px 8px;border-radius:5px;background:transparent;color:var(--text-soft);border:1px solid var(--line);cursor:pointer;font-family:inherit;font-weight:600;line-height:1.3}
 .init-meta-chip:hover{border-color:var(--primary);color:var(--primary)}
 .init-meta-chip.active{background:var(--primary-soft);color:var(--primary);border-color:#D9CFFB}
-.init-row-meta .reality-toggle{font-size:11px;padding:3px 9px}
-.init-row-meta .btn-icon{padding:4px 6px}
+/* v43 — Init을 다른 Init의 sub-list에 떨어뜨리는 drop-zone 시각 */
+.init-sub-list.drop-target-into{background:var(--primary-soft) !important;border-left-color:var(--primary) !important;outline:2px dashed var(--primary);outline-offset:-2px;transition:background .12s,outline .12s}
 /* sub-task 행 — 제목 input 우선, 메타 작게 */
 .init-sub-row{display:flex;align-items:center;gap:6px;padding:5px 0;border-bottom:1px dashed rgba(0,0,0,.06)}
 .init-sub-row .init-sub-title{flex:1 1 auto;min-width:0;font-size:13px;padding:6px 10px;background:white;border:1px solid var(--line);border-radius:6px;font-family:inherit;outline:none;transition:border-color .12s,box-shadow .12s}
@@ -1694,13 +1700,25 @@ function renderInitiative(krId,init){
   if(subOpen){
     const subRows=subTasks.map(t=>renderInitSubTaskRow(init.id,t,initEdit)).join('');
     const addBtn=initEdit?`<div style="margin-top:8px;display:flex;justify-content:flex-end;"><button class="btn btn-soft" data-act="add-init-sub" data-iid="${init.id}" style="padding:5px 11px;font-size:11.5px;">${I.plus} 할일 추가</button></div>`:'';
-    subBody=`<div class="init-sub-list" data-init-sub="${init.id}">${subTasks.length===0?'<div style="font-size:11.5px;color:var(--text-soft);padding:4px 0;">아직 할일이 없습니다.</div>':subRows}${addBtn}</div>`;
+    // v43 — 다른 Init을 끌어다 떨어뜨려 task로 demote할 수 있도록 drop-zone 속성 부여
+    subBody=`<div class="init-sub-list" data-init-sub="${init.id}" data-drop-zone="init-sub-list" data-parent-iid="${init.id}">${subTasks.length===0?'<div style="font-size:11.5px;color:var(--text-soft);padding:4px 0;">아직 할일이 없습니다. (다른 이니셔티브를 끌어다 놓으면 할일로 변환)</div>':subRows}${addBtn}</div>`;
   }
-  // v31 — 1행: 핵심(드래그·완료·상태·제목·삭제). 제목 input이 행 너비를 거의 다 차지함
-  const line1=`<div class="init-row-line1"><span class="drag-handle" style="font-size:11px;${initEdit?'':'opacity:.3;'}" title="드래그로 순서 변경">⋮⋮</span>${checkBtn}<select class="init-status ${init.status||'todo'}" data-field="init-status" data-krid="${krId}" data-iid="${init.id}"${initDis}>${Object.entries(STATUS_LABELS).map(([k,v])=>`<option value="${k}" ${init.status===k?'selected':''}>${v}</option>`).join('')}</select><input class="init-title-input" data-field="init-title" data-krid="${krId}" data-iid="${init.id}" value="${esc(init.title)}" placeholder="구체 액션 (예: AI 어시스턴트 MVP 개발 / 가맹점주 인터뷰 30건 / 경쟁사 매출 분석)"${initRo}${initTip} style="${done?'text-decoration:line-through;color:var(--text-soft);':''}" />${initEdit?`<button class="btn-icon" data-act="del-init" data-krid="${krId}" data-iid="${init.id}" title="삭제">${I.x}</button>`:''}</div>`;
-  // v31 — 2행: 메타(담당·시작·마감·신뢰도·할일·R·이력) — 1행을 좁히지 않도록 분리
-  const line2=`<div class="init-row-meta">${ownerBtn}<label class="init-meta-date"><span>시작</span><input type="date" data-field="init-start" data-krid="${krId}" data-iid="${init.id}" value="${init.startDate||''}"${initRo}${initTip} /></label><label class="init-meta-date ${isOverdue(init.dueDate,init.status)?'overdue':''}"><span>마감</span><input type="date" data-field="init-due" data-krid="${krId}" data-iid="${init.id}" value="${init.dueDate||''}"${initRo}${initTip} /></label>${renderConfChip('initiative',init.id,init.confidence||'mid')}${subHead}<button class="reality-toggle ${hr?'has-content':''}" data-act="toggle-reality" data-key="${rk}">${ro?'R ▴':'R ▾'}</button><button class="btn-icon" data-act="show-history" data-etype="initiative" data-eid="${init.id}" title="이력">${I.clock}</button></div>`;
-  return `<div class="init-row" data-init-id="${init.id}" draggable="${initEdit?'true':'false'}" data-drag-type="init" data-drag-parent="${krId}">${line1}${line2}${ro?`<div style="width:100%;">${renderRealityBox('initiative',init.id,init.realityBlocker,init.realityHelp)}</div>`:''}${subBody}</div>`;
+  // v43 — 1행 통합: 모든 컨트롤을 한 줄에 컴팩트하게. flex-wrap:nowrap + overflow-x:auto로 좁아져도 줄바꿈 안 함
+  const mainLine=`<div class="init-row-main">`
+    +`<span class="drag-handle" style="font-size:11px;${initEdit?'':'opacity:.3;'}" title="드래그로 순서 변경 또는 다른 이니셔티브의 할일로 이동">⋮⋮</span>`
+    +checkBtn
+    +`<select class="init-status ${init.status||'todo'}" data-field="init-status" data-krid="${krId}" data-iid="${init.id}"${initDis}>${Object.entries(STATUS_LABELS).map(([k,v])=>`<option value="${k}" ${init.status===k?'selected':''}>${v}</option>`).join('')}</select>`
+    +`<input class="init-title-input" data-field="init-title" data-krid="${krId}" data-iid="${init.id}" value="${esc(init.title)}" placeholder="구체 액션 (예: AI 어시스턴트 MVP / 가맹점주 인터뷰 30건)"${initRo}${initTip} style="${done?'text-decoration:line-through;color:var(--text-soft);':''}" />`
+    +ownerBtn
+    +`<label class="init-meta-date" title="시작일"><span>시작</span><input type="date" data-field="init-start" data-krid="${krId}" data-iid="${init.id}" value="${init.startDate||''}"${initRo}${initTip} /></label>`
+    +`<label class="init-meta-date ${isOverdue(init.dueDate,init.status)?'overdue':''}" title="마감일"><span>마감</span><input type="date" data-field="init-due" data-krid="${krId}" data-iid="${init.id}" value="${init.dueDate||''}"${initRo}${initTip} /></label>`
+    +renderConfChip('initiative',init.id,init.confidence||'mid')
+    +subHead
+    +`<button class="reality-toggle ${hr?'has-content':''}" data-act="toggle-reality" data-key="${rk}" title="Reality 메모">${ro?'R▴':'R▾'}</button>`
+    +`<button class="btn-icon" data-act="show-history" data-etype="initiative" data-eid="${init.id}" title="이력">${I.clock}</button>`
+    +(initEdit?`<button class="btn-icon" data-act="del-init" data-krid="${krId}" data-iid="${init.id}" title="삭제" style="color:var(--warning);">${I.x}</button>`:'')
+    +`</div>`;
+  return `<div class="init-row" data-init-id="${init.id}" draggable="${initEdit?'true':'false'}" data-drag-type="init" data-drag-parent="${krId}">${mainLine}${ro?`<div style="width:100%;">${renderRealityBox('initiative',init.id,init.realityBlocker,init.realityHelp)}</div>`:''}${subBody}</div>`;
 }
 // v31 — Initiative 하위 sub-task 행 (컴팩트 칩 스타일 — 제목 input이 행 너비 우선)
 function renderInitSubTaskRow(initId,t,editable){
@@ -3236,6 +3254,17 @@ document.addEventListener('dragend',e=>{
 });
 document.addEventListener('dragover',e=>{
   if(!dragSrc)return;
+  // v43 — Init이 다른 Init의 sub-list에 떨어지는 경우 (demote to task)
+  if(dragSrc.dataset.dragType==='init'){
+    const zone=e.target.closest('[data-drop-zone="init-sub-list"]');
+    if(zone && zone.dataset.parentIid !== dragSrc.dataset.initId){
+      e.preventDefault();
+      _clearDropTargets();
+      zone.classList.add('drop-target-into');
+      return;
+    }
+  }
+  // 기존: 같은 부모 안에서 reorder
   const tgt=e.target.closest('[draggable="true"]');if(!tgt||tgt===dragSrc)return;
   if(tgt.dataset.dragType!==dragSrc.dataset.dragType)return;
   if(tgt.dataset.dragParent!==dragSrc.dataset.dragParent)return; // 같은 부모만
@@ -3248,6 +3277,17 @@ document.addEventListener('dragover',e=>{
 });
 document.addEventListener('drop',async e=>{
   if(!dragSrc)return;
+  // v43 — Init demote-to-task
+  if(dragSrc.dataset.dragType==='init'){
+    const zone=e.target.closest('[data-drop-zone="init-sub-list"]');
+    if(zone && zone.dataset.parentIid !== dragSrc.dataset.initId){
+      e.preventDefault();
+      _clearDropTargets();
+      const src=dragSrc;dragSrc=null;
+      await demoteInitToTask(src.dataset.initId,zone.dataset.parentIid,src.dataset.dragParent);
+      return;
+    }
+  }
   const tgt=e.target.closest('[draggable="true"]');if(!tgt||tgt===dragSrc)return;
   if(tgt.dataset.dragType!==dragSrc.dataset.dragType)return;
   if(tgt.dataset.dragParent!==dragSrc.dataset.dragParent)return;
@@ -3262,6 +3302,56 @@ document.addEventListener('drop',async e=>{
   _clearDropTargets();
   dragSrc=null;
 });
+// v43 — Initiative을 다른 Init의 할일(sub-task)로 변환
+async function demoteInitToTask(srcInitId,targetParentIid,sourceKrId){
+  let srcInit=null,srcKR=null;
+  state.objectives.forEach(o=>o.keyResults.forEach(k=>k.initiatives.forEach(i=>{
+    if(i.id===srcInitId){srcInit=i;srcKR=k;}
+  })));
+  let targetInit=null;
+  state.objectives.forEach(o=>o.keyResults.forEach(k=>k.initiatives.forEach(i=>{
+    if(i.id===targetParentIid)targetInit=i;
+  })));
+  if(!srcInit||!targetInit){showToast('변환 대상을 찾을 수 없습니다',true);return;}
+  if(!confirm(`"${srcInit.title||'(제목 없음)'}"을(를)\n"${targetInit.title||'(제목 없음)'}"의 할일로 옮길까요?\n\n이니셔티브의 신뢰도·Reality 메모는 사라지고, 상태/담당/일정은 유지됩니다.`))return;
+  // 담당자 — 다중이면 첫 번째 사용
+  const ownerIds=(srcInit.ownerId||'').split(',').map(s=>s.trim()).filter(Boolean);
+  const owner_id=ownerIds[0]&&ownerIds[0]!=='__team_all__'?ownerIds[0]:null;
+  // 새 task 생성
+  const list=state.initiativeTasks[targetParentIid]||(state.initiativeTasks[targetParentIid]=[]);
+  const newTask={
+    id:uid(),initiative_id:targetParentIid,
+    title:srcInit.title||'',
+    status:srcInit.status||'todo',
+    owner_id,
+    start_date:srcInit.startDate||null,
+    due_date:srcInit.dueDate||null,
+    sort_order:list.length
+  };
+  list.push(newTask);
+  // src init이 하위 task를 갖고 있다면 새 부모로 이전
+  const orphanTasks=state.initiativeTasks[srcInitId]||[];
+  if(orphanTasks.length){
+    orphanTasks.forEach(t=>{t.initiative_id=targetParentIid;list.push(t);});
+    delete state.initiativeTasks[srcInitId];
+  }
+  // src init 메모리에서 제거
+  if(srcKR)srcKR.initiatives=srcKR.initiatives.filter(i=>i.id!==srcInitId);
+  scheduleRender();
+  // DB 작업
+  try{
+    if(typeof saveInitiativeTask==='function')saveInitiativeTask(newTask);
+    for(const t of orphanTasks){
+      markLocal('initiative_tasks',t.id);
+      await sb.from('initiative_tasks').update({initiative_id:targetParentIid}).eq('id',t.id);
+    }
+    markLocal('initiatives',srcInitId);
+    const{error}=await sb.from('initiatives').delete().eq('id',srcInitId);
+    if(error)showToast('이니셔티브 삭제 실패 — 새로고침 권장',true);
+    else showToast('할일로 변환됨'+(orphanTasks.length?` (하위 ${orphanTasks.length}건 같이 이동)`:''));
+    logChange('initiative',srcInitId,'delete','demote-to-task',srcInit.title||'',`→ ${targetInit.title||''}의 할일`,srcInit.title||'');
+  }catch(err){console.warn('[demote] failed',err);showToast('변환 실패',true);}
+}
 function _reinsert(arr,sIdx,tIdx,after){
   const[item]=arr.splice(sIdx,1);
   let insertIdx=tIdx;
