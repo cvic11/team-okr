@@ -302,6 +302,13 @@ html.dark .krl-cmt-item{border-bottom-color:rgba(255,255,255,.06)}
 .wbs-bar:hover{filter:brightness(1.05);box-shadow:0 2px 6px rgba(0,0,0,.18)!important}
 .wbs-bar.dragging{cursor:grabbing;opacity:.88;box-shadow:0 6px 14px rgba(0,0,0,.28)!important;z-index:10;transition:none}
 .wbs-drag-tip{position:fixed;z-index:9999;background:#26215C;color:white;padding:6px 10px;border-radius:6px;font-size:11.5px;font-weight:700;pointer-events:none;box-shadow:0 4px 12px rgba(0,0,0,.3);white-space:nowrap;font-family:inherit;line-height:1.45}
+/* v23 — 상단 날짜바의 담당자 아이콘 (클릭 점프) */
+.date-bar-members{display:inline-flex;gap:5px;align-items:center;margin-left:6px;flex-wrap:wrap}
+.date-bar-member-icon{width:28px;height:28px;border-radius:50%;border:2px solid white;cursor:pointer;font-size:11.5px;font-weight:800;color:white;display:inline-flex;align-items:center;justify-content:center;font-family:inherit;box-shadow:0 1px 3px rgba(0,0,0,.12);transition:transform .12s,box-shadow .12s,filter .12s;flex-shrink:0;padding:0;line-height:1}
+.date-bar-member-icon:hover{transform:translateY(-1px);box-shadow:0 3px 8px rgba(0,0,0,.22);filter:brightness(1.06)}
+.date-bar-member-icon:active{transform:translateY(0)}
+.member-card.highlight-flash{animation:mcFlash 1.5s ease-out}
+@keyframes mcFlash{0%{box-shadow:0 0 0 3px var(--primary),0 0 18px rgba(98,65,245,.4)}100%{box-shadow:0 0 0 0 transparent}}
 `;document.head.appendChild(s);
 // 다크 모드 즉시 적용 (FOUC 방지)
 document.documentElement.classList.toggle('dark',localStorage.getItem('team-okr-dark')==='1');
@@ -1064,7 +1071,10 @@ function renderToday(){
     // v22 — 옵저버만 있는 경우에도 renderTodayPresent가 안내 처리
     return renderTodayPresent(date,isToday,standup,todayRoutines,rl);
   }
-  return `<div class="date-bar"><button class="date-nav-btn" data-act="date-shift" data-delta="-1">${I.chevLeft}</button><input type="date" class="date-input" value="${date}" data-act="date-set"><button class="date-nav-btn" data-act="date-shift" data-delta="1">${I.chevRight}</button>${isToday?'<span class="today-tag">오늘</span>':`<span class="past-tag">${date<todayKey()?'지난 회의':'미래 날짜'}</span><button class="btn btn-soft" data-act="date-today">오늘로</button>`}</div>
+  // v23 — 날짜 옆 담당자 아이콘 (좌클릭: 카드로 점프 · 우클릭: 메시지 — 추후)
+  const dateBarMembers=state.members.filter(m=>!m.isObserver);
+  const memberIconsHtml=dateBarMembers.length>0?`<span class="date-bar-members" title="아이콘 클릭 시 해당 팀원 카드로 이동">${dateBarMembers.map(m=>`<button class="date-bar-member-icon" data-act="jump-to-member" data-mid="${m.id}" style="background:${m.color||'#6241F5'};" title="${esc(m.name)} — 클릭: 카드로 이동">${esc(m.name.slice(0,1).toUpperCase())}</button>`).join('')}</span>`:'';
+  return `<div class="date-bar"><button class="date-nav-btn" data-act="date-shift" data-delta="-1">${I.chevLeft}</button><input type="date" class="date-input" value="${date}" data-act="date-set"><button class="date-nav-btn" data-act="date-shift" data-delta="1">${I.chevRight}</button>${isToday?'<span class="today-tag">오늘</span>':`<span class="past-tag">${date<todayKey()?'지난 회의':'미래 날짜'}</span><button class="btn btn-soft" data-act="date-today">오늘로</button>`}${memberIconsHtml}</div>
   ${renderObjectivePairRow()}
   ${dueItems.length>0?`<section class="card card-section"><div class="section-head"><span style="color:var(--amber);">${I.flag}</span><span class="section-title">이번 주 마감 (${dueItems.length}건)</span></div>${dueItems.map(d=>`<div style="padding:8px 0;display:flex;align-items:center;gap:10px;border-bottom:1px solid #F4F4F5;font-size:13px;"><span style="font-size:11px;padding:2px 8px;border-radius:999px;background:${d.type==='kr'?'#EEEAFE':'#F4F4F5'};color:${d.type==='kr'?C.primary:C.textSoft};font-weight:700;">${d.type==='kr'?'KR':'Init'}</span><span style="flex:1;">${esc(d.title)}</span><span style="font-size:11.5px;color:${isOverdue(d.dueDate,d.status)?C.warning:C.textSoft};font-weight:600;">${dueShort(d.dueDate)}${isOverdue(d.dueDate,d.status)?' · 지연':''}</span></div>`).join('')}</section>`:''}
   <div class="card-section"><div class="section-head"><span style="color:var(--primary);">${I.msg}</span><span class="section-title">${isToday?'오늘의 스탠드업':`${date} 스탠드업`}</span><span class="section-meta">· 어제 / 오늘 / 막힘</span></div>${state.members.length===0?'<div class="empty">팀원을 먼저 등록해주세요. <strong>관리</strong> 탭에서 추가할 수 있습니다.</div>':`<div class="member-grid">${state.members.map(m=>renderMemberCard(m,standup.entries?.[m.id]||{})).join('')}</div>`}</div>
@@ -2314,6 +2324,12 @@ document.addEventListener('click',async e=>{
   if(a==='view'){currentView=btn.dataset.view;render();return;}
   if(a==='present'){presentMode=!presentMode;if(presentMode){const pm=presentableMembers();presentMid=pm.length>0?pm[pm.length-1].id:null;}render();return;}
   if(a==='present-set'){presentMid=btn.dataset.mid;render();return;}
+  if(a==='jump-to-member'){
+    const mid=btn.dataset.mid;
+    const card=document.querySelector('[data-member-card="'+mid+'"]');
+    if(card){card.scrollIntoView({behavior:'smooth',block:'start'});card.classList.add('highlight-flash');setTimeout(()=>card.classList.remove('highlight-flash'),1500);}
+    return;
+  }
   if(a==='present-prev'){const pm=presentableMembers();if(pm.length===0)return;const i=pm.findIndex(m=>m.id===presentMid);const ni=i>0?i-1:pm.length-1;presentMid=pm[ni].id;render();return;}
   if(a==='present-next'){const pm=presentableMembers();if(pm.length===0)return;const i=pm.findIndex(m=>m.id===presentMid);const ni=i<pm.length-1?i+1:0;presentMid=pm[ni].id;render();return;}
   if(a==='toggle-dark'){setDark(!isDark());render();return;}
