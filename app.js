@@ -487,27 +487,29 @@ html.dark .init-row-line1 .init-title-input:focus{background:#1A1D27}
 .date-bar{margin-top:-28px !important}
 body.present .date-bar{margin-top:-20px !important}
 @media(max-width:760px){.date-bar{margin-top:-14px !important}}
-/* ③ Objective 반짝임 + 글자 위계 */
+/* ③ Objective 반짝임 + 글자 위계 — v54: 색상 단순화(보라 + 옅은 보라 sheen)로 세련되게 */
+.obj-title-input,.obj-shimmer{
+  background:linear-gradient(100deg,#6241F5 0%,#6241F5 38%,#D6CBFD 50%,#6241F5 62%,#6241F5 100%);
+  background-size:230% 100%;
+  -webkit-background-clip:text;background-clip:text;
+  -webkit-text-fill-color:transparent;
+  animation:objShine 5s linear infinite;
+}
+@keyframes objShine{0%{background-position:100% 50%}100%{background-position:-30% 50%}}
 .obj-title-input{
   font-size:30px !important;font-weight:900 !important;letter-spacing:-0.9px !important;
   line-height:1.2 !important;padding:6px 2px !important;
-  background:linear-gradient(90deg,#6241F5 0%,#8B6FF7 18%,#F5B82A 38%,#E5484D 50%,#F5B82A 62%,#8B6FF7 82%,#6241F5 100%);
-  background-size:260% 100%;
-  -webkit-background-clip:text;background-clip:text;
-  -webkit-text-fill-color:transparent;
-  animation:objShimmer 6s linear infinite;
-  filter:drop-shadow(0 0 10px rgba(98,65,245,.22));
 }
-@keyframes objShimmer{0%{background-position:0% 50%}100%{background-position:260% 50%}}
 .obj-title-input::placeholder{
   -webkit-text-fill-color:var(--text-soft);color:var(--text-soft);
   background:none;font-weight:600;letter-spacing:0;font-size:20px !important
 }
 .obj-title-input:focus{
   -webkit-text-fill-color:var(--text);
-  animation:none;
-  filter:drop-shadow(0 0 4px rgba(98,65,245,.12));
+  animation:none;background:rgba(255,255,255,.5);border-radius:4px;
 }
+/* 오늘 탭 Objective 패널 제목에도 같은 sheen */
+.obj-shimmer{font-weight:800 !important;letter-spacing:-0.2px}
 body.present .obj-title-input{font-size:36px !important}
 @media(max-width:760px){.obj-title-input{font-size:22px !important}}
 /* KR 두 번째로 큰 */
@@ -519,9 +521,14 @@ body.present .kr-title-input{font-size:20px !important}
 .init-sub-row .init-title-input{font-size:12.5px !important;font-weight:400 !important}
 /* obj-desc 부제 — 위계 보조 */
 .obj-desc-input{font-size:13px !important;font-style:italic;color:var(--text-soft);opacity:.85}
-/* 다크모드: 그라데이션이 어두운 배경에서 더 또렷하게 */
-html.dark .obj-title-input{filter:drop-shadow(0 0 12px rgba(168,155,245,.4))}
-html.dark .obj-title-input:focus{filter:drop-shadow(0 0 4px rgba(168,155,245,.15));-webkit-text-fill-color:#E5E7EB}
+/* 다크모드: sheen 색을 어두운 배경에 맞게 (밝은 라벤더 → 흰색에 가깝게) */
+html.dark .obj-title-input,html.dark .obj-shimmer{
+  background:linear-gradient(100deg,#A89BF5 0%,#A89BF5 38%,#F5F2FF 50%,#A89BF5 62%,#A89BF5 100%);
+  background-size:230% 100%;
+  -webkit-background-clip:text;background-clip:text;
+  -webkit-text-fill-color:transparent;
+}
+html.dark .obj-title-input:focus{-webkit-text-fill-color:#E5E7EB;background:rgba(26,29,39,.5)}
 `;document.head.appendChild(s);
 // 다크 모드 즉시 적용 (FOUC 방지)
 document.documentElement.classList.toggle('dark',localStorage.getItem('team-okr-dark')==='1');
@@ -1540,7 +1547,7 @@ function renderObjectivePanel(o,slotIdx){
   return `<section class="card" style="margin:0;display:flex;flex-direction:column;">
     <div class="section-head" style="align-items:flex-start;gap:8px;">
       <span style="color:var(--primary);flex-shrink:0;margin-top:2px;">${I.target}</span>
-      <span class="section-title" style="line-height:1.45;flex:1;min-width:0;font-size:15px;">${esc(o.title||'(Objective 미작성)')}</span>
+      <span class="section-title obj-shimmer" style="line-height:1.45;flex:1;min-width:0;font-size:16px;">${esc(o.title||'(Objective 미작성)')}</span>
       <span style="font-size:11.5px;color:var(--text-soft);font-weight:600;flex-shrink:0;">평균 <strong style="color:${progressColor(objAvg)};font-size:13px;">${objAvg}%</strong></span>
     </div>
     <div style="font-size:11px;color:var(--text-soft);margin-bottom:4px;">KR ${krs.length}개</div>
