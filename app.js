@@ -164,9 +164,10 @@ mark{background:#FFF59D;color:var(--text);padding:0 2px;border-radius:3px}
   .member-card .member-head .member-name{font-size:15px;font-weight:800}
   .member-card .member-head .member-role{font-size:12px;color:var(--text-soft)}
   .member-card .field{margin-bottom:0;min-width:0;display:flex;flex-direction:column}
-  .member-card .field-label{margin-bottom:6px}
-  .member-card .field-input{min-height:100px;font-size:13.5px;width:100%}
-  .member-card .field > textarea.blocker-input{flex:1;min-height:160px;resize:vertical}
+  .member-card .field-label{margin-bottom:6px;flex-shrink:0}
+  /* v61 — 3개 필드 같은 높이: textarea가 셀 남은 공간 모두 차지 */
+  .member-card .field-input{flex:1 1 auto;min-height:140px;font-size:13.5px;width:100%;resize:none}
+  .member-card .field > textarea.blocker-input{flex:1 1 auto;min-height:140px;resize:none}
   .member-card .field > .krl-block{flex:1;display:flex;flex-direction:column;min-height:160px}
   .member-card .field > .krl-block > .krl-tasks{flex:1}
   .member-card .reality-box{margin-top:8px}
@@ -1686,12 +1687,13 @@ function renderYesterdaySection(mid,memo,yDone){
     ? `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px;">${yDone.map(i=>`<span style="font-size:10.5px;padding:2px 7px;background:var(--growth-soft);color:var(--growth);border-radius:999px;font-weight:600;">${esc(i.title.slice(0,18))}${i.title.length>18?'…':''}</span>`).join('')}</div>`
     : '';
   const editable=canEditAs(mid);const ro=editable?'':' readonly';const tip=editable?'':' title="본인이 작성한 항목만 수정할 수 있습니다"';
-  return `<div class="field"><div class="field-label"><span class="field-dot"></span><span class="field-name">어제 한 일</span></div>${summaryHtml}<textarea class="field-input" rows="3" data-autogrow placeholder="추가 메모 (선택) — 어제 진행한 내용을 자유롭게" data-field="standup" data-fieldname="yesterday" data-mid="${mid}" data-date="${viewingDate}"${ro}${tip}>${esc(memo||'')}</textarea></div>`;
+  // v61 — data-autogrow 제거: member-card 안에서는 flex:1로 셀 높이에 맞춤
+  return `<div class="field"><div class="field-label"><span class="field-dot"></span><span class="field-name">어제 한 일</span></div>${summaryHtml}<textarea class="field-input" rows="3" placeholder="추가 메모 (선택) — 어제 진행한 내용을 자유롭게" data-field="standup" data-fieldname="yesterday" data-mid="${mid}" data-date="${viewingDate}"${ro}${tip}>${esc(memo||'')}</textarea></div>`;
 }
 function renderTodaySection(mid,memo,myInits,checks){
   // v15 — Initiative 표시 제거 (OKR 탭의 완료 체크박스로 이관)
   const editable=canEditAs(mid);const ro=editable?'':' readonly';const tip=editable?'':' title="본인이 작성한 항목만 수정할 수 있습니다"';
-  return `<div class="field"><div class="field-label"><span class="field-dot accent-primary"></span><span class="field-name accent-primary">오늘 할 일</span></div><textarea class="field-input" rows="4" data-autogrow placeholder="추가 메모 — 오늘 목표를 자유롭게 (여러 줄 가능)" data-field="standup" data-fieldname="today" data-mid="${mid}" data-date="${viewingDate}"${ro}${tip}>${esc(memo||'')}</textarea></div>`;
+  return `<div class="field"><div class="field-label"><span class="field-dot accent-primary"></span><span class="field-name accent-primary">오늘 할 일</span></div><textarea class="field-input" rows="4" placeholder="추가 메모 — 오늘 목표를 자유롭게 (여러 줄 가능)" data-field="standup" data-fieldname="today" data-mid="${mid}" data-date="${viewingDate}"${ro}${tip}>${esc(memo||'')}</textarea></div>`;
 }
 function renderBlockerSection(mid,e){
   const has=!!(e.blockers&&e.blockers.trim());
@@ -1704,7 +1706,7 @@ function renderBlockerSection(mid,e){
   const editable=canEditAs(mid);const ro=editable?'':' readonly';const dis=editable?'':' disabled';const tip=editable?'':' title="본인이 작성한 항목만 수정할 수 있습니다"';
   const clearBtn=(hasAnyContent&&editable)?`<button data-act="clear-blocker" data-mid="${mid}" style="background:transparent;border:none;cursor:pointer;color:var(--text-soft);font-size:10.5px;padding:2px 6px;border-radius:5px;font-weight:600;text-decoration:underline;text-underline-offset:2px;" title="막힘과 도움 요청 모두 지우기">지우기</button>`:'';
   return `<div class="field"><div class="field-label"><span class="field-dot ${accent}"></span><span class="field-name ${accent}">막힘 / 도움 필요</span>${clearBtn}<button class="reality-toggle ${(e.helper_member_id||e.helper_name||e.support_type||e.support_detail)?'has-content':''}" style="margin-left:auto;" data-act="toggle-reality" data-key="${helperKey}" data-reality-btn="${helperKey}">${helpOpen?'도움요청 ▴':'도움요청 ▾'}</button></div>
-    <textarea class="field-input blocker-input" rows="5" data-autogrow placeholder="현실적인 어려움과 도움이 필요한게 있나요?" data-field="standup" data-fieldname="blockers" data-mid="${mid}" data-date="${viewingDate}"${ro}${tip}>${esc(e.blockers||'')}</textarea>
+    <textarea class="field-input blocker-input" rows="5" placeholder="현실적인 어려움과 도움이 필요한게 있나요?" data-field="standup" data-fieldname="blockers" data-mid="${mid}" data-date="${viewingDate}"${ro}${tip}>${esc(e.blockers||'')}</textarea>
     <div class="reality-box" data-reality-box="${helperKey}" style="margin-top:6px;padding:8px 10px;display:${helpOpen?'block':'none'};">
       <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:6px;">
         <span style="font-size:10.5px;font-weight:700;color:var(--text-soft);">누구에게:</span>
