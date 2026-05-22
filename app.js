@@ -170,6 +170,8 @@ mark{background:#FFF59D;color:var(--text);padding:0 2px;border-radius:3px}
   .member-card .field-input{flex:1 1 auto;min-height:140px;font-size:13.5px;width:100%;resize:none}
   .member-card .field > textarea.blocker-input{flex:1 1 auto;min-height:140px;resize:none}
   .member-card .field > .krl-block{flex:1;display:flex;flex-direction:column;min-height:160px}
+  /* v63 — label 바로 다음 krl-block의 margin-top 제거 (오늘 할 일 시작 높이 통일) */
+  .member-card .field > .field-label + .krl-block{margin-top:0 !important}
   .member-card .field > .krl-block > .krl-tasks{flex:1}
   .member-card .reality-box{margin-top:8px}
   /* KR-Link task row v14 — 2행 구조 (KR 칩 상단, 본문 꽉 차게) */
