@@ -1283,7 +1283,13 @@ function onInitTaskChange(p){
     else state.initiativeTasks[iid].push({...r});
     state.initiativeTasks[iid].sort((a,b)=>(a.sort_order||0)-(b.sort_order||0));
   }
-  if(currentView==='okr')render();
+  // v67 — 타이핑 중 re-render 방지: 활성 input/textarea가 있으면 blur 후 렌더
+  if(currentView==='okr'){
+    const a=document.activeElement;
+    if(a&&(a.tagName==='INPUT'||a.tagName==='TEXTAREA')){
+      a.addEventListener('blur',()=>{if(currentView==='okr')scheduleRender();},{once:true});
+    }else{scheduleRender();}
+  }
 }
 async function saveInitiativeTask(it){debouncedSave(`init-task-${it.id}`,async()=>{markLocal('initiative_tasks',it.id);const{error}=await sb.from('initiative_tasks').upsert({id:it.id,initiative_id:it.initiative_id,title:it.title,status:it.status||'todo',owner_id:it.owner_id||null,start_date:it.start_date||null,due_date:it.due_date||null,sort_order:it.sort_order||0,updated_at:new Date().toISOString()});if(error){
   // v46 — 테이블 누락 에러는 한 번만 명확하게 안내
@@ -1369,7 +1375,8 @@ function captureFocus(){
   const el=document.activeElement;
   if(!el||(el.tagName!=='INPUT'&&el.tagName!=='TEXTAREA'&&el.tagName!=='SELECT'))return null;
   const ds=el.dataset||{};
-  const keys=['field','fieldname','mid','oid','krid','iid','eid','etype','date','rid','key','which'];
+  // v67 — stid 추가: initiative sub-task 입력창 정확히 복원
+  const keys=['field','fieldname','mid','oid','krid','iid','stid','eid','etype','date','rid','key','which'];
   const sig={tag:el.tagName,attrs:{}};
   keys.forEach(k=>{if(ds[k])sig.attrs[k]=ds[k];});
   if(Object.keys(sig.attrs).length===0)return null;
