@@ -528,13 +528,30 @@ body.present .obj-title-input{font-size:36px !important}
 /* v55 — 사람 아이콘 클릭 시 sticky 헤더에 가리지 않도록 스크롤 여백 */
 .member-card{scroll-margin-top:130px}
 [data-obj-id],.kr-row,.init-row{scroll-margin-top:130px}
-/* v56 — Objective 1개 솔로 모드: KR 행도 살짝 크게 */
+/* v56/v57 — Objective 1개 솔로 모드: O 기준 KR 들여쓰기 + 이니셔티브 더 깊은 들여쓰기 */
 .obj-solo{padding:24px 26px !important}
-.obj-solo .kr-inline-row{padding:14px 0}
-.obj-solo .kr-inline-row > div:first-child > span:first-child{font-size:17px;font-weight:700;letter-spacing:-0.2px}
-.obj-solo .kr-inline-row .kr-strip-pct{font-size:16px !important}
-.obj-solo .kr-inline-row .kr-num-input{font-size:15px !important;width:80px !important}
-@media(max-width:760px){.obj-solo{padding:18px 16px !important} .obj-solo .obj-shimmer{font-size:22px !important}}
+.obj-solo .kr-inline-row{
+  padding:14px 0 14px 28px;
+  position:relative;
+  border-bottom:1px solid #F4F4F5;
+}
+.obj-solo .kr-inline-row::before{
+  content:'';position:absolute;left:8px;top:0;bottom:0;width:3px;
+  background:linear-gradient(to bottom,var(--primary-soft),transparent);
+  border-radius:2px;
+}
+.obj-solo .kr-inline-row > div:first-child > span:first-child{font-size:16.5px !important;font-weight:700 !important;letter-spacing:-0.2px}
+.obj-solo .kr-inline-row .kr-strip-pct{font-size:15px !important}
+.obj-solo .kr-inline-row .kr-num-input{font-size:14px !important;width:64px !important;padding:5px 8px !important}
+/* 이니셔티브는 KR 안에 더 들여쓰기 */
+.obj-solo .kr-init-inline{margin:8px 0 4px 14px !important;padding:6px 12px !important}
+@media(max-width:760px){
+  .obj-solo{padding:18px 14px !important}
+  .obj-solo .obj-shimmer{font-size:22px !important}
+  .obj-solo .kr-inline-row{padding-left:18px}
+  .obj-solo .kr-init-inline{margin-left:8px !important}
+}
+html.dark .obj-solo .kr-inline-row::before{background:linear-gradient(to bottom,#3A2F5A,transparent)}
 /* KR 두 번째로 큰 */
 .kr-title-input{font-size:17px !important;font-weight:700 !important;letter-spacing:-0.2px !important;padding:6px 4px !important}
 body.present .kr-title-input{font-size:20px !important}
@@ -1550,18 +1567,17 @@ function renderInlineKRRow(kr,oid){
         </div>`;
       }).join('')}
     </div>`:'';
+  // v57 — KR 행 1줄 통합 (좁으면 가로 스크롤). 제목/입력/진척바/%/신뢰도/마감 모두 한 줄에
   return `<div class="kr-inline-row" data-kr-id="${kr.id}" style="padding:10px 0;border-bottom:1px solid #F4F4F5;">
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap;">
-      <span style="font-size:13.5px;font-weight:700;color:var(--text);flex:1;min-width:120px;line-height:1.4;">${esc(kr.title||'(제목 없음)')}</span>
-      <span class="kr-strip-pct" data-kr-pct style="color:${progressColor(p)};font-weight:800;font-size:14px;flex-shrink:0;">${p}%</span>
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;">
+      <span style="font-size:14px;font-weight:700;color:var(--text);flex:1 1 auto;min-width:0;line-height:1.4;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${esc(kr.title||'')}">${esc(kr.title||'(제목 없음)')}</span>
+      <input type="number" class="kr-num-input" data-field="kr-current" data-oid="${oid}" data-krid="${kr.id}" value="${kr.current}" title="현재값 입력" style="width:58px;font-size:13px;padding:5px 7px;font-weight:700;flex-shrink:0;" />
+      <span style="color:var(--text-soft);font-size:12px;flex-shrink:0;">/</span>
+      <span style="font-size:12.5px;color:var(--text-soft);font-weight:600;flex-shrink:0;white-space:nowrap;">${kr.target}${kr.unit?' '+esc(kr.unit):''}</span>
+      <div class="progress-track" data-kr-bar-wrap style="flex:1 1 auto;min-width:70px;height:6px;border-radius:3px;background:#F0F0F2;overflow:hidden;margin:0 4px;"><div class="progress-fill" data-kr-bar style="width:${p}%;height:100%;background:${progressColor(p)};transition:width .2s;"></div></div>
+      <span class="kr-strip-pct" data-kr-pct style="color:${progressColor(p)};font-weight:800;font-size:14px;flex-shrink:0;min-width:38px;text-align:right;">${p}%</span>
       <span class="conf-chip ${kr.confidence||'mid'}" style="cursor:default;font-size:10.5px;padding:1px 7px;flex-shrink:0;">${CONF_LABELS[kr.confidence||'mid']}</span>
-    </div>
-    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-      <input type="number" class="kr-num-input" data-field="kr-current" data-oid="${oid}" data-krid="${kr.id}" value="${kr.current}" title="현재값 입력" style="width:74px;font-size:14px;padding:6px 9px;font-weight:700;" />
-      <span style="color:var(--text-soft);font-size:12px;">/</span>
-      <span style="font-size:13px;color:var(--text-soft);font-weight:600;">${kr.target}${kr.unit?' '+esc(kr.unit):''}</span>
-      <div class="progress-track" data-kr-bar-wrap style="flex:1;min-width:80px;height:6px;border-radius:3px;background:#F0F0F2;overflow:hidden;margin:0 4px;"><div class="progress-fill" data-kr-bar style="width:${p}%;height:100%;background:${progressColor(p)};transition:width .2s;"></div></div>
-      ${kr.dueDate?`<span style="font-size:11px;color:${overdue?'var(--warning)':'var(--text-soft)'};font-weight:600;flex-shrink:0;">${dueShort(kr.dueDate)}${overdue?' · 지연':''}</span>`:''}
+      ${kr.dueDate?`<span style="font-size:11px;color:${overdue?'var(--warning)':'var(--text-soft)'};font-weight:600;flex-shrink:0;white-space:nowrap;">${dueShort(kr.dueDate)}${overdue?'·지연':''}</span>`:''}
     </div>
     ${initsHtml}
   </div>`;
