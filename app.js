@@ -4351,6 +4351,21 @@ init();
     });
     return tree;
   }
+  // v69 — initiative_tasks를 standup 할일 형식으로 변환 (kind='today'용)
+  function buildInitTasksForToday(mid){
+    const allKR=collectAllKR();
+    const initToKr={};
+    allKR.forEach(k=>(k.initiatives||[]).forEach(i=>{initToKr[i.id]=k.id;}));
+    const tasks=[];
+    Object.entries(state.initiativeTasks||{}).forEach(([iid,arr])=>{
+      (arr||[]).forEach(t=>{
+        if(!t.owner_id||t.owner_id===mid){
+          tasks.push({id:t.id,t:t.title||'',i:iid,k:initToKr[iid]||'',d:t.status==='done',_isInitTask:true,_iid:iid,c:[]});
+        }
+      });
+    });
+    return tasks;
+  }
   function renderTaskGroupHead(key){
     let icon='⚪',title='운영 (KR 무관)',bg='#F4F4F5',fg='#737373',border='#E5E5E8';
     if(key.startsWith('kr:')){
@@ -4362,9 +4377,25 @@ init();
     }
     return{icon,title,bg,fg,border};
   }
+  // v69 — initiative_tasks 행 렌더링 (krl-toggle-init-task 사용)
+  function renderInitTaskRowInline(t,mid,kind){
+    const ed=(typeof canEditAs==='function')?canEditAs(mid):true;
+    const dis=ed?'':' disabled';const tip=ed?'':' title="본인이 작성한 항목만 수정할 수 있습니다"';
+    const textSt='width:100%;padding:9px 12px;border:1px solid var(--line);border-radius:6px;background:#FAFAFA;outline:none;font-size:13.5px;line-height:1.6;font-family:inherit;color:'+(t.d?'var(--text-soft)':'var(--text)')+';'+(t.d?'text-decoration:line-through;':'')+'resize:none;overflow:hidden;min-height:60px;box-sizing:border-box;';
+    return '<div class="krl-task-container" data-task-container="'+escapeHtml(t.id)+'">' +
+      '<div class="krl-task-row" data-tid="'+escapeHtml(t.id)+'" data-mid="'+escapeHtml(mid)+'" data-kind="'+escapeHtml(kind)+'" style="display:flex;align-items:flex-start;gap:6px;padding:6px 0;border-bottom:1px dashed #F0F0F2;">'+
+        '<button class="rt-check '+(t.d?'checked':'')+'" style="width:18px;height:18px;border-width:1.5px;border-radius:4px;flex-shrink:0;margin-top:9px;" data-act="krl-toggle-init-task" data-mid="'+escapeHtml(mid)+'" data-kind="'+escapeHtml(kind)+'" data-tid="'+escapeHtml(t.id)+'" data-init-id="'+escapeHtml(t._iid||'')+'"'+dis+tip+'>'+(t.d?'✓':'')+'</button>'+
+        '<textarea data-krl-field="task-text" data-krl-autogrow data-mid="'+escapeHtml(mid)+'" data-kind="'+escapeHtml(kind)+'" data-tid="'+escapeHtml(t.id)+'" data-is-init-task="1" data-init-id="'+escapeHtml(t._iid||'')+'" rows="2" placeholder="할일을 적어주세요" style="'+textSt+'"'+(ed?'':' readonly')+tip+'>'+escapeHtml(t.t||'')+'</textarea>'+
+        (ed?'<button data-act="krl-del-init-task" data-mid="'+escapeHtml(mid)+'" data-kind="'+escapeHtml(kind)+'" data-tid="'+escapeHtml(t.id)+'" data-init-id="'+escapeHtml(t._iid||'')+'" style="padding:4px 6px;margin-top:6px;background:none;border:1px solid transparent;border-radius:5px;cursor:pointer;color:var(--text-soft);font-size:12px;flex-shrink:0;line-height:1;" title="삭제">✕</button>':'')+
+      '</div></div>';
+  }
   function renderTaskListBlock(mid,kind,label){
     const data=getMemberTasks(mid,kind);
-    const legacy=data.legacy,tasks=data.tasks;
+    const legacy=data.legacy;
+    // v69 — kind='today': initiative_tasks 기반 + JSON 운영 할일 (KR 무관) 혼합
+    const tasks=kind==='today'
+      ?[...buildInitTasksForToday(mid),...data.tasks.filter(t=>!t.k&&!t.i)]
+      :data.tasks;
     const addLabel=(kind==='today'?'할일 추가':'기록 남기기');
     const editable=(typeof canEditAs==='function')?canEditAs(mid):true;
     const dis=editable?'':' disabled';
@@ -4393,8 +4424,9 @@ init();
         '<span style="font-size:10px;opacity:.75;flex-shrink:0;">'+ig.tasks.length+'건</span>'+
         addBtn+
       '</div>';
+      // v69 — _isInitTask 여부에 따라 렌더러 분기
       const rows='<div class="krl-subgroup-tasks" style="padding:2px 10px 2px 22px;">'+
-        ig.tasks.map(t=>renderTaskRowGrouped(t,mid,kind)).join('')+
+        ig.tasks.map(t=>t._isInitTask?renderInitTaskRowInline(t,mid,kind):renderTaskRowGrouped(t,mid,kind)).join('')+
       '</div>';
       return '<div class="krl-subgroup" data-init-id="'+escapeHtml(init.id)+'">'+head+rows+'</div>';
     }
@@ -4483,6 +4515,32 @@ init();
       '<div class="krl-tasks" data-krl-tasks="'+mid+':'+kind+'">'+groupsHtml+'</div>'+
       (legacy?'<div class="krl-legacy" data-krl-legacy="'+mid+':'+kind+'" style="font-size:12.5px;color:var(--text);background:#FFF8E1;border:1px dashed #E5B340;border-radius:6px;padding:8px 10px;margin-top:6px;line-height:1.55;"><div style="font-size:10.5px;font-weight:700;color:#946800;margin-bottom:3px;">기존 평문 메모</div>'+escapeHtml(legacy)+'<br><button data-act="krl-clear-legacy" data-mid="'+mid+'" data-kind="'+kind+'" style="margin-top:5px;font-size:11px;color:#6241F5;background:none;border:none;cursor:pointer;padding:0;font-weight:700;">이 메모 정리 →</button></div>':'')+
       '</div>';
+  }
+  // v69 — initiative_tasks.status 기반 KR 진척률 자동 계산 (Direction A)
+  function autoRecalcKRFromInitTasks(){
+    const allKR=collectAllKR();
+    allKR.forEach(kr=>{
+      const inits=kr.initiatives||[];
+      if(!inits.length)return;
+      let totalPct=0,cnt=0;
+      inits.forEach(init=>{
+        const tasks=state.initiativeTasks[init.id]||[];
+        if(!tasks.length)return;
+        const done=tasks.filter(t=>t.status==='done').length;
+        totalPct+=done/tasks.length*100;
+        cnt++;
+      });
+      if(!cnt)return;
+      const avgPct=totalPct/cnt;
+      let targetKR=null,targetOid=null;
+      (state.objectives||[]).forEach(o=>(o.keyResults||[]).forEach(k=>{if(k.id===kr.id){targetKR=k;targetOid=o.id;}}));
+      if(!targetKR||!targetOid)return;
+      const newCur=Math.round(avgPct/100*(targetKR.target||100));
+      if(newCur===targetKR.current)return;
+      targetKR.current=newCur;
+      if(typeof updateKRRowDom==='function')updateKRRowDom(targetOid,kr.id);
+      if(typeof saveKR==='function')saveKR(targetOid,targetKR);
+    });
   }
   // v64 — 할일 완료 상태 → initiative 완료율 → KR current 자동 계산
   function autoRecalcKRFromTasks(){
@@ -4774,9 +4832,21 @@ init();
     // v28 — KR/Init 헤더 ＋ 버튼: 그 KR/Init에 직접 묶이는 할일을 즉시 추가
     if(a==='krl-add-task-in-kr'||a==='krl-add-task-in-init'){
       const mid=btn.dataset.mid,kind=btn.dataset.kind;
-      const data=getMemberTasks(mid,kind);
       const krId=btn.dataset.krId||'';
       const initId=a==='krl-add-task-in-init'?(btn.dataset.initId||''):'';
+      // v69 — 실제 initiative이면 initiative_tasks 테이블에 추가
+      const isRealInit=initId&&(typeof collectAllInit==='function')&&!!collectAllInit().find(x=>x.id===initId);
+      if(isRealInit&&kind==='today'){
+        const selfId=state.selfId;
+        const newT={id:newTaskId(),initiative_id:initId,title:'',status:'todo',owner_id:selfId||null,start_date:null,due_date:null,sort_order:(state.initiativeTasks[initId]||[]).length};
+        if(!state.initiativeTasks[initId])state.initiativeTasks[initId]=[];
+        state.initiativeTasks[initId].push(newT);
+        if(typeof saveInitiativeTask==='function')saveInitiativeTask(newT);
+        const block=document.querySelector('[data-krl-block="'+mid+':'+kind+'"]');
+        if(block){const tmp=document.createElement('div');tmp.innerHTML=renderTaskListBlock(mid,kind,'추가 할일');const nb=tmp.firstElementChild;if(nb){block.replaceWith(nb);setTimeout(()=>{const ta=document.querySelector('textarea[data-krl-field="task-text"][data-tid="'+newT.id+'"]');if(ta){ta.focus();autoGrow(ta);}},50);}}
+        return;
+      }
+      const data=getMemberTasks(mid,kind);
       const newTask={id:newTaskId(),t:'',k:krId,i:initId,d:false};
       data.tasks.push(newTask);
       updateMemberTasks(mid,kind,data.legacy,data.tasks);
@@ -4792,7 +4862,7 @@ init();
       scheduleDistributionUpdate();
       return;
     }
-    if(a!=='krl-add-task'&&a!=='krl-toggle-task'&&a!=='krl-del-task'&&a!=='krl-clear-legacy'&&a!=='krl-add-subtask')return;
+    if(a!=='krl-add-task'&&a!=='krl-toggle-task'&&a!=='krl-del-task'&&a!=='krl-clear-legacy'&&a!=='krl-add-subtask'&&a!=='krl-toggle-init-task'&&a!=='krl-del-init-task')return;
     const mid=btn.dataset.mid,kind=btn.dataset.kind,tid=btn.dataset.tid;
     const data=getMemberTasks(mid,kind);
     if(a==='krl-add-task'){
@@ -4853,6 +4923,25 @@ init();
       const legacyEl=document.querySelector('[data-krl-legacy="'+mid+':'+kind+'"]');
       if(legacyEl)legacyEl.remove();
     }
+    // v69 — initiative_tasks 체크 토글
+    else if(a==='krl-toggle-init-task'){
+      const initId=btn.dataset.initId;
+      const arr=state.initiativeTasks[initId]||[];
+      const t=arr.find(x=>x.id===tid);if(!t)return;
+      t.status=t.status==='done'?'todo':'done';
+      if(typeof saveInitiativeTask==='function')saveInitiativeTask(t);
+      // DOM 즉시 업데이트
+      const row=document.querySelector('.krl-task-row[data-tid="'+tid+'"]');
+      if(row){const ck=row.querySelector('.rt-check');if(ck){ck.classList.toggle('checked',t.status==='done');ck.innerHTML=t.status==='done'?'✓':'';}const ta=row.querySelector('textarea');if(ta){ta.style.textDecoration=t.status==='done'?'line-through':'';ta.style.color=t.status==='done'?'var(--text-soft)':'var(--text)';}}
+      autoRecalcKRFromInitTasks();
+    }
+    // v69 — initiative_tasks 삭제
+    else if(a==='krl-del-init-task'){
+      const initId=btn.dataset.initId;
+      if(state.initiativeTasks[initId]){state.initiativeTasks[initId]=state.initiativeTasks[initId].filter(x=>x.id!==tid);}
+      if(typeof deleteInitiativeTask==='function')deleteInitiativeTask(tid);
+      rerenderTaskBlock(mid,kind);
+    }
   });
   // v26 — 댓글 textarea: Enter=저장, Alt+Enter=줄바꿈
   document.addEventListener('keydown',function(e){
@@ -4879,6 +4968,14 @@ init();
     if(el.dataset.krlField!=='task-text')return;
     autoGrow(el);
     const mid=el.dataset.mid,kind=el.dataset.kind,tid=el.dataset.tid;
+    // v69 — initiative_tasks textarea 저장
+    if(el.dataset.isInitTask==='1'){
+      const initId=el.dataset.initId;
+      const arr=state.initiativeTasks[initId]||[];
+      const t=arr.find(x=>x.id===tid);
+      if(t&&typeof saveInitiativeTask==='function'){t.title=el.value;saveInitiativeTask(t);}
+      return;
+    }
     const data=getMemberTasks(mid,kind);
     const t=data.tasks.find(x=>x.id===tid);
     if(t){t.t=el.value;updateMemberTasks(mid,kind,data.legacy,data.tasks);}
