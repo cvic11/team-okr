@@ -4772,7 +4772,7 @@ init();
       scheduleDistributionUpdate();
       return;
     }
-    if(a!=='krl-add-task'&&a!=='krl-toggle-task'&&a!=='krl-del-task'&&a!=='krl-clear-legacy')return;
+    if(a!=='krl-add-task'&&a!=='krl-toggle-task'&&a!=='krl-del-task'&&a!=='krl-clear-legacy'&&a!=='krl-add-subtask')return;
     const mid=btn.dataset.mid,kind=btn.dataset.kind,tid=btn.dataset.tid;
     const data=getMemberTasks(mid,kind);
     if(a==='krl-add-task'){
@@ -4812,7 +4812,7 @@ init();
       const parentTid=el.dataset.parentTid;
       const krId=el.dataset.krId||'';
       if(!parentTid)return;
-      const newTask={id:genId(),t:'',d:false,k:krId,i:parentTid,c:[]};
+      const newTask={id:newTaskId(),t:'',d:false,k:krId,i:parentTid,c:[]};
       data.tasks.push(newTask);
       updateMemberTasks(mid,kind,data.legacy,data.tasks);
       rerenderTaskBlock(mid,kind);
