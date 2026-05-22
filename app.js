@@ -164,7 +164,8 @@ mark{background:#FFF59D;color:var(--text);padding:0 2px;border-radius:3px}
   .member-card .member-head .member-name{font-size:15px;font-weight:800}
   .member-card .member-head .member-role{font-size:12px;color:var(--text-soft)}
   .member-card .field{margin-bottom:0;min-width:0;display:flex;flex-direction:column}
-  .member-card .field-label{margin-bottom:6px;flex-shrink:0}
+  /* v62 — 3개 필드 시작 높이 통일: 도움요청 버튼 등 높이 차이 흡수 */
+  .member-card .field-label{margin-bottom:6px;flex-shrink:0;min-height:32px}
   /* v61 — 3개 필드 같은 높이: textarea가 셀 남은 공간 모두 차지 */
   .member-card .field-input{flex:1 1 auto;min-height:140px;font-size:13.5px;width:100%;resize:none}
   .member-card .field > textarea.blocker-input{flex:1 1 auto;min-height:140px;resize:none}
