@@ -4351,16 +4351,40 @@ init();
     });
     return tree;
   }
-  // v69 — initiative_tasks를 standup 할일 형식으로 변환 (kind='today'용)
+  // v69 — initiative_tasks를 standup 할일 형식으로 변환 (날짜 필터 포함)
   function buildInitTasksForToday(mid){
+    const allKR=collectAllKR();
+    const initToKr={};
+    allKR.forEach(k=>(k.initiatives||[]).forEach(i=>{initToKr[i.id]=k.id;}));
+    const vDate=typeof viewingDate!=='undefined'?viewingDate:todayKey();
+    const tasks=[];
+    Object.entries(state.initiativeTasks||{}).forEach(([iid,arr])=>{
+      (arr||[]).forEach(t=>{
+        if(!t.owner_id||t.owner_id===mid){
+          const isDone=t.status==='done';
+          // 시작일이 없거나 시작일이 오늘 이하인 미완료 → 오늘 할일
+          const hasStarted=!t.start_date||t.start_date<=vDate;
+          if(!isDone&&hasStarted){
+            tasks.push({id:t.id,t:t.title||'',i:iid,k:initToKr[iid]||'',d:false,_isInitTask:true,_iid:iid,c:[]});
+          }
+        }
+      });
+    });
+    return tasks;
+  }
+  // v69 — 최근 한 일용: 특정 날짜에 완료된 initiative_tasks
+  function buildInitTasksForYesterday(mid,targetDate){
     const allKR=collectAllKR();
     const initToKr={};
     allKR.forEach(k=>(k.initiatives||[]).forEach(i=>{initToKr[i.id]=k.id;}));
     const tasks=[];
     Object.entries(state.initiativeTasks||{}).forEach(([iid,arr])=>{
       (arr||[]).forEach(t=>{
-        if(!t.owner_id||t.owner_id===mid){
-          tasks.push({id:t.id,t:t.title||'',i:iid,k:initToKr[iid]||'',d:t.status==='done',_isInitTask:true,_iid:iid,c:[]});
+        if((!t.owner_id||t.owner_id===mid)&&t.status==='done'){
+          const doneDate=t.updated_at?(t.updated_at.slice?t.updated_at.slice(0,10):''):'';
+          if(doneDate===targetDate){
+            tasks.push({id:t.id,t:t.title||'',i:iid,k:initToKr[iid]||'',d:true,_isInitTask:true,_iid:iid,c:[]});
+          }
         }
       });
     });
@@ -4392,10 +4416,13 @@ init();
   function renderTaskListBlock(mid,kind,label){
     const data=getMemberTasks(mid,kind);
     const legacy=data.legacy;
-    // v69 — kind='today': initiative_tasks 기반 + JSON 운영 할일 (KR 무관) 혼합
+    // v69 — initiative_tasks 연동: today=시작일 필터, yesterday=완료일 필터
+    const vDate=typeof viewingDate!=='undefined'?viewingDate:todayKey();
     const tasks=kind==='today'
       ?[...buildInitTasksForToday(mid),...data.tasks.filter(t=>!t.k&&!t.i)]
-      :data.tasks;
+      :kind==='yesterday'
+        ?[...buildInitTasksForYesterday(mid,shiftDate(vDate,-1)),...data.tasks]
+        :data.tasks;
     const addLabel=(kind==='today'?'할일 추가':'기록 남기기');
     const editable=(typeof canEditAs==='function')?canEditAs(mid):true;
     const dis=editable?'':' disabled';
