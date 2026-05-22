@@ -3399,6 +3399,19 @@ document.addEventListener('click',async e=>{
   }
   if(a==='add-init-sub'){
     const iid=btn.dataset.iid;
+    // v68 — render() 전에 DOM의 현재 입력값을 state에 동기화 (타이핑 중 클릭 시 손실 방지)
+    document.querySelectorAll('input[data-field="init-sub-title"]').forEach(inp=>{
+      const t2=(state.initiativeTasks[inp.dataset.iid]||[]).find(x=>x.id===inp.dataset.stid);
+      if(t2&&inp.value!==t2.title){t2.title=inp.value;saveInitiativeTask(t2);}
+    });
+    document.querySelectorAll('input[data-field="init-sub-due"]').forEach(inp=>{
+      const t2=(state.initiativeTasks[inp.dataset.iid]||[]).find(x=>x.id===inp.dataset.stid);
+      if(t2&&(inp.value||null)!==t2.due_date){t2.due_date=inp.value||null;saveInitiativeTask(t2);}
+    });
+    document.querySelectorAll('input[data-field="init-sub-start"]').forEach(inp=>{
+      const t2=(state.initiativeTasks[inp.dataset.iid]||[]).find(x=>x.id===inp.dataset.stid);
+      if(t2&&(inp.value||null)!==t2.start_date){t2.start_date=inp.value||null;saveInitiativeTask(t2);}
+    });
     if(!window._initSubOpen)window._initSubOpen=new Set();
     window._initSubOpen.add(iid);
     const list=state.initiativeTasks[iid]||(state.initiativeTasks[iid]=[]);
