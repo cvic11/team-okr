@@ -536,6 +536,9 @@ body.present .obj-title-input{font-size:36px !important}
 .kr-row-line .kr-num-input{flex-shrink:0}
 .kr-row-line .kr-pct{flex-shrink:0;min-width:38px;text-align:right}
 .kr-row-line .conf-chip,.kr-row-line .kr-menu-btn,.kr-row-line .btn-icon{flex-shrink:0}
+/* v62 — WBS 라벨 제목 2줄까지 wrap (잘림 X) */
+.wbs-title-clamp{flex:1;min-width:0;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;line-clamp:2;overflow:hidden;line-height:1.35;word-break:break-word}
+.wbs-label-row.wbs-O-row{font-weight:800}
 /* v60 — 루틴을 담당자별 열로 정렬 (1순위 멤버 좌 → 오른쪽) */
 .rt-by-member-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin-top:8px}
 .rt-member-col{display:flex;flex-direction:column;gap:8px;min-width:0}
@@ -2138,12 +2141,10 @@ function computeWBSRange(qRange){
   return{start:startD,end:endD};
 }
 function isWBSKidsHidden(type,id){
-  // 기본 표시 규칙: O는 펼침, KR은 접힘(=Initiative 안 보임). _wbsToggled가 있으면 반전.
+  // v62 — 기본은 모두 펼침. 사용자가 명시적으로 접은 것만 _wbsToggled에 저장
   if(!window._wbsToggled)window._wbsToggled=new Set();
   const key=type+':'+id;
-  const toggled=window._wbsToggled.has(key);
-  const defaultHidden=type==='KR';
-  return toggled?!defaultHidden:defaultHidden;
+  return window._wbsToggled.has(key);
 }
 function renderWBS(){
   const t=currentTeam();
@@ -2246,7 +2247,7 @@ function renderWBS(){
 
   // 좌측 라벨 + 우측 바 한 줄씩 그리기
   let labelsHtml='',barsHtml='';
-  const ROW_H=34;
+  const ROW_H=48; // v62 — 행 높이 늘려 2줄 텍스트 수용
   rows.forEach((r,idx)=>{
     // v16 — 다중 담당자 + 팀 전원 지원
     // v26 — O·KR은 담당자 칩 생략 (Initiative만 표시)
@@ -2265,7 +2266,9 @@ function renderWBS(){
     const toggleBtn=canCollapse?`<button class="btn-icon" data-act="wbs-toggle" data-key="${collapseKey}" style="padding:0 4px;flex-shrink:0;">${caret(!isCollapsed,11)}</button>`:`<span style="display:inline-block;width:14px;"></span>`;
     const rowBg=r.type==='O'?`background:hsl(${labelHue},60%,96%);`:'';
     const sideBar=`<span style="position:absolute;left:0;top:0;bottom:0;width:3px;background:hsl(${labelHue},60%,55%);"></span>`;
-    labelsHtml+=`<div class="wbs-label-row" style="position:relative;height:${ROW_H}px;display:flex;align-items:center;gap:6px;padding:0 10px 0 ${lvIndent}px;border-bottom:1px solid #F4F4F5;font-size:${r.type==='O'?'13':r.type==='KR'?'12.5':'12'}px;${rowBg}${r.type==='O'?'font-weight:700;':r.type==='KR'?'font-weight:600;':''}">${sideBar}${toggleBtn}<span style="flex-shrink:0;">${icon}</span>${badge}<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${esc(r.label)}">${esc(r.label)}</span>${ownerChip}</div>`;
+    // v62 — 제목 2줄까지 wrap. O는 shimmer. 텍스트 잘림 X
+    const titleCls=r.type==='O'?'wbs-title-clamp obj-shimmer':'wbs-title-clamp';
+    labelsHtml+=`<div class="wbs-label-row" style="position:relative;min-height:${ROW_H}px;display:flex;align-items:center;gap:6px;padding:0 10px 0 ${lvIndent}px;border-bottom:1px solid #F4F4F5;font-size:${r.type==='O'?'13':r.type==='KR'?'12.5':'12'}px;${rowBg}${r.type==='O'?'font-weight:800;':r.type==='KR'?'font-weight:600;':''}">${sideBar}${toggleBtn}<span style="flex-shrink:0;">${icon}</span>${badge}<span class="${titleCls}" title="${esc(r.label)}">${esc(r.label)}</span>${ownerChip}</div>`;
 
     // 바 위치
     const sOff=Math.max(0,daysBetween(startD,r.start));
@@ -2293,6 +2296,7 @@ function renderWBS(){
   return `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px;">
     <div><h2 style="font-weight:800;font-size:23px;margin:0;">WBS · 간트 차트</h2><div style="font-size:13px;color:var(--text-soft);margin-top:2px;">${esc(t?.quarter||'')} · ${range.start.slice(5).replace('-','/')} ~ ${range.end.slice(5).replace('-','/')} (총 ${totalDays}일)</div></div>
     <div style="display:flex;gap:8px;align-items:center;font-size:11.5px;color:var(--text-soft);flex-wrap:wrap;">
+      <button data-act="wbs-download" class="btn btn-soft" title="간트차트를 PNG 이미지로 저장" style="padding:5px 11px;font-size:11.5px;display:inline-flex;align-items:center;gap:5px;">${I.download} 다운로드</button>
       <div class="wbs-view-mode" style="display:inline-flex;border:1px solid var(--line);border-radius:7px;overflow:hidden;background:white;">
         ${(()=>{const opts=[{m:'month',l:'월'},{m:'week',l:'주'},{m:'day',l:'일'}];return opts.map((o,i)=>`<button data-act="wbs-view" data-mode="${o.m}" title="${o.m==='month'?'월별':o.m==='week'?'주차별':'일별'} 보기" style="padding:5px 11px;background:${view===o.m?'var(--primary)':'transparent'};color:${view===o.m?'white':'var(--text)'};border:none;cursor:pointer;font-family:inherit;font-size:11.5px;font-weight:${view===o.m?'700':'500'};${i<opts.length-1?'border-right:1px solid var(--line);':''}">${o.l}</button>`).join('');})()}
       </div>
@@ -2303,7 +2307,7 @@ function renderWBS(){
       <span style="display:inline-flex;align-items:center;gap:6px;margin-left:4px;"><span style="display:inline-block;width:2px;height:14px;background:var(--warning);"></span>오늘</span>
     </div>
   </div>
-  <div class="wbs-container" style="display:grid;grid-template-columns:340px 1fr;gap:0;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:white;">
+  <div class="wbs-container" style="display:grid;grid-template-columns:480px 1fr;gap:0;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:white;">
     <div class="wbs-labels-col" style="border-right:1px solid var(--line);background:white;">
       <div style="height:52px;background:#F4F4F5;border-bottom:1px solid var(--line);display:flex;align-items:center;padding:0 12px;font-size:12px;font-weight:700;color:var(--text);">항목 (${rows.length}건)</div>
       ${labelsHtml}
@@ -2321,6 +2325,45 @@ function renderWBS(){
   <div style="font-size:11.5px;color:var(--text-soft);margin-top:8px;line-height:1.55;">
     💡 막대 클릭 → 점프 · 막대 가운데 드래그 → 일정 이동 · 막대 끝 잡고 드래그 → 시작/마감 변경 · 막대 더블클릭 → 날짜 직접 입력 · ▶▼ → 접기·펼치기 · Initiative 마감 지연 시 빨간 테두리
   </div>`;
+}
+// v62 — WBS 간트차트 PNG 다운로드 (html2canvas 동적 로드)
+async function downloadWBSPng(){
+  const target=document.querySelector('.wbs-container');
+  if(!target){showToast('차트를 찾을 수 없습니다',true);return;}
+  showToast('이미지 생성 중…');
+  // html2canvas 동적 로드
+  if(!window.html2canvas){
+    try{
+      await new Promise((resolve,reject)=>{
+        const s=document.createElement('script');
+        s.src='https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+        s.onload=resolve;s.onerror=reject;
+        document.head.appendChild(s);
+      });
+    }catch(e){console.warn('[wbs-png] lib load failed',e);showToast('html2canvas 로드 실패',true);return;}
+  }
+  // 좌측 라벨 + 우측 타임라인 전체를 캡처 (timeline은 가로 스크롤 영역 전체)
+  try{
+    const scrollArea=target.querySelector('.wbs-timeline-col');
+    const origOverflow=scrollArea?scrollArea.style.overflow:null;
+    const origWidth=target.style.width;
+    if(scrollArea)scrollArea.style.overflow='visible';
+    target.style.width='max-content';
+    await new Promise(r=>setTimeout(r,60)); // reflow 대기
+    const canvas=await window.html2canvas(target,{
+      scale:2,backgroundColor:'#ffffff',logging:false,
+      width:target.scrollWidth,height:target.scrollHeight,
+      windowWidth:target.scrollWidth+100
+    });
+    if(scrollArea)scrollArea.style.overflow=origOverflow;
+    target.style.width=origWidth;
+    const link=document.createElement('a');
+    const t=currentTeam();const dateStr=todayKey();
+    link.download=`WBS_${(t?.name||'team').replace(/[^\w가-힣]/g,'_')}_${dateStr}.png`;
+    link.href=canvas.toDataURL('image/png');
+    link.click();
+    showToast('다운로드 완료');
+  }catch(e){console.warn('[wbs-png] capture failed',e);showToast('이미지 생성 실패',true);}
 }
 // v21 — WBS 막대 드래그로 일정 이동 (시작·종료 유지 폭) + 드래그 중 날짜 툴팁
 (function(){
@@ -3126,6 +3169,7 @@ document.addEventListener('click',async e=>{
   // v15 — WBS 간트
   if(a==='wbs-toggle'){const key=btn.dataset.key;const set=window._wbsToggled||(window._wbsToggled=new Set());set.has(key)?set.delete(key):set.add(key);render();return;}
   if(a==='wbs-view'){window._wbsView=btn.dataset.mode;render();return;}
+  if(a==='wbs-download'){downloadWBSPng();return;}
   if(a==='wbs-jump'){
     // v39 — 더블클릭(날짜 팝오버) 가능성을 위해 280ms 지연, dblclick 발동 시 취소
     const type=btn.dataset.type;const id=btn.dataset.id;
