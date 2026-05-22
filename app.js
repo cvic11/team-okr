@@ -535,6 +535,21 @@ body.present .obj-title-input{font-size:36px !important}
 .kr-row-line .kr-num-input{flex-shrink:0}
 .kr-row-line .kr-pct{flex-shrink:0;min-width:38px;text-align:right}
 .kr-row-line .conf-chip,.kr-row-line .kr-menu-btn,.kr-row-line .btn-icon{flex-shrink:0}
+/* v60 — 루틴을 담당자별 열로 정렬 (1순위 멤버 좌 → 오른쪽) */
+.rt-by-member-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin-top:8px}
+.rt-member-col{display:flex;flex-direction:column;gap:8px;min-width:0}
+.rt-member-head{display:flex;align-items:center;gap:8px;padding:8px 12px;background:linear-gradient(135deg,#F4F0FE,#FAFAFB);border:1px solid var(--primary-soft);border-radius:8px;font-weight:700;font-size:13px;position:sticky;top:0}
+.rt-member-avatar{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;color:white;font-size:11.5px;font-weight:800;flex-shrink:0}
+.rt-member-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rt-member-count{flex-shrink:0;font-size:10.5px;color:var(--text-soft);font-weight:700;background:white;border:1px solid var(--line);padding:1px 7px;border-radius:999px}
+.rt-item-col{flex-direction:column !important;align-items:stretch !important;gap:4px;padding:10px 12px;background:white;border:1px solid var(--line);border-radius:10px;transition:border-color .12s}
+.rt-item-col:hover{border-color:var(--primary-soft)}
+.rt-item-col.done{background:#F8FCF9;border-color:#CCEEDB}
+.rt-item-col .rt-note-input{font-size:12px;padding:5px 9px}
+html.dark .rt-member-head{background:linear-gradient(135deg,#2A2245,#191B23);border-color:#3A2F5A}
+html.dark .rt-item-col{background:#1A1D27;border-color:#2A2D38}
+html.dark .rt-item-col.done{background:#1A2A22;border-color:#2A4034}
+html.dark .rt-member-count{background:#222631;border-color:#2A2D38}
 /* v56/v57 — Objective 1개 솔로 모드: O 기준 KR 들여쓰기 + 이니셔티브 더 깊은 들여쓰기 */
 .obj-solo{padding:24px 26px !important}
 .obj-solo .kr-inline-row{
@@ -1449,9 +1464,9 @@ function renderToday(){
   return `<div class="date-bar"><button class="date-nav-btn" data-act="date-shift" data-delta="-1">${I.chevLeft}</button><input type="date" class="date-input" value="${date}" data-act="date-set"><button class="date-nav-btn" data-act="date-shift" data-delta="1">${I.chevRight}</button>${isToday?'<span class="today-tag">오늘</span>':`<span class="past-tag">${date<todayKey()?'지난 회의':'미래 날짜'}</span><button class="btn btn-soft" data-act="date-today">오늘로</button>`}${memberIconsHtml}</div>
   ${renderObjectivePairRow()}
   ${dueItems.length>0?`<section class="card card-section"><div class="section-head"><span style="color:var(--amber);">${I.flag}</span><span class="section-title">이번 주 마감 (${dueItems.length}건)</span></div>${dueItems.map(d=>`<div style="padding:8px 0;display:flex;align-items:center;gap:10px;border-bottom:1px solid #F4F4F5;font-size:13px;"><span style="font-size:11px;padding:2px 8px;border-radius:999px;background:${d.type==='kr'?'#EEEAFE':'#F4F4F5'};color:${d.type==='kr'?C.primary:C.textSoft};font-weight:700;">${d.type==='kr'?'KR':'Init'}</span><span style="flex:1;">${esc(d.title)}</span><span style="font-size:11.5px;color:${isOverdue(d.dueDate,d.status)?C.warning:C.textSoft};font-weight:600;">${dueShort(d.dueDate)}${isOverdue(d.dueDate,d.status)?' · 지연':''}</span></div>`).join('')}</section>`:''}
-  <div class="card-section"><div class="section-head"><span style="color:var(--primary);">${I.msg}</span><span class="section-title">${isToday?'오늘의 스탠드업':`${date} 스탠드업`}</span><span class="section-meta">· 어제 / 오늘 / 막힘</span></div>${state.members.length===0?'<div class="empty">팀원을 먼저 등록해주세요. <strong>관리</strong> 탭에서 추가할 수 있습니다.</div>':`<div class="member-grid">${state.members.map(m=>renderMemberCard(m,standup.entries?.[m.id]||{})).join('')}</div>`}</div>
+  <div class="card-section"><div class="section-head"><span style="color:var(--primary);">${I.msg}</span><span class="section-title">${isToday?'오늘의 스탠드업':`${date} 스탠드업`}</span><span class="section-meta">· 어제 / 오늘 / 막힘</span></div>${state.members.filter(m=>!m.isObserver).length===0?'<div class="empty">팀원을 먼저 등록해주세요. <strong>관리</strong> 탭에서 추가할 수 있습니다.</div>':`<div class="member-grid">${state.members.filter(m=>!m.isObserver).map(m=>renderMemberCard(m,standup.entries?.[m.id]||{})).join('')}</div>`}</div>
 ${''/* v15 — Initiative는 매일의 할 일에 표시하지 않음 (OKR 탭에서 관리) */}
-  ${isToday&&todayRoutines.length>0?`<section class="card card-section"><div class="section-head"><span style="color:var(--primary);">${I.loop}</span><span class="section-title">오늘의 루틴</span><span class="section-meta">· 매일 챙겨야 할 일</span></div>${todayRoutines.map(r=>renderRoutineCheck(r,rl[r.id]||{})).join('')}</section>`:''}`;
+  ${isToday&&todayRoutines.length>0?`<section class="card card-section"><div class="section-head"><span style="color:var(--primary);">${I.loop}</span><span class="section-title">오늘의 루틴</span><span class="section-meta">· 매일 챙겨야 할 일</span></div>${renderRoutinesByMember(todayRoutines,rl)}</section>`:''}`;
 }
 
 // v12 — 발표 모드 (사람별 전환, 한 화면 fit)
@@ -1719,6 +1734,41 @@ function renderRoutineCheck(r,log){
   return `<div class="rt-item ${c?'done':''}"><button class="rt-check ${c?'checked':''}" data-act="toggle-routine" data-rid="${r.id}"${dis}${tip}>${c?I.check:''}</button><div class="rt-info" style="min-width:0;"><div class="rt-title" style="display:flex;align-items:center;gap:6px;flex-wrap:nowrap;min-width:0;"><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(r.title)}</span>${ownerAvatar}</div><div class="rt-meta">${freqText(r)}</div></div><input class="rt-note-input" placeholder="메모 (선택)" data-field="rt-note" data-rid="${r.id}" value="${esc(log.note||'')}"${ro}${tip} /></div>`;
 }
 function freqText(r){if(r.frequency==='daily')return '매일';if(r.frequency==='weekdays')return '평일';if(r.frequency==='monthly')return `매월 ${r.day_of_month||1}일`;if(r.frequency==='weekly'||r.frequency==='custom'){const dn=['월','화','수','목','금','토','일'];return(r.days_of_week||[]).map(d=>dn[d-1]).join(',');}return '';}
+// v60 — 루틴을 담당자별 열로 묶어서 카드 그리드로 렌더 (옵저버 제외)
+function renderRoutinesByMember(routines,rl){
+  const byOwner=new Map();
+  routines.forEach(r=>{const k=r.owner_id||'__unassigned__';if(!byOwner.has(k))byOwner.set(k,[]);byOwner.get(k).push(r);});
+  const orderedMembers=state.members.filter(m=>!m.isObserver).sort((a,b)=>(a.sort_order||0)-(b.sort_order||0));
+  const cols=[];
+  orderedMembers.forEach(m=>{const rs=byOwner.get(m.id);if(rs&&rs.length)cols.push({member:m,routines:rs});});
+  const un=byOwner.get('__unassigned__');
+  if(un&&un.length)cols.push({member:null,routines:un});
+  if(cols.length===0)return '<div class="empty" style="margin-top:8px;">오늘 루틴이 없습니다.</div>';
+  return `<div class="rt-by-member-grid">${cols.map(col=>{
+    const head=col.member
+      ?`<div class="rt-member-head"><span class="rt-member-avatar" style="background:${col.member.color||'#6241F5'};">${esc(col.member.name.slice(0,1).toUpperCase())}</span><span class="rt-member-name">${esc(col.member.name)}</span><span class="rt-member-count">${col.routines.length}</span></div>`
+      :`<div class="rt-member-head"><span style="color:var(--text-soft);font-weight:700;">담당 없음</span><span class="rt-member-count">${col.routines.length}</span></div>`;
+    const items=col.routines.map(r=>renderRoutineCheckInCol(r,rl[r.id]||{})).join('');
+    return `<div class="rt-member-col">${head}${items}</div>`;
+  }).join('')}</div>`;
+}
+// v60 — 열(column) 안에 들어가는 컴팩트 루틴 카드 (담당자 칩 제거)
+function renderRoutineCheckInCol(r,log){
+  const o=state.members.find(m=>m.id===r.owner_id);
+  const c=!!log.completed;
+  const editable=o?canEditAs(o.id):true;
+  const ro=editable?'':' readonly';
+  const dis=editable?'':' disabled';
+  const tip=editable?'':' title="담당자 본인만 수정할 수 있습니다"';
+  return `<div class="rt-item rt-item-col ${c?'done':''}">
+    <div style="display:flex;align-items:center;gap:8px;min-width:0;">
+      <button class="rt-check ${c?'checked':''}" data-act="toggle-routine" data-rid="${r.id}"${dis}${tip}>${c?I.check:''}</button>
+      <span class="rt-title" style="flex:1;min-width:0;font-size:13px;font-weight:600;line-height:1.4;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${esc(r.title)}">${esc(r.title)}</span>
+      <span class="rt-meta" style="flex-shrink:0;font-size:10px;color:var(--text-soft);font-weight:600;padding:1px 6px;border-radius:4px;background:#F4F4F5;">${freqText(r)}</span>
+    </div>
+    <input class="rt-note-input" placeholder="메모 (선택)" data-field="rt-note" data-rid="${r.id}" value="${esc(log.note||'')}"${ro}${tip} style="width:100%;margin-top:6px;" />
+  </div>`;
+}
 function collectDueThisWeek(){const items=[];state.objectives.forEach(o=>o.keyResults.forEach(kr=>{if(kr.dueDate&&(withinThisWeek(kr.dueDate)||isOverdue(kr.dueDate)))items.push({type:'kr',title:kr.title,dueDate:kr.dueDate});kr.initiatives.forEach(i=>{if(i.dueDate&&i.status!=='done'&&(withinThisWeek(i.dueDate)||isOverdue(i.dueDate)))items.push({type:'init',title:i.title,dueDate:i.dueDate,status:i.status});});}));return items.sort((a,b)=>String(a.dueDate).localeCompare(String(b.dueDate)));}
 
 function renderGuideCard(key){
