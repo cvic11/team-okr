@@ -508,7 +508,7 @@ body.present .date-bar{margin-top:-20px !important}
 @keyframes objShine{0%{background-position:100% 50%}100%{background-position:-40% 50%}}
 @keyframes objBreathe{
   0%,100%{filter:drop-shadow(0 0 0 rgba(98,65,245,0))}
-  50%{filter:drop-shadow(0 0 14px rgba(98,65,245,.42)) drop-shadow(0 2px 18px rgba(98,65,245,.18))}
+  50%{filter:drop-shadow(0 0 10px rgba(98,65,245,.32))}
 }
 .obj-title-input{
   font-size:30px !important;font-weight:900 !important;letter-spacing:-0.9px !important;
@@ -547,7 +547,7 @@ body.present .obj-title-input{font-size:36px !important}
   background:linear-gradient(to bottom,var(--primary-soft),transparent);
   border-radius:2px;
 }
-.obj-solo .kr-inline-row > div:first-child > span:first-child{font-size:16.5px !important;font-weight:700 !important;letter-spacing:-0.2px}
+.obj-solo .kr-inline-title{font-size:16.5px !important;font-weight:700 !important;letter-spacing:-0.2px;line-height:1.6}
 .obj-solo .kr-inline-row .kr-strip-pct{font-size:15px !important}
 .obj-solo .kr-inline-row .kr-num-input{font-size:14px !important;width:64px !important;padding:5px 8px !important}
 /* 이니셔티브는 KR 안에 더 들여쓰기 */
@@ -1548,7 +1548,7 @@ function renderMyInitItem(i){
 function renderKRStrip(allKR){if(allKR.length===0)return '<div style="font-size:13px;color:var(--text-soft);">아직 등록된 KR이 없습니다.</div>';return allKR.map(kr=>{const p=pct(kr.current,kr.target);const o=state.members.find(m=>m.id===kr.ownerId);return `<div class="kr-strip-row"><div class="kr-strip-head"><div style="display:flex;align-items:center;gap:8px;min-width:0;"><span class="kr-strip-title">${esc(kr.title)}</span>${o?`<span class="kr-strip-owner">${esc(o.name)}</span>`:''}<span class="conf-chip ${kr.confidence||'mid'}" style="cursor:default;">${CONF_LABELS[kr.confidence||'mid']}</span></div><div class="kr-strip-meta">${kr.dueDate?`<span class="kr-strip-num" style="color:${isOverdue(kr.dueDate)?C.warning:C.textSoft};">${dueShort(kr.dueDate)}</span>`:''}<span class="kr-strip-num">${kr.current} / ${kr.target} ${esc(kr.unit||'')}</span><span class="kr-strip-pct" style="color:${progressColor(p)};">${p}%</span></div></div><div class="progress-track"><div class="progress-fill" style="width:${p}%;background:${progressColor(p)};"></div></div></div>`;}).join('');}
 
 // v11 — 오늘 화면: 1번/2번 OKR 좌우 배치 + 각 KR 진척도 인라인 입력
-function renderInlineKRRow(kr,oid){
+function renderInlineKRRow(kr,oid,idx){
   const p=pct(kr.current,kr.target);
   const o=state.members.find(m=>m.id===kr.ownerId);
   const overdue=isOverdue(kr.dueDate);
@@ -1574,10 +1574,12 @@ function renderInlineKRRow(kr,oid){
         </div>`;
       }).join('')}
     </div>`:'';
+  // v59 — KR 번호 칩 (KR1/KR2/…) 맨앞에 추가
+  const idxBadge=(typeof idx==='number')?`<span style="font-size:10.5px;padding:2px 8px;border-radius:999px;background:var(--primary-soft);color:var(--primary);font-weight:800;flex-shrink:0;letter-spacing:.3px;">KR${idx+1}</span>`:'';
   // v57 — KR 행 1줄 통합 (좁으면 가로 스크롤). 제목/입력/진척바/%/신뢰도/마감 모두 한 줄에
-  return `<div class="kr-inline-row" data-kr-id="${kr.id}" style="padding:10px 0;border-bottom:1px solid #F4F4F5;">
-    <div style="display:flex;align-items:center;gap:8px;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;">
-      <span style="font-size:14px;font-weight:700;color:var(--text);flex:1 1 auto;min-width:0;line-height:1.4;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${esc(kr.title||'')}">${esc(kr.title||'(제목 없음)')}</span>
+  return `<div class="kr-inline-row" data-kr-id="${kr.id}" style="padding:12px 0;border-bottom:1px solid #F4F4F5;">
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;line-height:1.6;">
+      ${idxBadge}<span class="kr-inline-title" style="font-size:14px;font-weight:700;color:var(--text);flex:1 1 auto;min-width:0;line-height:1.6;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:1px 2px;" title="${esc(kr.title||'')}">${esc(kr.title||'(제목 없음)')}</span>
       <input type="number" class="kr-num-input" data-field="kr-current" data-oid="${oid}" data-krid="${kr.id}" value="${kr.current}" title="현재값 입력" style="width:58px;font-size:13px;padding:5px 7px;font-weight:700;flex-shrink:0;" />
       <span style="color:var(--text-soft);font-size:12px;flex-shrink:0;">/</span>
       <span style="font-size:12.5px;color:var(--text-soft);font-weight:600;flex-shrink:0;white-space:nowrap;">${kr.target}${kr.unit?' '+esc(kr.unit):''}</span>
@@ -1607,7 +1609,7 @@ function renderObjectivePanel(o,slotIdx){
       <span style="font-size:11.5px;color:var(--text-soft);font-weight:600;flex-shrink:0;text-align:right;">평균 <strong style="color:${progressColor(objAvg)};font-size:13px;">${objAvg}%</strong><br><span style="font-size:10px;opacity:.7;">KR ${krs.length}</span></span>
     </div>
     <div style="flex:1;">
-      ${krs.length===0?'<div style="font-size:13px;color:var(--text-soft);padding:14px 0;text-align:center;">KR을 추가하세요.</div>':krs.map(k=>renderInlineKRRow(k,o.id)).join('')}
+      ${krs.length===0?'<div style="font-size:13px;color:var(--text-soft);padding:14px 0;text-align:center;">KR을 추가하세요.</div>':krs.map((k,i)=>renderInlineKRRow(k,o.id,i)).join('')}
     </div>
   </section>`;
 }
@@ -1629,7 +1631,7 @@ function renderObjectiveSolo(o){
       </div>
     </div>
     <div>
-      ${krs.length===0?'<div style="font-size:13px;color:var(--text-soft);padding:14px 0;text-align:center;">KR을 추가하세요.</div>':krs.map(k=>renderInlineKRRow(k,o.id)).join('')}
+      ${krs.length===0?'<div style="font-size:13px;color:var(--text-soft);padding:14px 0;text-align:center;">KR을 추가하세요.</div>':krs.map((k,i)=>renderInlineKRRow(k,o.id,i)).join('')}
     </div>
   </section>`;
 }
