@@ -1323,11 +1323,23 @@ function onReviewChange(p){const r=p.new||p.old;if(r.team_id&&r.team_id!==state.
 function updateConnDot(){const e=document.getElementById('conn-dot');if(!e)return;e.className=`conn-dot ${connStatus}`;e.textContent=connStatus==='online'?'실시간 연결됨':connStatus==='connecting'?'연결 중':'오프라인';}
 
 const debouncers={};
+const _pendingFns={}; // v71 — 미실행 저장 함수 보관 (페이지 이탈 시 즉시 실행용)
 function debouncedSave(k,fn,d=400){
   // v16 — 옵저버는 모든 DB 쓰기 우회 (UI만 동작, 기록 남기지 않음)
   if(typeof isObserverMode==='function'&&isObserverMode())return;
-  clearTimeout(debouncers[k]);debouncers[k]=setTimeout(async()=>{markSaveStart();let err=false;try{await fn();}catch(e){err=true;}finally{markSaveEnd(err);}},d);
+  _pendingFns[k]=fn;
+  clearTimeout(debouncers[k]);debouncers[k]=setTimeout(async()=>{delete _pendingFns[k];markSaveStart();let err=false;try{await fn();}catch(e){err=true;}finally{markSaveEnd(err);}},d);
 }
+// v71 — 탭 숨김/새로고침 시 미처리 저장 즉시 실행
+async function flushPendingSaves(){
+  const entries=Object.entries(_pendingFns);
+  if(!entries.length)return;
+  entries.forEach(([k])=>clearTimeout(debouncers[k]));
+  Object.keys(_pendingFns).forEach(k=>delete _pendingFns[k]);
+  await Promise.allSettled(entries.map(([,fn])=>fn()));
+}
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')flushPendingSaves();});
+window.addEventListener('beforeunload',()=>{flushPendingSaves();});
 async function logChange(et,eid,act,fn,bv,av,lb,category){
   // v16 — 옵저버는 audit 기록 남기지 않음
   if(typeof isObserverMode==='function'&&isObserverMode())return;
@@ -4009,6 +4021,8 @@ document.addEventListener('change',async e=>{
   else if(f==='rt-owner'){const r=state.routines.find(x=>x.id===el.dataset.rid);if(r){r.owner_id=el.value||null;saveRoutine(r);}}
   // v30 — Initiative 하위 sub-task 담당자
   else if(f==='init-sub-owner'){const iid=el.dataset.iid,stid=el.dataset.stid;const t=(state.initiativeTasks[iid]||[]).find(x=>x.id===stid);if(t){t.owner_id=el.value||null;saveInitiativeTask(t);}}
+  // v71 — init-sub-title: blur/Enter 시 즉시 저장 (debounce 타이머 미실행 시 손실 방지)
+  else if(f==='init-sub-title'){const iid=el.dataset.iid,stid=el.dataset.stid;const t=(state.initiativeTasks[iid]||[]).find(x=>x.id===stid);if(t){t.title=el.value;saveInitiativeTask(t);}}
   else if(f==='init-sub-status'){const iid=el.dataset.iid,stid=el.dataset.stid;const t=(state.initiativeTasks[iid]||[]).find(x=>x.id===stid);if(t){t.status=el.value;saveInitiativeTask(t);scheduleRender();}}
   else if(f==='member-color'){const m=state.members.find(x=>x.id===el.dataset.mid);if(m){m.color=el.value;saveMember(m);}}
   else if(f==='helper-member'){saveEntry(viewingDate,el.dataset.mid,'helper_member_id',el.value);}
