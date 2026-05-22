@@ -1283,12 +1283,13 @@ function onInitTaskChange(p){
     else state.initiativeTasks[iid].push({...r});
     state.initiativeTasks[iid].sort((a,b)=>(a.sort_order||0)-(b.sort_order||0));
   }
-  // v67 — 타이핑 중 re-render 방지: 활성 input/textarea가 있으면 blur 후 렌더
+  // v67/v72 — 타이핑 중 re-render 방지: blur 후 렌더, 리스너 중복 방지
   if(currentView==='okr'){
     const a=document.activeElement;
-    if(a&&(a.tagName==='INPUT'||a.tagName==='TEXTAREA')){
-      a.addEventListener('blur',()=>{if(currentView==='okr')scheduleRender();},{once:true});
-    }else{scheduleRender();}
+    if(a&&(a.tagName==='INPUT'||a.tagName==='TEXTAREA')&&!a._blurRenderPending){
+      a._blurRenderPending=true;
+      a.addEventListener('blur',()=>{a._blurRenderPending=false;if(currentView==='okr')scheduleRender();},{once:true});
+    }else if(!a||a.tagName==='BODY'){scheduleRender();}
   }
 }
 async function saveInitiativeTask(it){debouncedSave(`init-task-${it.id}`,async()=>{markLocal('initiative_tasks',it.id);const{error}=await sb.from('initiative_tasks').upsert({id:it.id,initiative_id:it.initiative_id,title:it.title,status:it.status||'todo',owner_id:it.owner_id||null,start_date:it.start_date||null,due_date:it.due_date||null,sort_order:it.sort_order||0,updated_at:new Date().toISOString()});if(error){
@@ -1332,14 +1333,19 @@ function debouncedSave(k,fn,d=400){
 }
 // v71 — 탭 숨김/새로고침 시 미처리 저장 즉시 실행
 async function flushPendingSaves(){
+  // v72 — 초기화 전 / 옵저버 모드 시 실행 안 함 (로그인 오류 방지)
+  if(!initialized)return;
+  if(typeof isObserverMode==='function'&&isObserverMode())return;
   const entries=Object.entries(_pendingFns);
   if(!entries.length)return;
   entries.forEach(([k])=>clearTimeout(debouncers[k]));
   Object.keys(_pendingFns).forEach(k=>delete _pendingFns[k]);
-  await Promise.allSettled(entries.map(([,fn])=>fn()));
+  try{await Promise.allSettled(entries.map(([,fn])=>fn()));}catch(e){}
 }
-document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')flushPendingSaves();});
-window.addEventListener('beforeunload',()=>{flushPendingSaves();});
+// v72 — visibilitychange만 사용 (beforeunload는 async 미지원으로 제거)
+document.addEventListener('visibilitychange',()=>{
+  if(document.visibilityState==='hidden'&&initialized)flushPendingSaves();
+});
 async function logChange(et,eid,act,fn,bv,av,lb,category){
   // v16 — 옵저버는 audit 기록 남기지 않음
   if(typeof isObserverMode==='function'&&isObserverMode())return;
@@ -4557,8 +4563,14 @@ init();
       (legacy?'<div class="krl-legacy" data-krl-legacy="'+mid+':'+kind+'" style="font-size:12.5px;color:var(--text);background:#FFF8E1;border:1px dashed #E5B340;border-radius:6px;padding:8px 10px;margin-top:6px;line-height:1.55;"><div style="font-size:10.5px;font-weight:700;color:#946800;margin-bottom:3px;">기존 평문 메모</div>'+escapeHtml(legacy)+'<br><button data-act="krl-clear-legacy" data-mid="'+mid+'" data-kind="'+kind+'" style="margin-top:5px;font-size:11px;color:#6241F5;background:none;border:none;cursor:pointer;padding:0;font-weight:700;">이 메모 정리 →</button></div>':'')+
       '</div>';
   }
-  // v69 — initiative_tasks.status 기반 KR 진척률 자동 계산 (Direction A)
+  // v69/v72 — initiative_tasks.status 기반 KR 진척률 자동 계산
+  // v72: 디바운스 추가 — 연속 토글 시 500ms 후 1회만 실행 (saveKR 중복 방지)
+  let _recalcInitTimer=null;
   function autoRecalcKRFromInitTasks(){
+    clearTimeout(_recalcInitTimer);
+    _recalcInitTimer=setTimeout(_doRecalcKRFromInitTasks,500);
+  }
+  function _doRecalcKRFromInitTasks(){
     const allKR=collectAllKR();
     allKR.forEach(kr=>{
       const inits=kr.initiatives||[];
