@@ -4304,6 +4304,8 @@ init();
     const allKR=collectAllKR();
     const krById={};const initToKr={};
     allKR.forEach(k=>{krById[k.id]=k;(k.initiatives||[]).forEach(i=>{initToKr[i.id]=k.id;});});
+    // v64 — task ID 맵: task.i가 실제 initiative가 아닌 다른 task(pseudo-init)를 가리킬 수 있음
+    const taskById={};tasks.forEach(t=>{taskById[t.id]=t;});
     const tree={krOrder:[],krGroups:{},individualTasks:[]};
     function ensureKR(krId){
       if(!tree.krGroups[krId]){
@@ -4316,7 +4318,9 @@ init();
       if(t.i){
         const krId=initToKr[t.i]||t.k||'__orphan';
         const g=ensureKR(krId);
-        const initObj=(g.kr&&(g.kr.initiatives||[]).find(i=>i.id===t.i))||{id:t.i,title:'(삭제된 Initiative)'};
+        const realInit=g.kr&&(g.kr.initiatives||[]).find(i=>i.id===t.i);
+        const pseudoParent=!realInit&&taskById[t.i];
+        const initObj=realInit||(pseudoParent?{id:t.i,title:pseudoParent.t||'이니셔티브',isPseudo:true}:{id:t.i,title:'(삭제된 Initiative)'});
         if(!g.initGroups[t.i]){g.initGroups[t.i]={init:initObj,tasks:[]};g.initOrder.push(t.i);}
         g.initGroups[t.i].tasks.push(t);
       }else if(t.k){
@@ -4374,15 +4378,36 @@ init();
       '</div>';
       return '<div class="krl-subgroup" data-init-id="'+escapeHtml(init.id)+'">'+head+rows+'</div>';
     }
+    // v64 — directTask(KR 직속)를 ⚡ 이니셔티브 헤더 + 하위 할일로 렌더링
+    function renderDirectInitRow(t,g){
+      const subGroup=g.initGroups[t.id];
+      const subTasks=subGroup?subGroup.tasks:[];
+      const doneSub=subTasks.filter(s=>s.d).length;
+      const ed=(typeof canEditAs==='function')?canEditAs(mid):true;
+      const ro=ed?'':' readonly';const dis=ed?'':' disabled';const tip=ed?'':' title="본인이 작성한 항목만 수정할 수 있습니다"';
+      const textSt='flex:1;min-width:0;padding:0;border:none;background:transparent;outline:none;font-size:13px;font-weight:600;font-family:inherit;color:'+(t.d?'var(--text-soft)':'#3A2670')+';'+(t.d?'text-decoration:line-through;':'')+'resize:none;overflow:hidden;min-height:20px;line-height:1.4;';
+      const subCountHtml=subTasks.length>0?'<span style="font-size:10px;color:#6241F5;font-weight:700;flex-shrink:0;background:#EDE8FB;padding:1px 6px;border-radius:10px;">'+doneSub+'/'+subTasks.length+'</span>':'';
+      const addSubBtn=ed?'<button class="krl-add-mini" data-act="krl-add-subtask" data-mid="'+mid+'" data-kind="'+kind+'" data-parent-tid="'+escapeHtml(t.id)+'" data-kr-id="'+escapeHtml(t.k||'')+'" title="하위 할일 추가" style="background:transparent;border:1px solid #B5A0F0;color:#3A2670;border-radius:4px;cursor:pointer;font-size:11px;padding:1px 7px;font-family:inherit;line-height:1;font-weight:800;flex-shrink:0;">＋</button>':'';
+      const delBtn=ed?'<button data-act="krl-del-task" data-mid="'+mid+'" data-kind="'+kind+'" data-tid="'+escapeHtml(t.id)+'" style="padding:2px 5px;background:none;border:1px solid transparent;border-radius:4px;cursor:pointer;color:var(--text-soft);font-size:11px;flex-shrink:0;line-height:1;" title="삭제">✕</button>':'';
+      const head='<div class="krl-direct-init-head" style="display:flex;align-items:flex-start;gap:6px;padding:7px 10px;background:#F3F0FD;border-bottom:1px solid #E8E3FA;">'+
+        '<button class="rt-check '+(t.d?'checked':'')+'" style="width:16px;height:16px;border-width:1.5px;border-radius:4px;flex-shrink:0;margin-top:2px;" data-act="krl-toggle-task" data-mid="'+mid+'" data-kind="'+kind+'" data-tid="'+escapeHtml(t.id)+'"'+dis+tip+'>'+(t.d?'✓':'')+'</button>'+
+        '<span style="flex-shrink:0;font-size:12px;margin-top:2px;">⚡</span>'+
+        '<textarea data-krl-field="task-text" data-krl-autogrow data-mid="'+mid+'" data-kind="'+kind+'" data-tid="'+escapeHtml(t.id)+'" rows="1" placeholder="이니셔티브를 입력하세요" style="'+textSt+'"'+ro+tip+'>'+escapeHtml(t.t||'')+'</textarea>'+
+        subCountHtml+addSubBtn+delBtn+
+      '</div>';
+      const subRows=subTasks.length>0?'<div style="padding:2px 10px 4px 30px;background:#FDFCFF;">'+subTasks.map(st=>renderTaskRowGrouped(st,mid,kind)).join('')+'</div>':'';
+      return '<div class="krl-direct-init" data-direct-init-id="'+escapeHtml(t.id)+'">'+head+subRows+'</div>';
+    }
     function renderKRTree(g){
       const kr=g.kr;
       const title=kr?(kr.title||'(제목 없는 KR)'):'(삭제된 KR)';
       const bg='#EEEAFE',fg='#6241F5',border='#D9CFFB';
-      const total=g.directTasks.length+g.initOrder.reduce((s,iid)=>s+g.initGroups[iid].tasks.length,0);
-      const addBtn=editable?'<button class="krl-add-mini" data-act="krl-add-task-in-kr" data-mid="'+mid+'" data-kind="'+kind+'" data-kr-id="'+escapeHtml(g.krId)+'" title="이 KR에 직속 할일 추가" style="background:transparent;border:1px solid '+fg+';color:'+fg+';border-radius:4px;cursor:pointer;font-size:11px;padding:1px 7px;font-family:inherit;line-height:1;font-weight:800;flex-shrink:0;">＋</button>':'';
-      // v34 — KR 제목 클릭 = 인플레이스 편집 / 우측 ▾ = KR 직속 task 이동. Init 하위 task 영향 없음
+      // v64 — total: directTask 자신 + 하위 subtask + real-init tasks
+      const directInitIds=new Set(g.directTasks.map(t=>t.id));
+      const total=g.directTasks.reduce((s,t)=>{const sub=g.initGroups[t.id];return s+(sub?sub.tasks.length:0)+1;},0)+
+        g.initOrder.filter(iid=>!directInitIds.has(iid)).reduce((s,iid)=>s+g.initGroups[iid].tasks.length,0);
+      const addBtn=editable?'<button class="krl-add-mini" data-act="krl-add-task-in-kr" data-mid="'+mid+'" data-kind="'+kind+'" data-kr-id="'+escapeHtml(g.krId)+'" title="이니셔티브 추가" style="background:transparent;border:1px solid '+fg+';color:'+fg+';border-radius:4px;cursor:pointer;font-size:11px;padding:1px 7px;font-family:inherit;line-height:1;font-weight:800;flex-shrink:0;">＋</button>':'';
       const groupKey='kr:'+g.krId;
-      // KR 소속 Objective id 찾기
       let krOid=null;
       if(typeof state!=='undefined'&&state.objectives){
         for(const o of state.objectives){if((o.keyResults||[]).some(k=>k.id===g.krId)){krOid=o.id;break;}}
@@ -4392,7 +4417,7 @@ init();
       const titleTip=titleEditable?' title="클릭하여 KR 제목 편집"':' title="관리자만 수정 가능"';
       const titleInput='<span style="flex-shrink:0;">KR · </span><input class="krl-group-title-input" data-field="kr-title" data-oid="'+escapeHtml(krOid||'')+'" data-krid="'+escapeHtml(g.krId)+'" value="'+escapeHtml(title)+'"'+titleRo+titleTip+' />';
       const moveBtn=editable
-        ? '<span class="krl-group-move-btn" title="이 KR 직속 task(Init 미지정)를 다른 KR/Init으로 이동">▾<select data-krl-field="group-kr" data-mid="'+mid+'" data-kind="'+kind+'" data-groupkey="'+escapeHtml(groupKey)+'">'+buildKROptions(groupKey,allKR)+'</select></span>'
+        ? '<span class="krl-group-move-btn" title="이 KR 직속 이니셔티브들을 다른 KR로 이동">▾<select data-krl-field="group-kr" data-mid="'+mid+'" data-kind="'+kind+'" data-groupkey="'+escapeHtml(groupKey)+'">'+buildKROptions(groupKey,allKR)+'</select></span>'
         : '';
       const head='<div class="krl-group-head" style="background:'+bg+';color:'+fg+';padding:6px 10px;font-size:11.5px;font-weight:700;display:flex;align-items:center;gap:6px;">'+
         '<span style="flex-shrink:0;">📌</span>'+
@@ -4401,10 +4426,9 @@ init();
         '<span style="font-size:10px;opacity:.75;flex-shrink:0;">'+total+'건</span>'+
         addBtn+
       '</div>';
-      const directRows=g.directTasks.length>0?'<div class="krl-group-tasks" style="padding:2px 10px;">'+
-        g.directTasks.map(t=>renderTaskRowGrouped(t,mid,kind)).join('')+
-      '</div>':'';
-      const initSubs=g.initOrder.map(iid=>renderInitSub(g.initGroups[iid],g.krId)).join('');
+      // v64 — directTasks → ⚡ 이니셔티브 행, real initGroups는 별도 렌더
+      const directRows=g.directTasks.map(t=>renderDirectInitRow(t,g)).join('');
+      const initSubs=g.initOrder.filter(iid=>!directInitIds.has(iid)).map(iid=>renderInitSub(g.initGroups[iid],g.krId)).join('');
       return '<div class="krl-group krl-group-kr" data-kr-id="'+escapeHtml(g.krId)+'" style="margin-bottom:8px;border:1px solid '+border+';border-radius:7px;overflow:hidden;background:white;">'+
         head+directRows+initSubs+
       '</div>';
@@ -4439,6 +4463,50 @@ init();
       '<div class="krl-tasks" data-krl-tasks="'+mid+':'+kind+'">'+groupsHtml+'</div>'+
       (legacy?'<div class="krl-legacy" data-krl-legacy="'+mid+':'+kind+'" style="font-size:12.5px;color:var(--text);background:#FFF8E1;border:1px dashed #E5B340;border-radius:6px;padding:8px 10px;margin-top:6px;line-height:1.55;"><div style="font-size:10.5px;font-weight:700;color:#946800;margin-bottom:3px;">기존 평문 메모</div>'+escapeHtml(legacy)+'<br><button data-act="krl-clear-legacy" data-mid="'+mid+'" data-kind="'+kind+'" style="margin-top:5px;font-size:11px;color:#6241F5;background:none;border:none;cursor:pointer;padding:0;font-weight:700;">이 메모 정리 →</button></div>':'')+
       '</div>';
+  }
+  // v64 — 할일 완료 상태 → initiative 완료율 → KR current 자동 계산
+  function autoRecalcKRFromTasks(){
+    const date=viewingDate;
+    const standup=state&&state.standups&&state.standups[date];
+    if(!standup)return;
+    const krAgg={}; // krId -> [{done,total}]
+    (state.members||[]).forEach(m=>{
+      const entry=(standup.entries||{})[m.id]||{};
+      const parsed=parseTasksField(entry.today||'');
+      const tasks=parsed.tasks||[];
+      const taskById2={};tasks.forEach(t=>{taskById2[t.id]=t;});
+      const tree2=buildTaskTree(tasks);
+      tree2.krOrder.forEach(krId=>{
+        if(!krAgg[krId])krAgg[krId]=[];
+        const g2=tree2.krGroups[krId];
+        const dIds=new Set(g2.directTasks.map(t=>t.id));
+        // directTasks → pseudo-initiative: sub-tasks 있으면 sub 기준, 없으면 자신
+        g2.directTasks.forEach(t=>{
+          const subG=g2.initGroups[t.id];
+          const subs=subG?subG.tasks:[];
+          if(subs.length>0){krAgg[krId].push({done:subs.filter(s=>s.d).length,total:subs.length});}
+          else{krAgg[krId].push({done:t.d?1:0,total:1});}
+        });
+        // real initiative groups
+        g2.initOrder.filter(iid=>!dIds.has(iid)).forEach(iid=>{
+          const ig=g2.initGroups[iid];
+          if(ig.tasks.length>0)krAgg[krId].push({done:ig.tasks.filter(t=>t.d).length,total:ig.tasks.length});
+        });
+      });
+    });
+    Object.entries(krAgg).forEach(([krId,entries])=>{
+      const valid=entries.filter(x=>x.total>0);
+      if(!valid.length)return;
+      const avgPct=valid.reduce((s,x)=>s+x.done/x.total*100,0)/valid.length;
+      let targetKR=null,targetOid=null;
+      (state.objectives||[]).forEach(o=>(o.keyResults||[]).forEach(kr=>{if(kr.id===krId){targetKR=kr;targetOid=o.id;}}));
+      if(!targetKR||!targetOid)return;
+      const newCur=Math.round(avgPct/100*(targetKR.target||100));
+      if(newCur===targetKR.current)return;
+      targetKR.current=newCur;
+      if(typeof updateKRRowDom==='function')updateKRRowDom(targetOid,krId);
+      if(typeof saveKR==='function')saveKR(targetOid,targetKR);
+    });
   }
   let distributionTimer=null;
   function scheduleDistributionUpdate(){
@@ -4729,9 +4797,27 @@ init();
     else if(a==='krl-toggle-task'){
       const t=data.tasks.find(x=>x.id===tid);if(!t)return;
       t.d=!t.d;updateMemberTasks(mid,kind,data.legacy,data.tasks);
+      // 이니셔티브 행(direct-init-head) 체크 UI 업데이트
+      const initHead=document.querySelector('.krl-direct-init-head [data-tid="'+tid+'"]');
+      if(initHead){const ch=initHead.closest('.krl-direct-init-head');if(ch){const ck=ch.querySelector('.rt-check');if(ck){ck.classList.toggle('checked',t.d);ck.innerHTML=t.d?'✓':'';}const ta=ch.querySelector('textarea');if(ta){ta.style.color=t.d?'var(--text-soft)':'#3A2670';ta.style.textDecoration=t.d?'line-through':'';}}}
+      // 일반 task 행 체크 UI 업데이트
       const row=document.querySelector('.krl-task-row[data-tid="'+tid+'"][data-mid="'+mid+'"][data-kind="'+kind+'"]');
       if(row){const check=row.querySelector('.rt-check');if(check){check.classList.toggle('checked',t.d);check.innerHTML=t.d?'✓':'';}const ta=row.querySelector('textarea[data-krl-field="task-text"]');if(ta){ta.style.textDecoration=t.d?'line-through':'';ta.style.color=t.d?'var(--text-soft)':'var(--text)';}}
+      // v64 — 완료 상태 변경 시 KR 진척률 자동 재계산
+      autoRecalcKRFromTasks();
       scheduleDistributionUpdate();
+    }
+    // v64 — 이니셔티브 하위 할일 추가
+    else if(a==='krl-add-subtask'){
+      const parentTid=el.dataset.parentTid;
+      const krId=el.dataset.krId||'';
+      if(!parentTid)return;
+      const newTask={id:genId(),t:'',d:false,k:krId,i:parentTid,c:[]};
+      data.tasks.push(newTask);
+      updateMemberTasks(mid,kind,data.legacy,data.tasks);
+      rerenderTaskBlock(mid,kind);
+      updateCount(mid,kind,data.tasks.length);
+      setTimeout(()=>{const ta=document.querySelector('textarea[data-krl-field="task-text"][data-tid="'+newTask.id+'"]');if(ta){ta.focus();autoGrow(ta);}},50);
     }
     else if(a==='krl-del-task'){
       const next=data.tasks.filter(x=>x.id!==tid);
