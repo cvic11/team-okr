@@ -1400,22 +1400,35 @@ function captureFocus(){
   const el=document.activeElement;
   if(!el||(el.tagName!=='INPUT'&&el.tagName!=='TEXTAREA'&&el.tagName!=='SELECT'))return null;
   const ds=el.dataset||{};
-  // v67 — stid 추가: initiative sub-task 입력창 정확히 복원
-  const keys=['field','fieldname','mid','oid','krid','iid','stid','eid','etype','date','rid','key','which'];
+  // v67/v102 — 모든 data-* 속성을 캡처해 정확한 행/입력창에 포커스 복원 (특히 task-textarea/init-task-textarea)
   const sig={tag:el.tagName,attrs:{}};
-  keys.forEach(k=>{if(ds[k])sig.attrs[k]=ds[k];});
+  Object.keys(ds).forEach(k=>{
+    const v=ds[k];
+    // 길이 너무 긴 값(JSON 등) 또는 빈 값은 제외
+    if(typeof v==='string'&&v.length>0&&v.length<200)sig.attrs[k]=v;
+  });
   if(Object.keys(sig.attrs).length===0)return null;
   try{sig.selStart=el.selectionStart;sig.selEnd=el.selectionEnd;}catch(e){}
+  // v102 — 입력 중 값 캡처: 재렌더 후 state 미반영분 복원
+  try{if(el.tagName==='INPUT'||el.tagName==='TEXTAREA')sig.value=el.value;}catch(e){}
   return sig;
 }
 function restoreFocus(sig){
   if(!sig)return;
   const parts=[sig.tag.toLowerCase()];
-  Object.entries(sig.attrs).forEach(([k,v])=>{parts.push(`[data-${k.replace(/([A-Z])/g,'-$1').toLowerCase()}="${v.replace(/"/g,'\\"')}"]`);});
+  Object.entries(sig.attrs).forEach(([k,v])=>{
+    // dataset camelCase → kebab-case 변환
+    const attrName=k.replace(/[A-Z]/g,c=>'-'+c.toLowerCase());
+    parts.push(`[data-${attrName}="${String(v).replace(/"/g,'\\"')}"]`);
+  });
   const sel=parts.join('');
   const el=document.querySelector(sel);
   if(el){
     el.focus();
+    // v102 — 입력 중이던 값 복원 (rerender 사이 키 입력 손실 방지)
+    if(sig.value!=null&&(el.tagName==='INPUT'||el.tagName==='TEXTAREA')&&el.value!==sig.value&&sig.value.length>el.value.length){
+      try{el.value=sig.value;}catch(e){}
+    }
     if(sig.selStart!=null){try{el.setSelectionRange(sig.selStart,sig.selEnd);}catch(e){}}
   }
 }
@@ -1423,6 +1436,24 @@ function restoreFocus(sig){
 let _renderScheduled=false;
 function scheduleRender(){
   if(_renderScheduled)return;
+  // v102 — 사용자가 입력 중이면 blur 전까지 렌더 지연 (깜빡임/입력 손실 방지)
+  const ae=document.activeElement;
+  if(ae&&(ae.tagName==='INPUT'||ae.tagName==='TEXTAREA')&&!ae._blurRenderPending){
+    ae._blurRenderPending=true;
+    _renderScheduled=true;
+    const onBlur=()=>{
+      ae._blurRenderPending=false;
+      _renderScheduled=false;
+      // 사용자가 blur 한 직후에만 렌더 (포커스가 다른 입력으로 옮겨갔으면 또 지연)
+      requestAnimationFrame(()=>{
+        const ae2=document.activeElement;
+        if(ae2&&(ae2.tagName==='INPUT'||ae2.tagName==='TEXTAREA'))scheduleRender();
+        else render();
+      });
+    };
+    ae.addEventListener('blur',onBlur,{once:true});
+    return;
+  }
   _renderScheduled=true;
   requestAnimationFrame(()=>{_renderScheduled=false;render();});
 }
@@ -4472,21 +4503,21 @@ init();
     const dis=editable?'':' disabled';
     const tip=editable?'':' title="본인이 작성한 항목만 수정할 수 있습니다"';
     const tree=buildTaskTree(tasks);
-    // v86 — kind='today'면 본인 담당 init이 있는 KR을 task 없어도 강제 표시
+    // v86/v102 — kind='today'에서 KR 강제 표시는 "방금 만든 init"만 (집중도 유지 + 깜빡임 방지)
+    // 빈 owned init을 모두 띄우면 화면이 매우 산만해지고 깜빡임 원인이 됨
     if(kind==='today'){
-      const krById={};allKR.forEach(k=>{krById[k.id]=k;});
-      Object.keys(krById).forEach(krId=>{
-        const krObj=krById[krId];
-        const inits=krObj.initiatives||[];
-        const ownedInits=inits.filter(init=>{
-          const owners=(typeof getInitOwnerIds==='function')?getInitOwnerIds(init):(init.ownerId?String(init.ownerId).split(','):[]);
-          return init.ownerId==='__team_all__'||owners.includes(mid);
+      if(!window._krlJustCreatedInits)window._krlJustCreatedInits=new Set();
+      const justSet=window._krlJustCreatedInits;
+      if(justSet.size>0){
+        allKR.forEach(krObj=>{
+          const inits=krObj.initiatives||[];
+          const hasJustCreated=inits.some(init=>justSet.has(init.id));
+          if(hasJustCreated&&!tree.krGroups[krObj.id]){
+            tree.krGroups[krObj.id]={krId:krObj.id,kr:krObj,directTasks:[],initGroups:{},initOrder:[]};
+            tree.krOrder.push(krObj.id);
+          }
         });
-        if(ownedInits.length>0&&!tree.krGroups[krId]){
-          tree.krGroups[krId]={krId,kr:krObj,directTasks:[],initGroups:{},initOrder:[]};
-          tree.krOrder.push(krId);
-        }
-      });
+      }
     }
     function renderInitSub(ig,krId){
       const init=ig.init;
@@ -4549,19 +4580,13 @@ init();
       const kr=g.kr;
       const title=kr?(kr.title||'(제목 없는 KR)'):'(삭제된 KR)';
       const bg='#EEEAFE',fg='#6241F5',border='#D9CFFB';
-      // v85/v93 — 본인 담당 Initiative는 task가 없어도 표시 (단 빈 제목 init은 방금 만든 것만)
+      // v102 — 방금 만든(justCreated) init만 빈 상태로 표시. 그 외 빈 owned init은 숨김 (깜빡임/혼잡 방지)
       if(!window._krlJustCreatedInits)window._krlJustCreatedInits=new Set();
       const allKRInits=(kr&&kr.initiatives)||[];
       allKRInits.forEach(init=>{
         if(g.initGroups[init.id])return; // 이미 task 있는 init
-        const ownerIds=(typeof getInitOwnerIds==='function')?getInitOwnerIds(init):(init.ownerId?String(init.ownerId).split(','):[]);
-        const isTeamAll=init.ownerId==='__team_all__';
-        const isMyInit=isTeamAll||ownerIds.includes(mid);
-        if(!isMyInit)return;
-        const hasTitle=!!(init.title&&init.title.trim());
         const justCreated=window._krlJustCreatedInits.has(init.id);
-        // 제목 있거나 방금 만든 경우만 표시 (잔재 빈 init 숨김)
-        if(hasTitle||justCreated){
+        if(justCreated){
           g.initGroups[init.id]={init,tasks:[]};
           g.initOrder.push(init.id);
         }
