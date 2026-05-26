@@ -322,6 +322,8 @@ html.dark .krl-group-move-btn:hover{background:rgba(255,255,255,.10)}
 html.dark .krl-cmt-thread{background:rgba(98,65,245,.12);border-left-color:var(--primary)}
 html.dark .krl-cmt-input{background:#1B1E27;color:#D1D5DB;border-color:#22252F}
 html.dark .krl-cmt-item{border-bottom-color:rgba(255,255,255,.06)}
+/* v97 — 새 이니셔티브 빈 제목 입력 강조 */
+@keyframes krl-pulse{0%,100%{box-shadow:0 0 0 0 rgba(229,179,64,.45)}50%{box-shadow:0 0 0 4px rgba(229,179,64,0)}}
 /* v95 — 최근 한 일: 댓글 스레드 기본 숨김, hover/focus 시 펼침, 댓글 수는 말풍선 배지로 표기 */
 .recent-task-container .krl-cmt-thread{display:none;margin-left:24px}
 .recent-task-container:hover .krl-cmt-thread,.recent-task-container:focus-within .krl-cmt-thread,.recent-task-container.cmt-open .krl-cmt-thread{display:block}
@@ -4487,7 +4489,8 @@ init();
     }
     function renderInitSub(ig,krId){
       const init=ig.init;
-      const title=init.title||'(제목 없는 Initiative)';
+      const hasTitleSub=!!(init.title&&init.title.trim());
+      const title=init.title||'';
       const bg='#D9CFFB',fg='#3A2670',border='#B5A0F0';
       const addBtn=editable?'<button class="krl-add-mini" data-act="krl-add-task-in-init" data-mid="'+mid+'" data-kind="'+kind+'" data-init-id="'+escapeHtml(init.id)+'" data-kr-id="'+escapeHtml(krId)+'" title="이 Initiative에 할일 추가" style="background:transparent;border:1px solid '+fg+';color:'+fg+';border-radius:4px;cursor:pointer;font-size:11px;padding:1px 7px;font-family:inherit;line-height:1;font-weight:800;flex-shrink:0;">＋</button>':'';
       // v34 — 제목 클릭 = 인플레이스 편집 / 우측 ▾ 클릭 = 그룹 이동 (영역 분리)
@@ -4495,7 +4498,9 @@ init();
       const titleEditable=(typeof canEditInit==='function')?canEditInit(init):editable;
       const titleRo=titleEditable?'':' readonly';
       const titleTip=titleEditable?' title="클릭하여 Initiative 제목 편집"':' title="본인 담당 Initiative 또는 관리자만 수정 가능"';
-      const titleInput='<input class="krl-group-title-input" data-field="init-title" data-krid="'+escapeHtml(krId)+'" data-iid="'+escapeHtml(init.id)+'" value="'+escapeHtml(title)+'"'+titleRo+titleTip+' />';
+      // v97 — 빈 제목 init은 placeholder + 강조 테두리로 표시 (값을 비워두어 바로 타이핑 가능)
+      const emptyStyle=hasTitleSub?'':' style="background:#FFF7E0;border:2px dashed #E5B340;font-weight:700;color:#3A2670;animation:krl-pulse 1.4s ease-in-out infinite;"';
+      const titleInput='<input class="krl-group-title-input" data-field="init-title" data-krid="'+escapeHtml(krId)+'" data-iid="'+escapeHtml(init.id)+'" value="'+escapeHtml(title)+'" placeholder="새 이니셔티브 제목을 입력하세요…"'+titleRo+titleTip+emptyStyle+' />';
       const moveBtn=editable
         ? '<span class="krl-group-move-btn" title="다른 KR/Init으로 그룹 이동">▾<select data-krl-field="group-kr" data-mid="'+mid+'" data-kind="'+kind+'" data-groupkey="'+escapeHtml(groupKey)+'">'+buildKROptions(groupKey,allKR)+'</select></span>'
         : '';
@@ -5222,7 +5227,15 @@ init();
         // v95 — 빈 picker였다면 picker 자체가 사라지므로 안전하게 reset
         try{el.value='';}catch(_){}
         rerenderTaskBlock(mid,kind);
-        setTimeout(()=>{const inp=document.querySelector('input[data-field="init-title"][data-iid="'+newInitId+'"]');if(inp){inp.focus();inp.scrollIntoView({block:'center',behavior:'smooth'});}},120);
+        // v97 — 풀 렌더로 OKR 패널까지 동기화 (rerenderTaskBlock 단독으로 누락되는 케이스 방어)
+        if(typeof render==='function')try{render();}catch(_){}
+        // v97 — DOM 안착 후 focus (requestAnimationFrame 2회 = 다음 paint 이후)
+        const focusNew=()=>{
+          const inp=document.querySelector('input[data-field="init-title"][data-iid="'+newInitId+'"]');
+          if(inp){inp.focus();inp.select&&inp.select();inp.scrollIntoView({block:'center',behavior:'smooth'});}
+          else setTimeout(focusNew,80); // 아직 DOM에 없으면 재시도
+        };
+        requestAnimationFrame(()=>requestAnimationFrame(focusNew));
       }
       return;
     }
