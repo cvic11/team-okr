@@ -4463,7 +4463,7 @@ init();
     const dis=editable?'':' disabled';
     const tip=editable?'':' title="본인이 작성한 항목만 수정할 수 있습니다"';
     const tree=buildTaskTree(tasks);
-    // v86 — kind='today'면 본인 담당 init이 있는 KR을 task 없어도 강제 표시
+    // v86/v88 — kind='today'면 본인 담당 init이 있는 KR을 task 없어도 강제 표시
     //       (오늘 할 일이 비어있어도 KR 헤더가 보여서 + 이니셔티브 추가 가능)
     if(kind==='today'){
       const krById={};allKR.forEach(k=>{krById[k.id]=k;});
@@ -4479,6 +4479,14 @@ init();
           tree.krOrder.push(krId);
         }
       });
+      // v88 — 그래도 표시할 KR이 하나도 없으면, 모든 KR을 fallback으로 표시
+      //       (본인 담당 init 없는 새 멤버도 KR 구조 보고 추가 가능)
+      if(tree.krOrder.length===0){
+        allKR.forEach(krObj=>{
+          tree.krGroups[krObj.id]={krId:krObj.id,kr:krObj,directTasks:[],initGroups:{},initOrder:[]};
+          tree.krOrder.push(krObj.id);
+        });
+      }
     }
     function renderInitSub(ig,krId){
       const init=ig.init;
@@ -4748,9 +4756,11 @@ init();
             const e=st.standups&&st.standups[d]&&st.standups[d].entries&&st.standups[d].entries[mid];
             if(!e)continue;
             const parsed=parseTasksField(e.today||'');
-            const hasTask=parsed.tasks&&parsed.tasks.length>0;
+            // v88 — 제목이 비어있는 task는 제외 (빈 댓글창 행 안 보이게)
+            const nonEmptyTasks=(parsed.tasks||[]).filter(t=>(t.t||'').trim());
+            const hasTask=nonEmptyTasks.length>0;
             const hasLegacy=parsed.legacy&&parsed.legacy.trim();
-            if(hasTask||hasLegacy){recent.push({date:d,tasks:parsed.tasks||[],legacy:parsed.legacy||''});break;}
+            if(hasTask||hasLegacy){recent.push({date:d,tasks:nonEmptyTasks,legacy:parsed.legacy||''});break;}
           }
           if(recent.length>0){
             const fmtDate=window.formatRecentDateLabel||(d=>d);
