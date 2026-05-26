@@ -4421,16 +4421,20 @@ init();
     }
     return{icon,title,bg,fg,border};
   }
-  // v69 — initiative_tasks 행 렌더링 (krl-toggle-init-task 사용)
+  // v69/v77 — initiative_tasks 행 렌더링 (카테고리 변경 selector 포함)
   function renderInitTaskRowInline(t,mid,kind){
-    // v74 — 카드 담당자(mid) 본인이거나 관리자이면 편집 가능 (owner_id 무관)
     const ed=(typeof canEditAs==='function')?canEditAs(mid):true;
     const dis=ed?'':' disabled';const tip=ed?'':' title="본인이 작성한 항목만 수정할 수 있습니다"';
     const textSt='width:100%;padding:9px 12px;border:1px solid var(--line);border-radius:6px;background:#FAFAFA;outline:none;font-size:13.5px;line-height:1.6;font-family:inherit;color:'+(t.d?'var(--text-soft)':'var(--text)')+';'+(t.d?'text-decoration:line-through;':'')+'resize:none;overflow:hidden;min-height:60px;box-sizing:border-box;';
+    // v77 — 카테고리 변경 selector (현재 init: 선택된 상태)
+    const allKR=collectAllKR();
+    const currentVal='init:'+(t._iid||'');
+    const moveSelect=ed?'<span class="krl-task-move" title="다른 KR/Initiative/운영으로 이동" style="display:inline-flex;align-items:center;flex-shrink:0;margin-top:8px;font-size:10px;color:var(--text-soft);position:relative;">▾<select data-krl-field="init-task-kr" data-mid="'+escapeHtml(mid)+'" data-kind="'+escapeHtml(kind)+'" data-tid="'+escapeHtml(t.id)+'" data-init-id="'+escapeHtml(t._iid||'')+'" style="position:absolute;inset:0;opacity:0;cursor:pointer;">'+buildKROptions(currentVal,allKR)+'</select></span>':'';
     return '<div class="krl-task-container" data-task-container="'+escapeHtml(t.id)+'">' +
       '<div class="krl-task-row" data-tid="'+escapeHtml(t.id)+'" data-mid="'+escapeHtml(mid)+'" data-kind="'+escapeHtml(kind)+'" style="display:flex;align-items:flex-start;gap:6px;padding:6px 0;border-bottom:1px dashed #F0F0F2;">'+
         '<button class="rt-check '+(t.d?'checked':'')+'" style="width:18px;height:18px;border-width:1.5px;border-radius:4px;flex-shrink:0;margin-top:9px;" data-act="krl-toggle-init-task" data-mid="'+escapeHtml(mid)+'" data-kind="'+escapeHtml(kind)+'" data-tid="'+escapeHtml(t.id)+'" data-init-id="'+escapeHtml(t._iid||'')+'"'+dis+tip+'>'+(t.d?'✓':'')+'</button>'+
         '<textarea data-krl-field="task-text" data-krl-autogrow data-mid="'+escapeHtml(mid)+'" data-kind="'+escapeHtml(kind)+'" data-tid="'+escapeHtml(t.id)+'" data-is-init-task="1" data-init-id="'+escapeHtml(t._iid||'')+'" rows="2" placeholder="할일을 적어주세요" style="'+textSt+'"'+(ed?'':' readonly')+tip+'>'+escapeHtml(t.t||'')+'</textarea>'+
+        moveSelect+
         (ed?'<button data-act="krl-del-init-task" data-mid="'+escapeHtml(mid)+'" data-kind="'+escapeHtml(kind)+'" data-tid="'+escapeHtml(t.id)+'" data-init-id="'+escapeHtml(t._iid||'')+'" style="padding:4px 6px;margin-top:6px;background:none;border:1px solid transparent;border-radius:5px;cursor:pointer;color:var(--text-soft);font-size:12px;flex-shrink:0;line-height:1;" title="삭제">✕</button>':'')+
       '</div></div>';
   }
@@ -4772,8 +4776,8 @@ init();
   }
   applyPatches();
   // 드롭다운 열리는 순간 최신 state로 옵션 재생성 (task-kr 구버전 + group-kr 신버전)
-  document.addEventListener('mousedown',function(e){const sel=e.target.closest('select[data-krl-field="task-kr"],select[data-krl-field="group-kr"]');if(!sel)return;const cur=sel.value;sel.innerHTML=buildKROptions(cur,collectAllKR());},true);
-  document.addEventListener('focusin',function(e){const sel=e.target;if(sel.tagName!=='SELECT'||(sel.dataset.krlField!=='task-kr'&&sel.dataset.krlField!=='group-kr'))return;sel.innerHTML=buildKROptions(sel.value,collectAllKR());},true);
+  document.addEventListener('mousedown',function(e){const sel=e.target.closest('select[data-krl-field="task-kr"],select[data-krl-field="group-kr"],select[data-krl-field="init-task-kr"]');if(!sel)return;const cur=sel.value;sel.innerHTML=buildKROptions(cur,collectAllKR());},true);
+  document.addEventListener('focusin',function(e){const sel=e.target;if(sel.tagName!=='SELECT'||(sel.dataset.krlField!=='task-kr'&&sel.dataset.krlField!=='group-kr'&&sel.dataset.krlField!=='init-task-kr'))return;sel.innerHTML=buildKROptions(sel.value,collectAllKR());},true);
   // v18 — 그룹 헤더 어디를 눌러도 KR/Initiative 드롭다운 열기 (운영 그룹 = renderIndividual용)
   // v34 — KR/Init 그룹은 제목 input + 별도 ▾ 이동 칩으로 분리되어 이 핸들러 적용 안 됨
   document.addEventListener('click',function(e){
@@ -5089,6 +5093,33 @@ init();
       if(changed)updateMemberTasks(mid,kind,data.legacy,data.tasks);
       rerenderTaskBlock(mid,kind);
       scheduleDistributionUpdate();
+      return;
+    }
+    // v77 — initiative_task의 카테고리 변경 (DB 행을 KR/Init/운영으로 이동)
+    if(el.dataset.krlField==='init-task-kr'){
+      const mid=el.dataset.mid,kind=el.dataset.kind,tid=el.dataset.tid,oldInitId=el.dataset.initId;
+      const sel=parseKRSelectValue(el.value||'');
+      const arr=state.initiativeTasks[oldInitId]||[];
+      const t=arr.find(x=>x.id===tid);if(!t)return;
+      const realInitIds=_realInitIdsForChange();
+      if(sel.i&&realInitIds.has(sel.i)){
+        // 다른 실제 initiative로 이동 → DB의 initiative_id만 변경
+        if(sel.i===oldInitId){rerenderTaskBlock(mid,kind);return;}
+        state.initiativeTasks[oldInitId]=arr.filter(x=>x.id!==tid);
+        if(!state.initiativeTasks[sel.i])state.initiativeTasks[sel.i]=[];
+        t.initiative_id=sel.i;
+        state.initiativeTasks[sel.i].push(t);
+        if(typeof saveInitiativeTask==='function')saveInitiativeTask(t);
+      }else{
+        // KR pseudo or 운영 → DB 삭제 + JSON으로 역마이그레이션
+        state.initiativeTasks[oldInitId]=arr.filter(x=>x.id!==tid);
+        if(typeof deleteInitiativeTask==='function')deleteInitiativeTask(tid);
+        const data=getMemberTasks(mid,kind);
+        data.tasks.push({id:newTaskId(),t:t.title||'',k:sel.k||'',i:'',d:t.status==='done'});
+        updateMemberTasks(mid,kind,data.legacy,data.tasks);
+      }
+      rerenderTaskBlock(mid,kind);
+      autoRecalcKRFromInitTasks();
       return;
     }
     // v29 — 할일 행 안의 KR/Init 변경 chip (개별 task 재배치)
