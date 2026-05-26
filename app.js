@@ -5013,30 +5013,30 @@ init();
       window._krlJustCreatedInits.add(newId);
       if(typeof saveInitiative==='function')saveInitiative(krId,newInit);
       if(typeof showToast==='function')showToast('이니셔티브 등록 완료');
-      // v99 — rerender 의존 X: 폼 자리에 성공 상태(이니셔티브 헤더 + 할일 입력칸)를 직접 삽입
-      if(wrap){
+      // v100 — 폼 자리에 영구 카드를 직접 그림 (rerender 의존 X, 사라지지 않음)
+      // 정식 트리 재렌더는 사용자가 + 할일 추가를 누를 때만 수행
+      if(wrap&&wrap.isConnected){
         const krTitle=(targetKR.title||'').replace(/"/g,'&quot;');
         wrap.innerHTML=
-          '<div style="font-size:11px;color:var(--text-soft);margin-bottom:5px;text-align:left;">📌 '+escapeHtml(krTitle)+'</div>'+
-          '<div style="background:#D9CFFB;color:#3A2670;padding:6px 10px;border-radius:6px 6px 0 0;font-size:12px;font-weight:700;display:flex;align-items:center;gap:6px;">'+
+          '<div style="font-size:11px;color:var(--text-soft);margin-bottom:5px;text-align:left;">📌 '+escapeHtml(krTitle)+' · 본인 이니셔티브</div>'+
+          '<div data-newinit-card="'+escapeHtml(newId)+'" style="background:#D9CFFB;color:#3A2670;padding:6px 10px;border-radius:6px 6px 0 0;font-size:12px;font-weight:700;display:flex;align-items:center;gap:6px;">'+
             '<span>⚡</span>'+
-            '<span style="flex:1;text-align:left;">'+escapeHtml(title)+'</span>'+
-            '<button data-act="newinit-add-task" data-init-id="'+escapeHtml(newId)+'" data-kr-id="'+escapeHtml(krId)+'" data-mid="'+escapeHtml(mid)+'" data-kind="'+escapeHtml(kind)+'" style="background:white;color:#3A2670;border:1px solid #3A2670;border-radius:4px;cursor:pointer;font-size:11px;padding:2px 8px;font-weight:700;font-family:inherit;">＋ 할일 추가</button>'+
+            '<input class="krl-group-title-input" data-field="init-title" data-krid="'+escapeHtml(krId)+'" data-iid="'+escapeHtml(newId)+'" value="'+escapeHtml(title)+'" title="제목 클릭하여 편집" style="flex:1;min-width:0;font-size:12px;font-weight:700;background:white;border:1px solid #B5A0F0;border-radius:4px;padding:3px 7px;color:#3A2670;font-family:inherit;outline:none;" />'+
+            '<button data-act="newinit-add-task" data-init-id="'+escapeHtml(newId)+'" data-kr-id="'+escapeHtml(krId)+'" data-mid="'+escapeHtml(mid)+'" data-kind="'+escapeHtml(kind)+'" style="background:white;color:#3A2670;border:1px solid #3A2670;border-radius:4px;cursor:pointer;font-size:11px;padding:2px 8px;font-weight:700;font-family:inherit;flex-shrink:0;">＋ 할일</button>'+
+            '<button data-act="krl-del-init" data-iid="'+escapeHtml(newId)+'" data-krid="'+escapeHtml(krId)+'" title="이 이니셔티브 삭제" style="background:white;color:#3A2670;border:1px solid #B5A0F0;border-radius:4px;cursor:pointer;font-size:11px;padding:2px 6px;font-weight:700;font-family:inherit;flex-shrink:0;">✕</button>'+
           '</div>'+
-          '<div style="background:#FDFCFF;border:1px solid #D9CFFB;border-top:none;padding:8px 10px;text-align:left;font-size:11.5px;color:var(--text-soft);">이니셔티브가 등록되었습니다. 할일을 추가하려면 위의 <b>＋ 할일 추가</b> 버튼을 누르세요.</div>';
+          '<div style="background:#FDFCFF;border:1px solid #D9CFFB;border-top:none;padding:8px 10px;text-align:left;font-size:11.5px;color:var(--text-soft);border-radius:0 0 6px 6px;">등록되었습니다. 제목을 수정하거나 <b>＋ 할일</b>로 작업을 추가하세요.</div>';
       }
-      // 뒤늦게 전체 트리를 동기화 (다른 화면 영향)
-      setTimeout(()=>{if(typeof render==='function')try{render();}catch(_){}},600);
       return;
     }
-    // v99 — 성공 상태 카드의 + 할일 추가
+    // v99/v100 — 성공 상태 카드의 + 할일 추가
     if(a==='newinit-add-task'){
       const initId=btn.dataset.initId,mid=btn.dataset.mid,kind=btn.dataset.kind;
       const newT={id:newTaskId(),initiative_id:initId,title:'',status:'todo',owner_id:mid||null,start_date:null,due_date:null,sort_order:(state.initiativeTasks[initId]||[]).length};
       if(!state.initiativeTasks[initId])state.initiativeTasks[initId]=[];
       state.initiativeTasks[initId].push(newT);
       if(typeof saveInitiativeTask==='function')saveInitiativeTask(newT);
-      // 이제 정상 트리로 전환
+      // 이제 정상 트리로 전환 (task가 생겼으니 v86 + tasks 기반 트리 모두 표시)
       rerenderTaskBlock(mid,kind);
       setTimeout(()=>{const ta=document.querySelector('textarea[data-krl-field="task-text"][data-tid="'+newT.id+'"]');if(ta){ta.focus();autoGrow(ta);}},80);
       return;
