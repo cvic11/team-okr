@@ -4998,8 +4998,8 @@ init();
     }
     // v64 — 이니셔티브 하위 할일 추가
     else if(a==='krl-add-subtask'){
-      const parentTid=el.dataset.parentTid;
-      const krId=el.dataset.krId||'';
+      const parentTid=btn.dataset.parentTid;
+      const krId=btn.dataset.krId||'';
       if(!parentTid)return;
       const newTask={id:newTaskId(),t:'',d:false,k:krId,i:parentTid,c:[]};
       data.tasks.push(newTask);
