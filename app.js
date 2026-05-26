@@ -4600,16 +4600,22 @@ init();
     }
     // v82 — 운영(KR 무관) 제거: individualTasks 렌더링 안 함
     const groupsHtml=tree.krOrder.map(krId=>renderKRTree(tree.krGroups[krId])).join('');
-    // v89 — 비어있을 때 단일 등록 버튼 (모든 이니셔티브 선택 드롭다운)
+    // v89/v90 — 비어있을 때 계층 드롭다운: KR > 이니셔티브 선택 OR 새 이니셔티브 등록
     let emptyAddHtml='';
     if(kind==='today'&&tree.krOrder.length===0&&editable){
-      const allInits=(typeof collectAllInit==='function')?collectAllInit():[];
-      if(allInits.length>0){
-        const opts='<option value="" disabled selected>+ 할일 추가 — 이니셔티브 선택</option>'+
-          allInits.map(i=>'<option value="'+escapeHtml(i.id)+'">'+escapeHtml((i.krTitle||'').slice(0,20))+' › '+escapeHtml(i.title||'(제목 없음)')+'</option>').join('');
-        emptyAddHtml='<div style="padding:20px 12px;text-align:center;"><div style="font-size:12.5px;color:var(--text-soft);margin-bottom:10px;">오늘 할 일이 없습니다.</div><select data-krl-field="empty-add-picker" data-mid="'+escapeHtml(mid)+'" data-kind="'+escapeHtml(kind)+'" style="font-size:12.5px;padding:6px 10px;border:1px solid #D9CFFB;background:#EEEAFE;color:#6241F5;border-radius:6px;cursor:pointer;font-family:inherit;font-weight:700;">'+opts+'</select></div>';
+      if(allKR.length>0){
+        let opts='<option value="" disabled selected>+ 할일 추가</option>';
+        allKR.forEach(kr=>{
+          opts+='<optgroup label="📌 '+escapeHtml((kr.title||'(KR)').slice(0,40))+'">';
+          (kr.initiatives||[]).forEach(i=>{
+            opts+='<option value="init:'+escapeHtml(i.id)+'">⚡ '+escapeHtml(i.title||'(제목 없는 Initiative)')+'</option>';
+          });
+          opts+='<option value="newinit:'+escapeHtml(kr.id)+'">＋ 새 이니셔티브 등록</option>';
+          opts+='</optgroup>';
+        });
+        emptyAddHtml='<div style="padding:20px 12px;text-align:center;"><div style="font-size:12.5px;color:var(--text-soft);margin-bottom:10px;">오늘 할 일이 없습니다.</div><select data-krl-field="empty-add-picker" data-mid="'+escapeHtml(mid)+'" data-kind="'+escapeHtml(kind)+'" style="font-size:12.5px;padding:6px 10px;border:1px solid #D9CFFB;background:#EEEAFE;color:#6241F5;border-radius:6px;cursor:pointer;font-family:inherit;font-weight:700;min-width:240px;">'+opts+'</select></div>';
       }else{
-        emptyAddHtml='<div style="padding:20px 12px;text-align:center;font-size:12.5px;color:var(--text-soft);">이니셔티브가 없습니다.<br>OKR 탭에서 먼저 이니셔티브를 추가해주세요.</div>';
+        emptyAddHtml='<div style="padding:20px 12px;text-align:center;font-size:12.5px;color:var(--text-soft);">KR이 없습니다.<br>OKR 탭에서 먼저 Objective와 KR을 추가해주세요.</div>';
       }
     }
     return '<div class="krl-block" data-krl-block="'+mid+':'+kind+'" style="background:#FAFAFB;border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin-top:8px;">'+
@@ -5162,17 +5168,34 @@ init();
   }
   document.addEventListener('change',function(e){
     const el=e.target;
-    // v89 — 비어있는 오늘 할 일에서 + 할일 추가 (이니셔티브 선택)
+    // v89/v90 — 비어있는 오늘 할 일에서 + 할일 추가 (이니셔티브 선택 OR 새 이니셔티브 등록)
     if(el.dataset.krlField==='empty-add-picker'){
       const mid=el.dataset.mid,kind=el.dataset.kind;
-      const initId=el.value;
-      if(!initId)return;
-      const newT={id:newTaskId(),initiative_id:initId,title:'',status:'todo',owner_id:mid||null,start_date:null,due_date:null,sort_order:(state.initiativeTasks[initId]||[]).length};
-      if(!state.initiativeTasks[initId])state.initiativeTasks[initId]=[];
-      state.initiativeTasks[initId].push(newT);
-      if(typeof saveInitiativeTask==='function')saveInitiativeTask(newT);
-      rerenderTaskBlock(mid,kind);
-      setTimeout(()=>{const ta=document.querySelector('textarea[data-krl-field="task-text"][data-tid="'+newT.id+'"]');if(ta){ta.focus();autoGrow(ta);}},80);
+      const val=el.value||'';
+      if(!val)return;
+      if(val.startsWith('init:')){
+        // 기존 이니셔티브에 빈 task 추가
+        const initId=val.slice(5);
+        const newT={id:newTaskId(),initiative_id:initId,title:'',status:'todo',owner_id:mid||null,start_date:null,due_date:null,sort_order:(state.initiativeTasks[initId]||[]).length};
+        if(!state.initiativeTasks[initId])state.initiativeTasks[initId]=[];
+        state.initiativeTasks[initId].push(newT);
+        if(typeof saveInitiativeTask==='function')saveInitiativeTask(newT);
+        rerenderTaskBlock(mid,kind);
+        setTimeout(()=>{const ta=document.querySelector('textarea[data-krl-field="task-text"][data-tid="'+newT.id+'"]');if(ta){ta.focus();autoGrow(ta);}},80);
+      }else if(val.startsWith('newinit:')){
+        // 새 이니셔티브 등록 → 본인 담당으로
+        const krId=val.slice(8);
+        let targetKR=null;
+        (state.objectives||[]).forEach(o=>(o.keyResults||[]).forEach(k=>{if(k.id===krId)targetKR=k;}));
+        if(!targetKR){showToast('KR을 찾을 수 없음',true);return;}
+        const newInitId=(typeof uid==='function'?uid():('i_'+Math.random().toString(36).slice(2,10)));
+        const newInit={id:newInitId,title:'',ownerId:mid||state.selfId||null,status:'todo',dueDate:null,confidence:'mid',realityBlocker:'',realityHelp:''};
+        if(!targetKR.initiatives)targetKR.initiatives=[];
+        targetKR.initiatives.push(newInit);
+        if(typeof saveInitiative==='function')saveInitiative(krId,newInit);
+        rerenderTaskBlock(mid,kind);
+        setTimeout(()=>{const inp=document.querySelector('input[data-field="init-title"][data-iid="'+newInitId+'"]');if(inp)inp.focus();},80);
+      }
       return;
     }
     // v17 — 그룹 헤더 KR 선택: 그룹 내 모든 작업 일괄 재배치
