@@ -327,8 +327,6 @@ html.dark .krl-cmt-item{border-bottom-color:rgba(255,255,255,.06)}
 .recent-task-container:hover .krl-cmt-thread,.recent-task-container:focus-within .krl-cmt-thread,.recent-task-container.cmt-open .krl-cmt-thread{display:block}
 .recent-cmt-pill{display:inline-flex;align-items:center;gap:3px;background:#EEEAFE;color:#6241F5;font-size:10.5px;font-weight:700;padding:1px 7px;border-radius:999px;cursor:pointer;flex-shrink:0;margin-left:6px;line-height:1.4;border:1px solid #D9CFFB;user-select:none;align-self:center}
 .recent-cmt-pill:hover{background:#E5DEFB}
-.recent-cmt-pill.is-empty{background:transparent;border-color:transparent;color:var(--text-soft);opacity:.45}
-.recent-task-container:hover .recent-cmt-pill.is-empty,.recent-task-container:focus-within .recent-cmt-pill.is-empty{opacity:.85}
 html.dark .recent-cmt-pill{background:rgba(98,65,245,.18);border-color:rgba(98,65,245,.35);color:#C8BBFB}
 /* v21 — WBS 막대 드래그 */
 .wbs-bar{cursor:grab;user-select:none;touch-action:none;transition:box-shadow .12s,filter .12s;position:absolute}
@@ -4822,7 +4820,8 @@ init();
                       checkHtml='<span style="display:inline-block;width:16px;text-align:center;margin-right:4px;color:'+(t.d?'var(--growth)':'var(--text-soft)')+';">'+(t.d?'✓':'•')+'</span>';
                     }
                     const cmtCount=Array.isArray(t.c)?t.c.length:0;
-                    const cmtPill='<span class="recent-cmt-pill'+(cmtCount===0?' is-empty':'')+'" title="'+(cmtCount===0?'댓글 달기':cmtCount+'개 댓글')+'">💬'+(cmtCount>0?' '+cmtCount:'')+'</span>';
+                    // v96 — 댓글 없으면 말풍선 자체를 표시하지 않음
+                    const cmtPill=cmtCount>0?'<span class="recent-cmt-pill" title="'+cmtCount+'개 댓글">💬 '+cmtCount+'</span>':'';
                     return '<div class="recent-task-container" data-task-container="'+t.id+'" data-recent-date="'+r.date+'">'+
                       '<div class="recent-task-row" data-recent-tid="'+t.id+'" data-recent-mid="'+mid+'" data-recent-date="'+r.date+'" style="font-size:12.5px;line-height:1.55;padding:2px 0 2px 8px;display:flex;align-items:flex-start;">'+
                         checkHtml+
