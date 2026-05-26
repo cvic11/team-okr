@@ -4436,12 +4436,14 @@ init();
   function renderTaskListBlock(mid,kind,label){
     const data=getMemberTasks(mid,kind);
     const legacy=data.legacy;
-    // v69 — initiative_tasks 연동: today=시작일 필터, yesterday=완료일 필터
+    // v69/v73 — initiative_tasks 연동: today=시작일 필터, yesterday=완료일 필터
+    // v73: 실제 initiative에 연결된 JSON 태스크만 제외 (pseudo-initiative/KR-linked JSON은 유지)
     const vDate=typeof viewingDate!=='undefined'?viewingDate:todayKey();
+    const _realInitIds=new Set(allKR.flatMap(k=>(k.initiatives||[]).map(i=>i.id)));
     const tasks=kind==='today'
-      ?[...buildInitTasksForToday(mid),...data.tasks.filter(t=>!t.k&&!t.i)]
+      ?[...buildInitTasksForToday(mid),...data.tasks.filter(t=>!t.i||!_realInitIds.has(t.i))]
       :kind==='yesterday'
-        ?[...buildInitTasksForYesterday(mid,shiftDate(vDate,-1)),...data.tasks]
+        ?[...buildInitTasksForYesterday(mid,shiftDate(vDate,-1)),...data.tasks.filter(t=>!t.i||!_realInitIds.has(t.i))]
         :data.tasks;
     const addLabel=(kind==='today'?'할일 추가':'기록 남기기');
     const editable=(typeof canEditAs==='function')?canEditAs(mid):true;
