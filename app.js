@@ -4423,6 +4423,7 @@ init();
   }
   // v69 — initiative_tasks 행 렌더링 (krl-toggle-init-task 사용)
   function renderInitTaskRowInline(t,mid,kind){
+    // v74 — 카드 담당자(mid) 본인이거나 관리자이면 편집 가능 (owner_id 무관)
     const ed=(typeof canEditAs==='function')?canEditAs(mid):true;
     const dis=ed?'':' disabled';const tip=ed?'':' title="본인이 작성한 항목만 수정할 수 있습니다"';
     const textSt='width:100%;padding:9px 12px;border:1px solid var(--line);border-radius:6px;background:#FAFAFA;outline:none;font-size:13.5px;line-height:1.6;font-family:inherit;color:'+(t.d?'var(--text-soft)':'var(--text)')+';'+(t.d?'text-decoration:line-through;':'')+'resize:none;overflow:hidden;min-height:60px;box-sizing:border-box;';
@@ -4892,8 +4893,8 @@ init();
       // v69 — 실제 initiative이면 initiative_tasks 테이블에 추가
       const isRealInit=initId&&(typeof collectAllInit==='function')&&!!collectAllInit().find(x=>x.id===initId);
       if(isRealInit&&kind==='today'){
-        const selfId=state.selfId;
-        const newT={id:newTaskId(),initiative_id:initId,title:'',status:'todo',owner_id:selfId||null,start_date:null,due_date:null,sort_order:(state.initiativeTasks[initId]||[]).length};
+        // v74 — owner_id = mid (카드 담당자), selfId(관리자) 아님 → 담당자가 편집 가능
+        const newT={id:newTaskId(),initiative_id:initId,title:'',status:'todo',owner_id:mid||null,start_date:null,due_date:null,sort_order:(state.initiativeTasks[initId]||[]).length};
         if(!state.initiativeTasks[initId])state.initiativeTasks[initId]=[];
         state.initiativeTasks[initId].push(newT);
         if(typeof saveInitiativeTask==='function')saveInitiativeTask(newT);
@@ -5052,6 +5053,22 @@ init();
       if(newBlock)block.replaceWith(newBlock);
     }
   }
+  // v74 — JSON 태스크를 실제 initiative에 연결할 때 initiative_tasks로 마이그레이션
+  function migrateJsonTaskToInitiative(mid,kind,title,done){
+    // 이미 선택된 sel.i를 사용하므로 호출 측에서 initId 전달
+    // ← 이 함수는 아래 핸들러에서 직접 처리
+  }
+  const _realInitIdsForChange=()=>new Set(collectAllKR().flatMap(k=>(k.initiatives||[]).map(i=>i.id)));
+  function migrateToRealInit(mid,kind,matchedTasks,initId,removeIds){
+    // JSON 태스크 → state.initiativeTasks 이동
+    if(!state.initiativeTasks[initId])state.initiativeTasks[initId]=[];
+    matchedTasks.forEach(t=>{
+      const newT={id:newTaskId(),initiative_id:initId,title:t.t||'',status:t.d?'done':'todo',owner_id:mid,start_date:null,due_date:null,sort_order:(state.initiativeTasks[initId]||[]).length};
+      state.initiativeTasks[initId].push(newT);
+      if(typeof saveInitiativeTask==='function')saveInitiativeTask(newT);
+      removeIds.add(t.id);
+    });
+  }
   document.addEventListener('change',function(e){
     const el=e.target;
     // v17 — 그룹 헤더 KR 선택: 그룹 내 모든 작업 일괄 재배치
@@ -5059,9 +5076,14 @@ init();
       const mid=el.dataset.mid,kind=el.dataset.kind,oldKey=el.dataset.groupkey;
       const data=getMemberTasks(mid,kind);
       const sel=parseKRSelectValue(el.value||'');
+      // v74 — 실제 initiative 선택 시 JSON 태스크 → initiative_tasks 마이그레이션
+      if(sel.i&&kind==='today'&&_realInitIdsForChange().has(sel.i)){
+        const matched=data.tasks.filter(t=>{const tKey=t.i?'init:'+t.i:(t.k?'kr:'+t.k:'task:'+t.id);return tKey===oldKey;});
+        if(matched.length){const removeIds=new Set();migrateToRealInit(mid,kind,matched,sel.i,removeIds);const next=data.tasks.filter(t=>!removeIds.has(t.id));updateMemberTasks(mid,kind,data.legacy,next);}
+        rerenderTaskBlock(mid,kind);scheduleDistributionUpdate();return;
+      }
       let changed=false;
       data.tasks.forEach(t=>{
-        // v19 — 활성 블록 그룹화와 동일 규칙: KR/Init 미선택은 작업별 키
         const tKey=t.i?'init:'+t.i:(t.k?'kr:'+t.k:'task:'+t.id);
         if(tKey===oldKey){t.k=sel.k;t.i=sel.i;changed=true;}
       });
@@ -5075,7 +5097,13 @@ init();
       const mid=el.dataset.mid,kind=el.dataset.kind,tid=el.dataset.tid;
       const data=getMemberTasks(mid,kind);
       const t=data.tasks.find(x=>x.id===tid);if(!t)return;
-      const sel=parseKRSelectValue(el.value||'');t.k=sel.k;t.i=sel.i;
+      const sel=parseKRSelectValue(el.value||'');
+      // v74 — 실제 initiative 선택 시 마이그레이션
+      if(sel.i&&kind==='today'&&_realInitIdsForChange().has(sel.i)){
+        const removeIds=new Set();migrateToRealInit(mid,kind,[t],sel.i,removeIds);const next=data.tasks.filter(x=>!removeIds.has(x.id));updateMemberTasks(mid,kind,data.legacy,next);
+        rerenderTaskBlock(mid,kind);scheduleDistributionUpdate();return;
+      }
+      t.k=sel.k;t.i=sel.i;
       updateMemberTasks(mid,kind,data.legacy,data.tasks);
       rerenderTaskBlock(mid,kind);
       scheduleDistributionUpdate();
