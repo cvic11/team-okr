@@ -322,6 +322,14 @@ html.dark .krl-group-move-btn:hover{background:rgba(255,255,255,.10)}
 html.dark .krl-cmt-thread{background:rgba(98,65,245,.12);border-left-color:var(--primary)}
 html.dark .krl-cmt-input{background:#1B1E27;color:#D1D5DB;border-color:#22252F}
 html.dark .krl-cmt-item{border-bottom-color:rgba(255,255,255,.06)}
+/* v95 — 최근 한 일: 댓글 스레드 기본 숨김, hover/focus 시 펼침, 댓글 수는 말풍선 배지로 표기 */
+.recent-task-container .krl-cmt-thread{display:none;margin-left:24px}
+.recent-task-container:hover .krl-cmt-thread,.recent-task-container:focus-within .krl-cmt-thread,.recent-task-container.cmt-open .krl-cmt-thread{display:block}
+.recent-cmt-pill{display:inline-flex;align-items:center;gap:3px;background:#EEEAFE;color:#6241F5;font-size:10.5px;font-weight:700;padding:1px 7px;border-radius:999px;cursor:pointer;flex-shrink:0;margin-left:6px;line-height:1.4;border:1px solid #D9CFFB;user-select:none;align-self:center}
+.recent-cmt-pill:hover{background:#E5DEFB}
+.recent-cmt-pill.is-empty{background:transparent;border-color:transparent;color:var(--text-soft);opacity:.45}
+.recent-task-container:hover .recent-cmt-pill.is-empty,.recent-task-container:focus-within .recent-cmt-pill.is-empty{opacity:.85}
+html.dark .recent-cmt-pill{background:rgba(98,65,245,.18);border-color:rgba(98,65,245,.35);color:#C8BBFB}
 /* v21 — WBS 막대 드래그 */
 .wbs-bar{cursor:grab;user-select:none;touch-action:none;transition:box-shadow .12s,filter .12s;position:absolute}
 .wbs-bar:hover{filter:brightness(1.05);box-shadow:0 2px 6px rgba(0,0,0,.18)!important}
@@ -4813,10 +4821,13 @@ init();
                     }else{
                       checkHtml='<span style="display:inline-block;width:16px;text-align:center;margin-right:4px;color:'+(t.d?'var(--growth)':'var(--text-soft)')+';">'+(t.d?'✓':'•')+'</span>';
                     }
+                    const cmtCount=Array.isArray(t.c)?t.c.length:0;
+                    const cmtPill='<span class="recent-cmt-pill'+(cmtCount===0?' is-empty':'')+'" title="'+(cmtCount===0?'댓글 달기':cmtCount+'개 댓글')+'">💬'+(cmtCount>0?' '+cmtCount:'')+'</span>';
                     return '<div class="recent-task-container" data-task-container="'+t.id+'" data-recent-date="'+r.date+'">'+
                       '<div class="recent-task-row" data-recent-tid="'+t.id+'" data-recent-mid="'+mid+'" data-recent-date="'+r.date+'" style="font-size:12.5px;line-height:1.55;padding:2px 0 2px 8px;display:flex;align-items:flex-start;">'+
                         checkHtml+
                         '<span class="recent-task-text" style="flex:1;color:'+(t.d?'var(--text-soft)':'var(--text)')+';'+(t.d?'text-decoration:line-through;':'')+'">'+esc((t.t||'').slice(0,300))+'</span>'+
+                        cmtPill+
                       '</div>'+
                       renderCommentsThread(t,mid,'today',r.date)+
                     '</div>';
@@ -5199,7 +5210,7 @@ init();
         const krId=val.slice(8);
         let targetKR=null;
         (state.objectives||[]).forEach(o=>(o.keyResults||[]).forEach(k=>{if(k.id===krId)targetKR=k;}));
-        if(!targetKR){showToast('KR을 찾을 수 없음',true);return;}
+        if(!targetKR){showToast('KR을 찾을 수 없음',true);el.value='';return;}
         const newInitId=(typeof uid==='function'?uid():('i_'+Math.random().toString(36).slice(2,10)));
         const newInit={id:newInitId,title:'',ownerId:mid||state.selfId||null,status:'todo',dueDate:null,confidence:'mid',realityBlocker:'',realityHelp:''};
         if(!targetKR.initiatives)targetKR.initiatives=[];
@@ -5208,8 +5219,11 @@ init();
         if(!window._krlJustCreatedInits)window._krlJustCreatedInits=new Set();
         window._krlJustCreatedInits.add(newInitId);
         if(typeof saveInitiative==='function')saveInitiative(krId,newInit);
+        if(typeof showToast==='function')showToast('새 이니셔티브 추가됨 — 제목을 입력하세요');
+        // v95 — 빈 picker였다면 picker 자체가 사라지므로 안전하게 reset
+        try{el.value='';}catch(_){}
         rerenderTaskBlock(mid,kind);
-        setTimeout(()=>{const inp=document.querySelector('input[data-field="init-title"][data-iid="'+newInitId+'"]');if(inp)inp.focus();},80);
+        setTimeout(()=>{const inp=document.querySelector('input[data-field="init-title"][data-iid="'+newInitId+'"]');if(inp){inp.focus();inp.scrollIntoView({block:'center',behavior:'smooth'});}},120);
       }
       return;
     }
