@@ -4520,6 +4520,17 @@ init();
       const kr=g.kr;
       const title=kr?(kr.title||'(제목 없는 KR)'):'(삭제된 KR)';
       const bg='#EEEAFE',fg='#6241F5',border='#D9CFFB';
+      // v85 — 본인 담당 Initiative는 task가 없어도 표시 (방금 만든 빈 init도 즉시 보임)
+      const allKRInits=(kr&&kr.initiatives)||[];
+      allKRInits.forEach(init=>{
+        if(g.initGroups[init.id])return; // 이미 task 있는 init
+        const ownerIds=(typeof getInitOwnerIds==='function')?getInitOwnerIds(init):(init.ownerId?String(init.ownerId).split(','):[]);
+        const isTeamAll=init.ownerId==='__team_all__';
+        if(isTeamAll||ownerIds.includes(mid)){
+          g.initGroups[init.id]={init,tasks:[]};
+          g.initOrder.push(init.id);
+        }
+      });
       // v64 — total: directTask 자신 + 하위 subtask + real-init tasks
       const directInitIds=new Set(g.directTasks.map(t=>t.id));
       const total=g.directTasks.reduce((s,t)=>{const sub=g.initGroups[t.id];return s+(sub?sub.tasks.length:0)+1;},0)+
