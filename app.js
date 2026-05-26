@@ -4610,17 +4610,18 @@ init();
     let emptyAddHtml='';
     if(kind==='today'&&tree.krOrder.length===0&&editable){
       if(allKR.length>0){
-        // v93 — 빈 제목 init은 드롭다운에서 숨김. KR 자체도 선택 가능 (선택 시 새 init 등록)
+        // v94 — optgroup으로 KR 묶고, 각 KR 하단 한 곳에만 + 새 이니셔티브 등록
+        const tShort=(s,n)=>{const t=String(s||'');return t.length>n?t.slice(0,n)+'…':t;};
         let opts='<option value="" disabled selected hidden style="display:none">+ 할일 추가</option>';
         allKR.forEach(kr=>{
-          // KR row: 선택 시 그 KR에 새 이니셔티브 등록
-          opts+='<option value="newinit:'+escapeHtml(kr.id)+'">📌 '+escapeHtml((kr.title||'(KR)').slice(0,40))+'  ＋ 새 이니셔티브 등록</option>';
-          // 비어있지 않은 이니셔티브만 표시 (할일 추가용)
+          opts+='<optgroup label="📌 '+escapeHtml(tShort(kr.title||'(KR)',30))+'">';
           (kr.initiatives||[]).filter(i=>i.title&&i.title.trim()).forEach(i=>{
-            opts+='<option value="init:'+escapeHtml(i.id)+'">　　⚡ '+escapeHtml(i.title)+'  ＋ 할일 추가</option>';
+            opts+='<option value="init:'+escapeHtml(i.id)+'">⚡ '+escapeHtml(tShort(i.title,30))+'</option>';
           });
+          opts+='<option value="newinit:'+escapeHtml(kr.id)+'">＋ 새 이니셔티브</option>';
+          opts+='</optgroup>';
         });
-        emptyAddHtml='<div style="padding:20px 12px;text-align:center;"><div style="font-size:12.5px;color:var(--text-soft);margin-bottom:10px;">오늘 할 일이 없습니다.</div><select data-krl-field="empty-add-picker" data-mid="'+escapeHtml(mid)+'" data-kind="'+escapeHtml(kind)+'" style="font-size:12.5px;padding:6px 10px;border:1px solid #D9CFFB;background:#EEEAFE;color:#6241F5;border-radius:6px;cursor:pointer;font-family:inherit;font-weight:700;min-width:280px;">'+opts+'</select></div>';
+        emptyAddHtml='<div style="padding:20px 12px;text-align:center;"><div style="font-size:12.5px;color:var(--text-soft);margin-bottom:10px;">오늘 할 일이 없습니다.</div><select data-krl-field="empty-add-picker" data-mid="'+escapeHtml(mid)+'" data-kind="'+escapeHtml(kind)+'" style="font-size:12.5px;padding:6px 10px;border:1px solid #D9CFFB;background:#EEEAFE;color:#6241F5;border-radius:6px;cursor:pointer;font-family:inherit;font-weight:700;max-width:100%;width:100%;box-sizing:border-box;">'+opts+'</select></div>';
       }else{
         emptyAddHtml='<div style="padding:20px 12px;text-align:center;font-size:12.5px;color:var(--text-soft);">KR이 없습니다.<br>OKR 탭에서 먼저 Objective와 KR을 추가해주세요.</div>';
       }
