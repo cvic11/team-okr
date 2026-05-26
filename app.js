@@ -1434,6 +1434,7 @@ function restoreFocus(sig){
 }
 // v42 — realtime 이벤트 폭주 시 render() 합치기 (한 프레임에 1회만)
 let _renderScheduled=false;
+let _lastRenderAt=0;const RENDER_MIN_GAP_MS=250;
 function scheduleRender(){
   if(_renderScheduled)return;
   // v102 — 사용자가 입력 중이면 blur 전까지 렌더 지연 (깜빡임/입력 손실 방지)
@@ -1448,14 +1449,24 @@ function scheduleRender(){
       requestAnimationFrame(()=>{
         const ae2=document.activeElement;
         if(ae2&&(ae2.tagName==='INPUT'||ae2.tagName==='TEXTAREA'))scheduleRender();
-        else render();
+        else _throttledRender();
       });
     };
     ae.addEventListener('blur',onBlur,{once:true});
     return;
   }
   _renderScheduled=true;
-  requestAnimationFrame(()=>{_renderScheduled=false;render();});
+  requestAnimationFrame(()=>{_renderScheduled=false;_throttledRender();});
+}
+// v104 — 250ms 내 여러 번 호출되면 한 번만 렌더 (탭/헤더 깜빡임 차단)
+let _throttleTimer=null;
+function _throttledRender(){
+  const now=Date.now();const gap=now-_lastRenderAt;
+  if(gap>=RENDER_MIN_GAP_MS){_lastRenderAt=now;render();return;}
+  if(_throttleTimer)return;
+  _throttleTimer=setTimeout(()=>{
+    _throttleTimer=null;_lastRenderAt=Date.now();render();
+  },RENDER_MIN_GAP_MS-gap);
 }
 function render(){
   if(!initialized)return;
@@ -4433,7 +4444,8 @@ init();
           // 시작일이 없거나 시작일이 오늘 이하인 미완료 → 오늘 할일
           const hasStarted=!t.start_date||t.start_date<=vDate;
           if(!isDone&&hasStarted){
-            tasks.push({id:t.id,t:t.title||'',i:iid,k:initToKr[iid]||'',d:false,_isInitTask:true,_iid:iid,c:[]});
+            // v104 — _dueDate, _startDate 함께 전달 (오늘 탭에서도 날짜 편집 가능)
+            tasks.push({id:t.id,t:t.title||'',i:iid,k:initToKr[iid]||'',d:false,_isInitTask:true,_iid:iid,c:[],_dueDate:t.due_date||'',_startDate:t.start_date||''});
           }
         }
       });
@@ -4479,10 +4491,18 @@ init();
     const allKR=collectAllKR();
     const currentVal='init:'+(t._iid||'');
     const moveSelect=ed?'<span class="krl-task-move" title="다른 KR/Initiative/운영으로 이동" style="display:inline-flex;align-items:center;flex-shrink:0;margin-top:5px;font-size:10px;color:var(--text-soft);position:relative;">▾<select data-krl-field="init-task-kr" data-mid="'+escapeHtml(mid)+'" data-kind="'+escapeHtml(kind)+'" data-tid="'+escapeHtml(t.id)+'" data-init-id="'+escapeHtml(t._iid||'')+'" style="position:absolute;inset:0;opacity:0;cursor:pointer;">'+buildKROptions(currentVal,allKR)+'</select></span>':'';
+    // v104 — 마감일 입력 (오늘 탭에서도 OKR 탭과 동일하게 날짜 지정 가능)
+    const dueVal=t._dueDate||'';
+    const today=(typeof todayKey==='function')?todayKey():'';
+    const overdue=dueVal&&dueVal<today&&!t.d;
+    const dueColor=overdue?'#E5343B':'var(--text-soft)';
+    const dueLabel=dueVal?dueVal.slice(5):'📅';
+    const dueInput=ed?'<label class="krl-task-due" title="마감일" style="display:inline-flex;align-items:center;gap:2px;flex-shrink:0;margin-top:5px;font-size:11px;color:'+dueColor+';position:relative;cursor:pointer;padding:2px 5px;border:1px solid '+(dueVal?dueColor:'transparent')+';border-radius:4px;'+(overdue?'background:#FFF1F1;font-weight:700;':'')+'"><span style="pointer-events:none;">'+dueLabel+'</span><input type="date" data-krl-field="init-task-due" data-mid="'+escapeHtml(mid)+'" data-kind="'+escapeHtml(kind)+'" data-tid="'+escapeHtml(t.id)+'" data-init-id="'+escapeHtml(t._iid||'')+'" value="'+escapeHtml(dueVal)+'" style="position:absolute;inset:0;opacity:0;cursor:pointer;border:none;padding:0;" /></label>':(dueVal?'<span style="font-size:11px;color:'+dueColor+';margin-top:5px;flex-shrink:0;">'+dueLabel+'</span>':'');
     return '<div class="krl-task-container" data-task-container="'+escapeHtml(t.id)+'">' +
       '<div class="krl-task-row" data-tid="'+escapeHtml(t.id)+'" data-mid="'+escapeHtml(mid)+'" data-kind="'+escapeHtml(kind)+'" style="display:flex;align-items:flex-start;gap:6px;padding:4px 0;border-bottom:1px dashed #F0F0F2;">'+
         '<button class="rt-check '+(t.d?'checked':'')+'" style="width:18px;height:18px;border-width:1.5px;border-radius:4px;flex-shrink:0;margin-top:6px;" data-act="krl-toggle-init-task" data-mid="'+escapeHtml(mid)+'" data-kind="'+escapeHtml(kind)+'" data-tid="'+escapeHtml(t.id)+'" data-init-id="'+escapeHtml(t._iid||'')+'"'+dis+tip+'>'+(t.d?'✓':'')+'</button>'+
         '<textarea data-krl-field="task-text" data-krl-autogrow data-mid="'+escapeHtml(mid)+'" data-kind="'+escapeHtml(kind)+'" data-tid="'+escapeHtml(t.id)+'" data-is-init-task="1" data-init-id="'+escapeHtml(t._iid||'')+'" rows="1" placeholder="할일을 적어주세요" style="'+textSt+'"'+(ed?'':' readonly')+tip+'>'+escapeHtml(t.t||'')+'</textarea>'+
+        dueInput+
         moveSelect+
         (ed?'<button data-act="krl-del-init-task" data-mid="'+escapeHtml(mid)+'" data-kind="'+escapeHtml(kind)+'" data-tid="'+escapeHtml(t.id)+'" data-init-id="'+escapeHtml(t._iid||'')+'" style="padding:2px 5px;margin-top:4px;background:none;border:1px solid transparent;border-radius:5px;cursor:pointer;color:var(--text-soft);font-size:12px;flex-shrink:0;line-height:1;" title="삭제">✕</button>':'')+
       '</div></div>';
@@ -5394,6 +5414,28 @@ init();
       if(changed)updateMemberTasks(mid,kind,data.legacy,data.tasks);
       rerenderTaskBlock(mid,kind);
       scheduleDistributionUpdate();
+      return;
+    }
+    // v104 — initiative_task 마감일 변경 (오늘 탭에서 직접 입력)
+    if(el.dataset.krlField==='init-task-due'){
+      const tid=el.dataset.tid,initId=el.dataset.initId,mid=el.dataset.mid,kind=el.dataset.kind;
+      const t=(state.initiativeTasks[initId]||[]).find(x=>x.id===tid);
+      if(t){
+        t.due_date=el.value||null;
+        if(typeof saveInitiativeTask==='function')saveInitiativeTask(t);
+        // 즉시 UI 갱신: 라벨 텍스트와 색 변경 (전체 재렌더는 불필요)
+        const label=el.parentElement;
+        if(label){
+          const today=(typeof todayKey==='function')?todayKey():'';
+          const overdue=t.due_date&&t.due_date<today&&t.status!=='done';
+          const span=label.querySelector('span');
+          if(span)span.textContent=t.due_date?t.due_date.slice(5):'📅';
+          label.style.color=overdue?'#E5343B':'var(--text-soft)';
+          label.style.borderColor=t.due_date?(overdue?'#E5343B':'var(--text-soft)'):'transparent';
+          label.style.background=overdue?'#FFF1F1':'';
+          label.style.fontWeight=overdue?'700':'';
+        }
+      }
       return;
     }
     // v77 — initiative_task의 카테고리 변경 (DB 행을 KR/Init/운영으로 이동)
