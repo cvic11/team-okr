@@ -4462,6 +4462,23 @@ init();
     const dis=editable?'':' disabled';
     const tip=editable?'':' title="본인이 작성한 항목만 수정할 수 있습니다"';
     const tree=buildTaskTree(tasks);
+    // v86 — kind='today'면 본인 담당 init이 있는 KR을 task 없어도 강제 표시
+    //       (오늘 할 일이 비어있어도 KR 헤더가 보여서 + 이니셔티브 추가 가능)
+    if(kind==='today'){
+      const krById={};allKR.forEach(k=>{krById[k.id]=k;});
+      Object.keys(krById).forEach(krId=>{
+        const krObj=krById[krId];
+        const inits=krObj.initiatives||[];
+        const ownedInits=inits.filter(init=>{
+          const owners=(typeof getInitOwnerIds==='function')?getInitOwnerIds(init):(init.ownerId?String(init.ownerId).split(','):[]);
+          return init.ownerId==='__team_all__'||owners.includes(mid);
+        });
+        if(ownedInits.length>0&&!tree.krGroups[krId]){
+          tree.krGroups[krId]={krId,kr:krObj,directTasks:[],initGroups:{},initOrder:[]};
+          tree.krOrder.push(krId);
+        }
+      });
+    }
     function renderInitSub(ig,krId){
       const init=ig.init;
       const title=init.title||'(제목 없는 Initiative)';
