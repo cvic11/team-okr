@@ -1598,8 +1598,11 @@ function renderInlineKRRow(kr,oid,idx){
   const o=state.members.find(m=>m.id===kr.ownerId);
   const overdue=isOverdue(kr.dueDate);
   const inits=kr.initiatives||[];
-  // v15 — Initiative 인라인 표시 (메인 화면 상단 OKR 패널)
-  const initsHtml=inits.length>0?`
+  // v84 — KR별 이니셔티브 펼침 상태 (기본: 접힘)
+  if(!window._krInitOpen)window._krInitOpen=new Set();
+  const isInitOpen=window._krInitOpen.has(kr.id);
+  // v84 — 접힘 상태면 이니셔티브 숨김
+  const initsHtml=(inits.length>0&&isInitOpen)?`
     <div class="kr-init-inline" style="margin-top:8px;padding:6px 10px;background:#FAFAFB;border-left:3px solid #D9CFFB;border-radius:0 6px 6px 0;">
       <div style="font-size:10px;color:var(--text-soft);font-weight:700;letter-spacing:.3px;margin-bottom:4px;">⚡ INITIATIVES · ${inits.length}건</div>
       ${inits.map(i=>{
@@ -1632,6 +1635,7 @@ function renderInlineKRRow(kr,oid,idx){
       <span class="kr-strip-pct" data-kr-pct style="color:${progressColor(p)};font-weight:800;font-size:14px;flex-shrink:0;min-width:38px;text-align:right;">${p}%</span>
       <span class="conf-chip ${kr.confidence||'mid'}" style="cursor:default;font-size:10.5px;padding:1px 7px;flex-shrink:0;">${CONF_LABELS[kr.confidence||'mid']}</span>
       ${kr.dueDate?`<span style="font-size:11px;color:${overdue?'var(--warning)':'var(--text-soft)'};font-weight:600;flex-shrink:0;white-space:nowrap;">${dueShort(kr.dueDate)}${overdue?'·지연':''}</span>`:''}
+      ${inits.length>0?`<button class="btn-mode" data-act="toggle-kr-init" data-krid="${kr.id}" title="이니셔티브 ${isInitOpen?'접기':'펼치기'}" style="font-size:10.5px;padding:1px 7px;flex-shrink:0;background:${isInitOpen?'var(--primary-soft)':'transparent'};color:var(--primary);border:1px solid #D9CFFB;">⚡ ${inits.length} ${isInitOpen?'▲':'▼'}</button>`:''}
     </div>
     ${initsHtml}
   </div>`;
@@ -3192,6 +3196,8 @@ document.addEventListener('click',async e=>{
   if(a==='date-today'){viewingDate=todayKey();render();return;}
   if(a==='toggle-obj'){const oid=btn.dataset.oid;expanded.has(oid)?expanded.delete(oid):expanded.add(oid);render();return;}
   if(a==='toggle-kr'){const k=btn.dataset.krid;krCollapsed.has(k)?krCollapsed.delete(k):krCollapsed.add(k);render();return;}
+  // v84 — 메인화면 KR 행에서 이니셔티브 펼침/접힘 토글
+  if(a==='toggle-kr-init'){const k=btn.dataset.krid;if(!window._krInitOpen)window._krInitOpen=new Set();window._krInitOpen.has(k)?window._krInitOpen.delete(k):window._krInitOpen.add(k);render();return;}
   // v15 — WBS 간트
   if(a==='wbs-toggle'){const key=btn.dataset.key;const set=window._wbsToggled||(window._wbsToggled=new Set());set.has(key)?set.delete(key):set.add(key);render();return;}
   if(a==='wbs-view'){window._wbsView=btn.dataset.mode;render();return;}
