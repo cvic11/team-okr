@@ -4494,11 +4494,14 @@ init();
       const subCountHtml=subTasks.length>0?'<span style="font-size:10px;color:#6241F5;font-weight:700;flex-shrink:0;background:#EDE8FB;padding:1px 6px;border-radius:10px;">'+doneSub+'/'+subTasks.length+'</span>':'';
       const addSubBtn=ed?'<button class="krl-add-mini" data-act="krl-add-subtask" data-mid="'+mid+'" data-kind="'+kind+'" data-parent-tid="'+escapeHtml(t.id)+'" data-kr-id="'+escapeHtml(t.k||'')+'" title="하위 할일 추가" style="background:transparent;border:1px solid #B5A0F0;color:#3A2670;border-radius:4px;cursor:pointer;font-size:11px;padding:1px 7px;font-family:inherit;line-height:1;font-weight:800;flex-shrink:0;">＋</button>':'';
       const delBtn=ed?'<button data-act="krl-del-task" data-mid="'+mid+'" data-kind="'+kind+'" data-tid="'+escapeHtml(t.id)+'" style="padding:2px 5px;background:none;border:1px solid transparent;border-radius:4px;cursor:pointer;color:var(--text-soft);font-size:11px;flex-shrink:0;line-height:1;" title="삭제">✕</button>':'';
+      // v78 — directTask(KR pseudo)도 카테고리 selector 추가
+      const directGroupKey='task:'+t.id;
+      const directMoveSel=ed?'<span class="krl-task-move" title="다른 KR/Initiative/운영으로 이동" style="display:inline-flex;align-items:center;flex-shrink:0;margin-top:2px;font-size:10px;color:#3A2670;position:relative;">▾<select data-krl-field="group-kr" data-mid="'+mid+'" data-kind="'+kind+'" data-groupkey="'+escapeHtml(directGroupKey)+'" style="position:absolute;inset:0;opacity:0;cursor:pointer;">'+buildKROptions('kr:'+(t.k||''),allKR)+'</select></span>':'';
       const head='<div class="krl-direct-init-head" style="display:flex;align-items:flex-start;gap:6px;padding:7px 10px;background:#F3F0FD;border-bottom:1px solid #E8E3FA;">'+
         '<button class="rt-check '+(t.d?'checked':'')+'" style="width:16px;height:16px;border-width:1.5px;border-radius:4px;flex-shrink:0;margin-top:2px;" data-act="krl-toggle-task" data-mid="'+mid+'" data-kind="'+kind+'" data-tid="'+escapeHtml(t.id)+'"'+dis+tip+'>'+(t.d?'✓':'')+'</button>'+
         '<span style="flex-shrink:0;font-size:12px;margin-top:2px;">⚡</span>'+
         '<textarea data-krl-field="task-text" data-krl-autogrow data-mid="'+mid+'" data-kind="'+kind+'" data-tid="'+escapeHtml(t.id)+'" rows="1" placeholder="이니셔티브를 입력하세요" style="'+textSt+'"'+ro+tip+'>'+escapeHtml(t.t||'')+'</textarea>'+
-        subCountHtml+addSubBtn+delBtn+
+        subCountHtml+directMoveSel+addSubBtn+delBtn+
       '</div>';
       const subRows=subTasks.length>0?'<div style="padding:2px 10px 4px 30px;background:#FDFCFF;">'+subTasks.map(st=>renderTaskRowGrouped(st,mid,kind)).join('')+'</div>':'';
       return '<div class="krl-direct-init" data-direct-init-id="'+escapeHtml(t.id)+'">'+head+subRows+'</div>';
