@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git config *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git push *)",
+      "PowerShell(\\(Get-Content C:\\\\Users\\\\cvic1\\\\projects\\\\team-okr\\\\app.js | Measure-Object -Line\\).Lines)",
+      "Bash(node -c app.js)"
+    ]
+  }
+}
