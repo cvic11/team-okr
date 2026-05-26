@@ -4463,8 +4463,7 @@ init();
     const dis=editable?'':' disabled';
     const tip=editable?'':' title="본인이 작성한 항목만 수정할 수 있습니다"';
     const tree=buildTaskTree(tasks);
-    // v86/v88 — kind='today'면 본인 담당 init이 있는 KR을 task 없어도 강제 표시
-    //       (오늘 할 일이 비어있어도 KR 헤더가 보여서 + 이니셔티브 추가 가능)
+    // v86 — kind='today'면 본인 담당 init이 있는 KR을 task 없어도 강제 표시
     if(kind==='today'){
       const krById={};allKR.forEach(k=>{krById[k.id]=k;});
       Object.keys(krById).forEach(krId=>{
@@ -4479,14 +4478,6 @@ init();
           tree.krOrder.push(krId);
         }
       });
-      // v88 — 그래도 표시할 KR이 하나도 없으면, 모든 KR을 fallback으로 표시
-      //       (본인 담당 init 없는 새 멤버도 KR 구조 보고 추가 가능)
-      if(tree.krOrder.length===0){
-        allKR.forEach(krObj=>{
-          tree.krGroups[krObj.id]={krId:krObj.id,kr:krObj,directTasks:[],initGroups:{},initOrder:[]};
-          tree.krOrder.push(krObj.id);
-        });
-      }
     }
     function renderInitSub(ig,krId){
       const init=ig.init;
@@ -4609,12 +4600,24 @@ init();
     }
     // v82 — 운영(KR 무관) 제거: individualTasks 렌더링 안 함
     const groupsHtml=tree.krOrder.map(krId=>renderKRTree(tree.krGroups[krId])).join('');
+    // v89 — 비어있을 때 단일 등록 버튼 (모든 이니셔티브 선택 드롭다운)
+    let emptyAddHtml='';
+    if(kind==='today'&&tree.krOrder.length===0&&editable){
+      const allInits=(typeof collectAllInit==='function')?collectAllInit():[];
+      if(allInits.length>0){
+        const opts='<option value="" disabled selected>+ 할일 추가 — 이니셔티브 선택</option>'+
+          allInits.map(i=>'<option value="'+escapeHtml(i.id)+'">'+escapeHtml((i.krTitle||'').slice(0,20))+' › '+escapeHtml(i.title||'(제목 없음)')+'</option>').join('');
+        emptyAddHtml='<div style="padding:20px 12px;text-align:center;"><div style="font-size:12.5px;color:var(--text-soft);margin-bottom:10px;">오늘 할 일이 없습니다.</div><select data-krl-field="empty-add-picker" data-mid="'+escapeHtml(mid)+'" data-kind="'+escapeHtml(kind)+'" style="font-size:12.5px;padding:6px 10px;border:1px solid #D9CFFB;background:#EEEAFE;color:#6241F5;border-radius:6px;cursor:pointer;font-family:inherit;font-weight:700;">'+opts+'</select></div>';
+      }else{
+        emptyAddHtml='<div style="padding:20px 12px;text-align:center;font-size:12.5px;color:var(--text-soft);">이니셔티브가 없습니다.<br>OKR 탭에서 먼저 이니셔티브를 추가해주세요.</div>';
+      }
+    }
     return '<div class="krl-block" data-krl-block="'+mid+':'+kind+'" style="background:#FAFAFB;border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin-top:8px;">'+
       '<div class="krl-block-head" data-krl-head="'+mid+':'+kind+'" style="font-size:12px;color:var(--text-soft);font-weight:600;margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">'+
-        (tasks.length>0?'<span style="display:inline-flex;align-items:center;gap:6px;">'+escapeHtml(label)+'<span class="krl-count" style="font-size:11px;color:var(--text-soft);font-weight:600;">'+tasks.length+'건</span></span>':'<span style="font-size:11px;color:var(--text-soft);">KR에 + 이니셔티브 추가, 이니셔티브에 + 할일 추가</span>')+
+        (tasks.length>0?'<span style="display:inline-flex;align-items:center;gap:6px;">'+escapeHtml(label)+'<span class="krl-count" style="font-size:11px;color:var(--text-soft);font-weight:600;">'+tasks.length+'건</span></span>':'<span></span>')+
         '<span class="krl-right" style="display:inline-flex;align-items:center;gap:6px;">'+
       '</div>'+
-      '<div class="krl-tasks" data-krl-tasks="'+mid+':'+kind+'">'+groupsHtml+'</div>'+
+      '<div class="krl-tasks" data-krl-tasks="'+mid+':'+kind+'">'+groupsHtml+emptyAddHtml+'</div>'+
       (legacy?'<div class="krl-legacy" data-krl-legacy="'+mid+':'+kind+'" style="font-size:12.5px;color:var(--text);background:#FFF8E1;border:1px dashed #E5B340;border-radius:6px;padding:8px 10px;margin-top:6px;line-height:1.55;"><div style="font-size:10.5px;font-weight:700;color:#946800;margin-bottom:3px;">기존 평문 메모</div>'+escapeHtml(legacy)+'<br><button data-act="krl-clear-legacy" data-mid="'+mid+'" data-kind="'+kind+'" style="margin-top:5px;font-size:11px;color:#6241F5;background:none;border:none;cursor:pointer;padding:0;font-weight:700;">이 메모 정리 →</button></div>':'')+
       '</div>';
   }
@@ -5159,6 +5162,19 @@ init();
   }
   document.addEventListener('change',function(e){
     const el=e.target;
+    // v89 — 비어있는 오늘 할 일에서 + 할일 추가 (이니셔티브 선택)
+    if(el.dataset.krlField==='empty-add-picker'){
+      const mid=el.dataset.mid,kind=el.dataset.kind;
+      const initId=el.value;
+      if(!initId)return;
+      const newT={id:newTaskId(),initiative_id:initId,title:'',status:'todo',owner_id:mid||null,start_date:null,due_date:null,sort_order:(state.initiativeTasks[initId]||[]).length};
+      if(!state.initiativeTasks[initId])state.initiativeTasks[initId]=[];
+      state.initiativeTasks[initId].push(newT);
+      if(typeof saveInitiativeTask==='function')saveInitiativeTask(newT);
+      rerenderTaskBlock(mid,kind);
+      setTimeout(()=>{const ta=document.querySelector('textarea[data-krl-field="task-text"][data-tid="'+newT.id+'"]');if(ta){ta.focus();autoGrow(ta);}},80);
+      return;
+    }
     // v17 — 그룹 헤더 KR 선택: 그룹 내 모든 작업 일괄 재배치
     if(el.dataset.krlField==='group-kr'){
       const mid=el.dataset.mid,kind=el.dataset.kind,oldKey=el.dataset.groupkey;
