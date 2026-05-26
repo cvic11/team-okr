@@ -3,20 +3,20 @@
 const fs = require('fs');
 const code = fs.readFileSync('app.js', 'utf8');
 let pass = true;
+let warnCount = 0;
 
 // 1) 문법 검사
-try { new Function(code); console.log('✓ 1/3 syntax OK'); }
-catch (e) { console.log('✗ 1/3 SYNTAX ERROR:', e.message); pass = false; }
+try { new Function(code); console.log('✓ 1/5 syntax OK'); }
+catch (e) { console.log('✗ 1/5 SYNTAX ERROR:', e.message); pass = false; }
 
 // 2) Click 핸들러 안에 잘못된 el.dataset 사용 검사
 //    클릭 핸들러는 'btn' 변수만 정의함. el이 정의되지 않은 곳에서 el.dataset 쓰면 ReferenceError
-function findClickHandlerRanges(src) {
+function findHandlerRanges(src, eventName) {
   const ranges = [];
-  const re = /document\.addEventListener\(['"]click['"]/g;
+  const re = new RegExp(`document\\.addEventListener\\(['"]${eventName}['"]`, 'g');
   let m;
   while ((m = re.exec(src))) {
     const start = m.index;
-    // 매칭되는 '{' 부터 균형 '}' 찾기
     let i = src.indexOf('{', start);
     let brace = 1, j = i + 1;
     while (j < src.length && brace > 0) {
@@ -28,43 +28,33 @@ function findClickHandlerRanges(src) {
   }
   return ranges;
 }
-const clickRanges = findClickHandlerRanges(code);
+const clickRanges = findHandlerRanges(code, 'click');
 const violations = [];
-clickRanges.forEach(([s, e], idx) => {
+clickRanges.forEach(([s, e]) => {
   const block = code.slice(s, e);
-  // 'el'을 정의하는지 확인
   const definesEl = /\bconst el\s*=|\blet el\s*=|\bvar el\s*=/.test(block);
   if (!definesEl) {
-    // 'el.dataset' 또는 'el.value' 등 el 참조 찾기 (하지만 다른 사람이 정의한 변수일 수 있어 false-positive 있음)
-    // 가장 신뢰성 있는 검사: el.dataset만 검사 (이게 가장 흔한 버그 패턴)
     const matches = block.matchAll(/\bel\.dataset\./g);
     for (const mm of matches) {
-      // 해당 위치의 라인 번호
       const pos = s + mm.index;
       const line = code.slice(0, pos).split('\n').length;
       violations.push({ line, handler: 'click@' + (code.slice(0, s).split('\n').length) });
     }
   }
 });
-if (violations.length === 0) console.log('✓ 2/3 click handler scope OK');
-else { console.log('✗ 2/3 SCOPE BUG:', JSON.stringify(violations, null, 2)); pass = false; }
+if (violations.length === 0) console.log('✓ 2/5 click handler scope OK');
+else { console.log('✗ 2/5 SCOPE BUG:', JSON.stringify(violations, null, 2)); pass = false; }
 
-// 3) TDZ 잠재 검사: const X = ... ; ... 사용한 const X 가 위쪽에 나오는지 (간단 휴리스틱)
-//    동일 함수 안에서 변수 사용이 선언보다 먼저 나오면 의심
+// 3) TDZ 잠재 검사: const X = ... ; ... 사용한 const X 가 위쪽에 나오는지
 function checkTDZ(src) {
-  // 큰 함수 단위로 분리하기는 복잡, 일단 알려진 패턴 (allKR 같은 const)
   const issues = [];
-  const fnPattern = /function\s+\w+[^{]*\{([\s\S]*?)\n\s{0,4}\}/g; // 대략적
-  // 더 단순한 검사: const X = collectAllKR\(\); 가 있는데 그 위쪽에 X. 가 있으면 의심
   const lines = src.split('\n');
   for (let i = 0; i < lines.length; i++) {
     const m = lines[i].match(/const (\w+)\s*=\s*collectAllKR\(\)/);
     if (!m) continue;
     const varName = m[1];
-    // 위로 30줄 안에서 같은 varName.X 사용 검사
     for (let j = Math.max(0, i - 30); j < i; j++) {
       if (lines[j].match(new RegExp('\\b' + varName + '\\.'))) {
-        // 같은 함수 안인지 대략 확인 (의심만)
         issues.push({ line: j + 1, var: varName, declaredAt: i + 1 });
         break;
       }
@@ -73,8 +63,44 @@ function checkTDZ(src) {
   return issues;
 }
 const tdz = checkTDZ(code);
-if (tdz.length === 0) console.log('✓ 3/3 TDZ check OK');
-else { console.log('⚠ 3/3 POSSIBLE TDZ:', JSON.stringify(tdz, null, 2)); /* 경고만, 차단 안함 */ }
+if (tdz.length === 0) console.log('✓ 3/5 TDZ check OK');
+else { console.log('⚠ 3/5 POSSIBLE TDZ:', JSON.stringify(tdz, null, 2)); warnCount++; }
 
-console.log(pass ? '\n✅ PASS — 푸시 가능' : '\n❌ FAIL — 푸시 전 수정 필요');
+// 4) collectAllKR이 init.ownerId 를 포함하는지 (v86, renderKRTree 의 owned-init 필터 의존)
+//    이 필드가 빠지면 빈 init 가시성 버그 재발
+function checkCollectAllKRFields(src) {
+  const collectMatch = src.match(/function\s+collectAllKR\s*\([^)]*\)\s*\{[\s\S]*?\n\s{0,4}\}/);
+  if (!collectMatch) return ['collectAllKR not found'];
+  const body = collectMatch[0];
+  const missing = [];
+  // init 객체 매핑 안에 ownerId 포함 여부
+  const initMapMatch = body.match(/initiatives\s*:[\s\S]*?map\([^)]*=>\s*\(\{([^}]+)\}\)/);
+  if (!initMapMatch) return ['init mapping not found in collectAllKR'];
+  const initFields = initMapMatch[1];
+  const required = ['ownerId'];
+  required.forEach(f => { if (!initFields.includes(f)) missing.push(`init.${f}`); });
+  return missing;
+}
+const collectMissing = checkCollectAllKRFields(code);
+if (collectMissing.length === 0) console.log('✓ 4/5 collectAllKR fields OK');
+else { console.log('✗ 4/5 collectAllKR MISSING:', collectMissing, '\n   → v86 force-add 및 renderKRTree owned-init 필터 동작 안 함. 빈 init 사라짐 버그 재발 위험.'); pass = false; }
+
+// 5) onChange/click 핸들러가 setTimeout(render, ...) 또는 render() 즉시 호출로 깜빡임 야기하는 패턴
+//    인라인 사용자 입력 폼 직후 render() 호출은 폼을 덮어쓰므로 위험
+function checkDangerousRender(src) {
+  const issues = [];
+  const lines = src.split('\n');
+  for (let i = 0; i < lines.length; i++) {
+    // setTimeout(render 또는 setTimeout(()=>render() 패턴
+    if (/setTimeout\([^)]*\brender\s*\(/.test(lines[i])) {
+      issues.push({ line: i + 1, content: lines[i].trim().slice(0, 100) });
+    }
+  }
+  return issues;
+}
+const dangerousRender = checkDangerousRender(code);
+if (dangerousRender.length === 0) console.log('✓ 5/5 no dangerous setTimeout(render) calls');
+else { console.log('⚠ 5/5 setTimeout(render) found (UI 깜빡임 위험):', JSON.stringify(dangerousRender.slice(0, 5), null, 2)); warnCount++; }
+
+console.log(pass ? `\n✅ PASS — 푸시 가능${warnCount > 0 ? ' (경고 ' + warnCount + '건)' : ''}` : '\n❌ FAIL — 푸시 전 수정 필요');
 process.exit(pass ? 0 : 1);

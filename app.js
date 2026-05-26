@@ -4153,8 +4153,9 @@ init();
     return JSON.stringify({_krlv:1,legacy:legacy||'',tasks});
   }
   function collectAllKR(){
+    // v101 — ownerId 등 전체 필드 유지 (v86/renderKRTree 의 owned-init 필터가 동작하려면 필수)
     const list=[];const st=getState();if(!st||!st.objectives)return list;
-    st.objectives.forEach(o=>{(o.keyResults||[]).forEach(k=>{list.push({id:k.id,title:k.title||'(제목 없는 KR)',objTitle:o.title||'(이름 없는 Objective)',initiatives:(k.initiatives||[]).map(i=>({id:i.id,title:i.title||'(제목 없는 Initiative)',krId:k.id,status:i.status||'todo'}))});});});
+    st.objectives.forEach(o=>{(o.keyResults||[]).forEach(k=>{list.push({id:k.id,title:k.title||'(제목 없는 KR)',objTitle:o.title||'(이름 없는 Objective)',ownerId:k.ownerId,startDate:k.startDate,dueDate:k.dueDate,initiatives:(k.initiatives||[]).map(i=>({id:i.id,title:i.title||'(제목 없는 Initiative)',krId:k.id,status:i.status||'todo',ownerId:i.ownerId,startDate:i.startDate,dueDate:i.dueDate,confidence:i.confidence}))});});});
     return list;
   }
   // v15 — Initiative 포함 평탄화된 옵션 목록 (값 prefix로 KR/Init 구분)
@@ -5013,20 +5014,35 @@ init();
       window._krlJustCreatedInits.add(newId);
       if(typeof saveInitiative==='function')saveInitiative(krId,newInit);
       if(typeof showToast==='function')showToast('이니셔티브 등록 완료');
-      // v100 — 폼 자리에 영구 카드를 직접 그림 (rerender 의존 X, 사라지지 않음)
-      // 정식 트리 재렌더는 사용자가 + 할일 추가를 누를 때만 수행
-      if(wrap&&wrap.isConnected){
+      // v101 — collectAllKR이 이제 ownerId 포함하므로 v86 force-add가 정상 동작 → 정식 트리에 즉시 나타남
+      try{rerenderTaskBlock(mid,kind);}catch(_){}
+      // 정식 트리가 새 init을 표시했는지 검증 (방어층)
+      const verify=()=>{
+        const okEl=document.querySelector('[data-krl-block="'+mid+':'+kind+'"] [data-init-id="'+newId+'"]');
+        if(okEl){
+          const inp=okEl.querySelector('input[data-field="init-title"]');
+          if(inp){inp.focus();inp.select&&inp.select();inp.scrollIntoView({block:'nearest',behavior:'smooth'});}
+          return;
+        }
+        // 폴백: 정식 트리에 안 나타나면 tasks 영역에 직접 카드 삽입 (절대 사라지지 않음)
+        const tasksDiv=document.querySelector('[data-krl-tasks="'+mid+':'+kind+'"]');
+        if(!tasksDiv)return;
         const krTitle=(targetKR.title||'').replace(/"/g,'&quot;');
-        wrap.innerHTML=
-          '<div style="font-size:11px;color:var(--text-soft);margin-bottom:5px;text-align:left;">📌 '+escapeHtml(krTitle)+' · 본인 이니셔티브</div>'+
-          '<div data-newinit-card="'+escapeHtml(newId)+'" style="background:#D9CFFB;color:#3A2670;padding:6px 10px;border-radius:6px 6px 0 0;font-size:12px;font-weight:700;display:flex;align-items:center;gap:6px;">'+
+        const fb=document.createElement('div');
+        fb.setAttribute('data-newinit-fallback',newId);
+        fb.style.cssText='margin-bottom:8px;';
+        fb.innerHTML=
+          '<div style="font-size:11px;color:var(--text-soft);margin-bottom:5px;">📌 '+escapeHtml(krTitle)+' · 본인 이니셔티브</div>'+
+          '<div data-init-id="'+escapeHtml(newId)+'" style="background:#D9CFFB;color:#3A2670;padding:6px 10px;border-radius:6px 6px 0 0;font-size:12px;font-weight:700;display:flex;align-items:center;gap:6px;">'+
             '<span>⚡</span>'+
             '<input class="krl-group-title-input" data-field="init-title" data-krid="'+escapeHtml(krId)+'" data-iid="'+escapeHtml(newId)+'" value="'+escapeHtml(title)+'" title="제목 클릭하여 편집" style="flex:1;min-width:0;font-size:12px;font-weight:700;background:white;border:1px solid #B5A0F0;border-radius:4px;padding:3px 7px;color:#3A2670;font-family:inherit;outline:none;" />'+
             '<button data-act="newinit-add-task" data-init-id="'+escapeHtml(newId)+'" data-kr-id="'+escapeHtml(krId)+'" data-mid="'+escapeHtml(mid)+'" data-kind="'+escapeHtml(kind)+'" style="background:white;color:#3A2670;border:1px solid #3A2670;border-radius:4px;cursor:pointer;font-size:11px;padding:2px 8px;font-weight:700;font-family:inherit;flex-shrink:0;">＋ 할일</button>'+
             '<button data-act="krl-del-init" data-iid="'+escapeHtml(newId)+'" data-krid="'+escapeHtml(krId)+'" title="이 이니셔티브 삭제" style="background:white;color:#3A2670;border:1px solid #B5A0F0;border-radius:4px;cursor:pointer;font-size:11px;padding:2px 6px;font-weight:700;font-family:inherit;flex-shrink:0;">✕</button>'+
           '</div>'+
-          '<div style="background:#FDFCFF;border:1px solid #D9CFFB;border-top:none;padding:8px 10px;text-align:left;font-size:11.5px;color:var(--text-soft);border-radius:0 0 6px 6px;">등록되었습니다. 제목을 수정하거나 <b>＋ 할일</b>로 작업을 추가하세요.</div>';
-      }
+          '<div style="background:#FDFCFF;border:1px solid #D9CFFB;border-top:none;padding:8px 10px;font-size:11.5px;color:var(--text-soft);border-radius:0 0 6px 6px;">등록되었습니다. 제목을 수정하거나 <b>＋ 할일</b>로 작업을 추가하세요.</div>';
+        tasksDiv.insertBefore(fb,tasksDiv.firstChild);
+      };
+      verify();
       return;
     }
     // v99/v100 — 성공 상태 카드의 + 할일 추가
