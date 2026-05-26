@@ -5082,16 +5082,21 @@ init();
       const mid=el.dataset.mid,kind=el.dataset.kind,oldKey=el.dataset.groupkey;
       const data=getMemberTasks(mid,kind);
       const sel=parseKRSelectValue(el.value||'');
+      // v78 — oldKey가 'task:xxx'면 task ID로 직접 매칭 (directTask selector도 지원)
+      const matchByOldKey=(t)=>{
+        if(oldKey&&oldKey.startsWith('task:')){return oldKey.slice(5)===t.id;}
+        const tKey=t.i?'init:'+t.i:(t.k?'kr:'+t.k:'task:'+t.id);
+        return tKey===oldKey;
+      };
       // v74/v75 — 실제 initiative 선택 시 JSON 태스크 → initiative_tasks 마이그레이션
       if(sel.i&&kind==='today'&&_realInitIdsForChange().has(sel.i)){
-        const matched=data.tasks.filter(t=>{const tKey=t.i?'init:'+t.i:(t.k?'kr:'+t.k:'task:'+t.id);return tKey===oldKey;});
+        const matched=data.tasks.filter(matchByOldKey);
         if(matched.length){const removeIds=new Set();migrateToRealInit(mid,kind,matched,sel.i,removeIds);const next=data.tasks.filter(t=>!removeIds.has(t.id));updateMemberTasks(mid,kind,data.legacy,next);}
         rerenderTaskBlock(mid,kind);scheduleDistributionUpdate();return;
       }
       let changed=false;
       data.tasks.forEach(t=>{
-        const tKey=t.i?'init:'+t.i:(t.k?'kr:'+t.k:'task:'+t.id);
-        if(tKey===oldKey){t.k=sel.k;t.i=sel.i;changed=true;}
+        if(matchByOldKey(t)){t.k=sel.k;t.i=sel.i;changed=true;}
       });
       if(changed)updateMemberTasks(mid,kind,data.legacy,data.tasks);
       rerenderTaskBlock(mid,kind);
