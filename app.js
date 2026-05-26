@@ -4437,14 +4437,15 @@ init();
   function renderTaskListBlock(mid,kind,label){
     const data=getMemberTasks(mid,kind);
     const legacy=data.legacy;
-    // v69/v73 — initiative_tasks 연동: today=시작일 필터, yesterday=완료일 필터
-    // v73: 실제 initiative에 연결된 JSON 태스크만 제외 (pseudo-initiative/KR-linked JSON은 유지)
+    // v69/v75 — initiative_tasks 연동
+    // v75 fix: JSON 태스크를 realInitId로 필터하면 카테고리 선택 후 사라지는 문제
+    //          → JSON 태스크 전체 포함 (ID 충돌 없음: DB=uid, JSON=t_xxx)
     const vDate=typeof viewingDate!=='undefined'?viewingDate:todayKey();
     const _realInitIds=new Set(allKR.flatMap(k=>(k.initiatives||[]).map(i=>i.id)));
     const tasks=kind==='today'
-      ?[...buildInitTasksForToday(mid),...data.tasks.filter(t=>!t.i||!_realInitIds.has(t.i))]
+      ?[...buildInitTasksForToday(mid),...data.tasks]
       :kind==='yesterday'
-        ?[...buildInitTasksForYesterday(mid,shiftDate(vDate,-1)),...data.tasks.filter(t=>!t.i||!_realInitIds.has(t.i))]
+        ?[...buildInitTasksForYesterday(mid,shiftDate(vDate,-1)),...data.tasks]
         :data.tasks;
     const addLabel=(kind==='today'?'할일 추가':'기록 남기기');
     const editable=(typeof canEditAs==='function')?canEditAs(mid):true;
@@ -5076,14 +5077,10 @@ init();
       const mid=el.dataset.mid,kind=el.dataset.kind,oldKey=el.dataset.groupkey;
       const data=getMemberTasks(mid,kind);
       const sel=parseKRSelectValue(el.value||'');
-      // DEBUG v74
-      console.log('[v74 group-kr]',{elValue:el.value,selI:sel.i,selK:sel.k,kind,oldKey,taskCount:data.tasks.length,realInitIds:[..._realInitIdsForChange()].slice(0,5),hasIt:sel.i?_realInitIdsForChange().has(sel.i):false,tasks:data.tasks.map(t=>({id:t.id,t:t.t,k:t.k,i:t.i}))});
-      // v74 — 실제 initiative 선택 시 JSON 태스크 → initiative_tasks 마이그레이션
+      // v74/v75 — 실제 initiative 선택 시 JSON 태스크 → initiative_tasks 마이그레이션
       if(sel.i&&kind==='today'&&_realInitIdsForChange().has(sel.i)){
         const matched=data.tasks.filter(t=>{const tKey=t.i?'init:'+t.i:(t.k?'kr:'+t.k:'task:'+t.id);return tKey===oldKey;});
-        console.log('[v74 migrate]',{matched:matched.length,initId:sel.i,stateTasksBefore:(state.initiativeTasks[sel.i]||[]).length});
         if(matched.length){const removeIds=new Set();migrateToRealInit(mid,kind,matched,sel.i,removeIds);const next=data.tasks.filter(t=>!removeIds.has(t.id));updateMemberTasks(mid,kind,data.legacy,next);}
-        console.log('[v74 after]',{stateTasksAfter:(state.initiativeTasks[sel.i]||[]).length,builtTasks:buildInitTasksForToday(mid).length});
         rerenderTaskBlock(mid,kind);scheduleDistributionUpdate();return;
       }
       let changed=false;
