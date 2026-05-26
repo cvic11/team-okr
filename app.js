@@ -4604,7 +4604,8 @@ init();
     let emptyAddHtml='';
     if(kind==='today'&&tree.krOrder.length===0&&editable){
       if(allKR.length>0){
-        let opts='<option value="" disabled selected>+ 할일 추가</option>';
+        // v91 — placeholder option은 display:none으로 드롭다운 목록에서 숨김 (닫힘 상태 label만 유지)
+        let opts='<option value="" disabled selected hidden style="display:none">+ 할일 추가</option>';
         allKR.forEach(kr=>{
           opts+='<optgroup label="📌 '+escapeHtml((kr.title||'(KR)').slice(0,40))+'">';
           (kr.initiatives||[]).forEach(i=>{
