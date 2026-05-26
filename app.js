@@ -5082,6 +5082,35 @@ init();
       const mid=el.dataset.mid,kind=el.dataset.kind,oldKey=el.dataset.groupkey;
       const data=getMemberTasks(mid,kind);
       const sel=parseKRSelectValue(el.value||'');
+      // v80 — init: 헤더의 ▾로 init 그룹 전체 이동: DB 태스크들도 함께 처리
+      if(oldKey&&oldKey.startsWith('init:')&&kind==='today'){
+        const oldInitId=oldKey.slice(5);
+        const dbTasks=(state.initiativeTasks[oldInitId]||[]).filter(t=>!t.owner_id||t.owner_id===mid);
+        if(dbTasks.length>0){
+          const realInitIds=_realInitIdsForChange();
+          if(sel.i&&realInitIds.has(sel.i)&&sel.i!==oldInitId){
+            // init A의 본인 DB 태스크들을 init B로 이동
+            if(!state.initiativeTasks[sel.i])state.initiativeTasks[sel.i]=[];
+            dbTasks.forEach(t=>{
+              state.initiativeTasks[oldInitId]=state.initiativeTasks[oldInitId].filter(x=>x.id!==t.id);
+              t.initiative_id=sel.i;
+              state.initiativeTasks[sel.i].push(t);
+              if(typeof saveInitiativeTask==='function')saveInitiativeTask(t);
+            });
+            rerenderTaskBlock(mid,kind);autoRecalcKRFromInitTasks();return;
+          }
+          if(!sel.i){
+            // init A의 본인 DB 태스크들을 JSON으로 (KR pseudo or 운영)
+            dbTasks.forEach(t=>{
+              state.initiativeTasks[oldInitId]=state.initiativeTasks[oldInitId].filter(x=>x.id!==t.id);
+              if(typeof deleteInitiativeTask==='function')deleteInitiativeTask(t.id);
+              data.tasks.push({id:newTaskId(),t:t.title||'',k:sel.k||'',i:'',d:t.status==='done'});
+            });
+            updateMemberTasks(mid,kind,data.legacy,data.tasks);
+            rerenderTaskBlock(mid,kind);autoRecalcKRFromInitTasks();return;
+          }
+        }
+      }
       // v78 — oldKey가 'task:xxx'면 task ID로 직접 매칭 (directTask selector도 지원)
       const matchByOldKey=(t)=>{
         if(oldKey&&oldKey.startsWith('task:')){return oldKey.slice(5)===t.id;}
