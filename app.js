@@ -4993,6 +4993,33 @@ init();
       setTimeout(()=>{const inp=document.querySelector('input[data-field="init-title"][data-iid="'+newId+'"]');if(inp)inp.focus();},80);
       return;
     }
+    // v98 — 새 이니셔티브 인라인 폼 저장
+    if(a==='newinit-save'){
+      const krId=btn.dataset.krId,mid=btn.dataset.mid,kind=btn.dataset.kind;
+      const form=btn.parentElement;
+      const inp=form&&form.querySelector('input[data-krl-field="newinit-title-pending"]');
+      const title=(inp&&inp.value||'').trim();
+      if(!title){if(inp){inp.focus();inp.style.borderColor='#E5343B';}showToast('제목을 입력하세요',true);return;}
+      let targetKR=null;
+      (state.objectives||[]).forEach(o=>(o.keyResults||[]).forEach(k=>{if(k.id===krId)targetKR=k;}));
+      if(!targetKR){showToast('KR을 찾을 수 없음',true);return;}
+      const newId=(typeof uid==='function'?uid():('i_'+Math.random().toString(36).slice(2,10)));
+      const newInit={id:newId,title:title,ownerId:mid||state.selfId||null,status:'todo',dueDate:null,confidence:'mid',realityBlocker:'',realityHelp:''};
+      if(!targetKR.initiatives)targetKR.initiatives=[];
+      targetKR.initiatives.push(newInit);
+      if(typeof saveInitiative==='function')saveInitiative(krId,newInit);
+      if(typeof showToast==='function')showToast('이니셔티브 등록 완료');
+      rerenderTaskBlock(mid,kind);
+      // 새 이니셔티브 자리에 "+ 할일 추가" 버튼이 보이도록 풀 렌더도 호출
+      if(typeof render==='function')try{render();}catch(_){}
+      return;
+    }
+    // v98 — 새 이니셔티브 인라인 폼 취소 (picker 복원)
+    if(a==='newinit-cancel'){
+      const mid=btn.dataset.mid,kind=btn.dataset.kind;
+      rerenderTaskBlock(mid,kind);
+      return;
+    }
     // v82 — Initiative 삭제 (오늘 할 일 화면에서)
     if(a==='krl-del-init'){
       const iid=btn.dataset.iid,krid=btn.dataset.krid;
@@ -5129,6 +5156,14 @@ init();
     if(!el||el.tagName!=='TEXTAREA')return;
     if(e.key!=='Enter'||e.shiftKey||e.isComposing||e.keyCode===229)return; // 한글 IME 조합 중 무시
     if(e.altKey)return; // Alt+Enter → 기본 동작(줄바꿈)
+    // v98 — 새 이니셔티브 인라인 폼: Enter → 저장 버튼 클릭
+    if(el.dataset&&el.dataset.krlField==='newinit-title-pending'){
+      e.preventDefault();
+      const wrap=el.parentElement;
+      const sav=wrap&&wrap.querySelector('[data-act="newinit-save"]');
+      if(sav)sav.click();
+      return;
+    }
     if(el.hasAttribute('data-cmt-input')){
       e.preventDefault();
       const wrap=el.closest('.krl-cmt-input-wrap');
@@ -5210,32 +5245,23 @@ init();
         rerenderTaskBlock(mid,kind);
         setTimeout(()=>{const ta=document.querySelector('textarea[data-krl-field="task-text"][data-tid="'+newT.id+'"]');if(ta){ta.focus();autoGrow(ta);}},80);
       }else if(val.startsWith('newinit:')){
-        // 새 이니셔티브 등록 → 본인 담당으로
+        // v98 — 오늘 탭의 picker 자리에 인라인 입력 폼을 즉시 띄움 (KR tree 의존 X)
         const krId=val.slice(8);
         let targetKR=null;
         (state.objectives||[]).forEach(o=>(o.keyResults||[]).forEach(k=>{if(k.id===krId)targetKR=k;}));
         if(!targetKR){showToast('KR을 찾을 수 없음',true);el.value='';return;}
-        const newInitId=(typeof uid==='function'?uid():('i_'+Math.random().toString(36).slice(2,10)));
-        const newInit={id:newInitId,title:'',ownerId:mid||state.selfId||null,status:'todo',dueDate:null,confidence:'mid',realityBlocker:'',realityHelp:''};
-        if(!targetKR.initiatives)targetKR.initiatives=[];
-        targetKR.initiatives.push(newInit);
-        // v93 — 방금 만든 빈 init 표시
-        if(!window._krlJustCreatedInits)window._krlJustCreatedInits=new Set();
-        window._krlJustCreatedInits.add(newInitId);
-        if(typeof saveInitiative==='function')saveInitiative(krId,newInit);
-        if(typeof showToast==='function')showToast('새 이니셔티브 추가됨 — 제목을 입력하세요');
-        // v95 — 빈 picker였다면 picker 자체가 사라지므로 안전하게 reset
-        try{el.value='';}catch(_){}
-        rerenderTaskBlock(mid,kind);
-        // v97 — 풀 렌더로 OKR 패널까지 동기화 (rerenderTaskBlock 단독으로 누락되는 케이스 방어)
-        if(typeof render==='function')try{render();}catch(_){}
-        // v97 — DOM 안착 후 focus (requestAnimationFrame 2회 = 다음 paint 이후)
-        const focusNew=()=>{
-          const inp=document.querySelector('input[data-field="init-title"][data-iid="'+newInitId+'"]');
-          if(inp){inp.focus();inp.select&&inp.select();inp.scrollIntoView({block:'center',behavior:'smooth'});}
-          else setTimeout(focusNew,80); // 아직 DOM에 없으면 재시도
-        };
-        requestAnimationFrame(()=>requestAnimationFrame(focusNew));
+        const wrap=el.parentElement; // picker를 감싸는 div
+        if(!wrap){showToast('UI 오류 — 새로고침 필요',true);return;}
+        const krTitle=(targetKR.title||'').replace(/"/g,'&quot;');
+        wrap.innerHTML=
+          '<div style="font-size:11px;color:var(--text-soft);margin-bottom:6px;text-align:left;">📌 '+escapeHtml(krTitle)+' 하위 · 새 이니셔티브</div>'+
+          '<div style="display:flex;gap:5px;align-items:stretch;">'+
+            '<input data-krl-field="newinit-title-pending" data-kr-id="'+escapeHtml(krId)+'" data-mid="'+escapeHtml(mid)+'" data-kind="'+escapeHtml(kind)+'" placeholder="새 이니셔티브 제목을 입력하세요…" style="flex:1;min-width:0;padding:8px 10px;border:2px solid #6241F5;border-radius:6px;font-size:13px;font-family:inherit;outline:none;background:white;color:var(--text);" />'+
+            '<button data-act="newinit-save" data-kr-id="'+escapeHtml(krId)+'" data-mid="'+escapeHtml(mid)+'" data-kind="'+escapeHtml(kind)+'" style="padding:8px 14px;background:#6241F5;color:white;border:none;border-radius:6px;cursor:pointer;font-size:12.5px;font-weight:700;font-family:inherit;flex-shrink:0;">등록</button>'+
+            '<button data-act="newinit-cancel" data-mid="'+escapeHtml(mid)+'" data-kind="'+escapeHtml(kind)+'" style="padding:8px 10px;background:transparent;color:var(--text-soft);border:1px solid var(--line);border-radius:6px;cursor:pointer;font-size:12px;font-family:inherit;flex-shrink:0;">취소</button>'+
+          '</div>';
+        const inp=wrap.querySelector('input[data-krl-field="newinit-title-pending"]');
+        if(inp){inp.focus();inp.scrollIntoView({block:'center',behavior:'smooth'});}
       }
       return;
     }
