@@ -4958,7 +4958,8 @@ init();
       (state.objectives||[]).forEach(o=>(o.keyResults||[]).forEach(k=>{if(k.id===krId)targetKR=k;}));
       if(!targetKR){showToast('KR을 찾을 수 없음',true);return;}
       const newId=(typeof uid==='function'?uid():('i_'+Math.random().toString(36).slice(2,10)));
-      const newInit={id:newId,title:'',ownerId:state.selfId||null,status:'todo',dueDate:null,confidence:'mid',realityBlocker:'',realityHelp:''};
+      // v92 — ownerId는 카드 담당자(mid). 관리자가 다른 카드에서 추가해도 그 사람 거가 됨
+      const newInit={id:newId,title:'',ownerId:mid||state.selfId||null,status:'todo',dueDate:null,confidence:'mid',realityBlocker:'',realityHelp:''};
       if(!targetKR.initiatives)targetKR.initiatives=[];
       targetKR.initiatives.push(newInit);
       if(typeof saveInitiative==='function')saveInitiative(krId,newInit);
@@ -5300,7 +5301,43 @@ init();
     }
   });
   document.addEventListener('focusin',function(e){const el=e.target;if(el.tagName==='TEXTAREA'&&el.dataset.krlField==='task-text'){el.style.background='white';el.style.borderColor='#6241F5';}});
-  document.addEventListener('focusout',function(e){const el=e.target;if(el.tagName==='TEXTAREA'&&el.dataset.krlField==='task-text'){el.style.background='#FAFAFA';el.style.borderColor='var(--line)';}});
+  document.addEventListener('focusout',function(e){
+    const el=e.target;
+    if(el.tagName==='TEXTAREA'&&el.dataset.krlField==='task-text'){
+      el.style.background='#FAFAFA';el.style.borderColor='var(--line)';
+      // v92 — 빈 task는 blur 시 자동 삭제 (initiative_task 한정)
+      if(el.dataset.isInitTask==='1'&&(el.value||'').trim()===''){
+        const tid=el.dataset.tid,initId=el.dataset.initId,mid=el.dataset.mid,kind=el.dataset.kind;
+        // 약간 지연 (다른 핸들러 완료 후)
+        setTimeout(()=>{
+          if(state.initiativeTasks[initId]){
+            const t=state.initiativeTasks[initId].find(x=>x.id===tid);
+            if(t&&!(t.title||'').trim()){
+              state.initiativeTasks[initId]=state.initiativeTasks[initId].filter(x=>x.id!==tid);
+              if(typeof deleteInitiativeTask==='function')deleteInitiativeTask(tid);
+              if(mid&&kind)rerenderTaskBlock(mid,kind);
+            }
+          }
+        },200);
+      }
+    }
+    // v92 — 빈 initiative 제목은 blur 시 자동 삭제
+    if(el.tagName==='INPUT'&&el.dataset.field==='init-title'&&(el.value||'').trim()===''){
+      const iid=el.dataset.iid,krid=el.dataset.krid;
+      setTimeout(()=>{
+        let init=null;
+        (state.objectives||[]).forEach(o=>(o.keyResults||[]).forEach(k=>{if(k.id===krid){init=(k.initiatives||[]).find(i=>i.id===iid);}}));
+        if(init&&!(init.title||'').trim()){
+          // 하위 init_tasks도 삭제
+          (state.initiativeTasks[iid]||[]).forEach(t=>{if(typeof deleteInitiativeTask==='function')deleteInitiativeTask(t.id);});
+          delete state.initiativeTasks[iid];
+          (state.objectives||[]).forEach(o=>(o.keyResults||[]).forEach(k=>{if(k.id===krid){k.initiatives=(k.initiatives||[]).filter(i=>i.id!==iid);}}));
+          if(typeof sb!=='undefined')sb.from('initiatives').delete().eq('id',iid).then(()=>{});
+          render();
+        }
+      },200);
+    }
+  });
 })();
 // v24 — 팀원 간 1:1 메시지 + 우측 하단 플로팅 채팅 (messages 테이블 사용)
 (function(){
