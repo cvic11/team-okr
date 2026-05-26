@@ -4537,13 +4537,19 @@ init();
       const kr=g.kr;
       const title=kr?(kr.title||'(제목 없는 KR)'):'(삭제된 KR)';
       const bg='#EEEAFE',fg='#6241F5',border='#D9CFFB';
-      // v85 — 본인 담당 Initiative는 task가 없어도 표시 (방금 만든 빈 init도 즉시 보임)
+      // v85/v93 — 본인 담당 Initiative는 task가 없어도 표시 (단 빈 제목 init은 방금 만든 것만)
+      if(!window._krlJustCreatedInits)window._krlJustCreatedInits=new Set();
       const allKRInits=(kr&&kr.initiatives)||[];
       allKRInits.forEach(init=>{
         if(g.initGroups[init.id])return; // 이미 task 있는 init
         const ownerIds=(typeof getInitOwnerIds==='function')?getInitOwnerIds(init):(init.ownerId?String(init.ownerId).split(','):[]);
         const isTeamAll=init.ownerId==='__team_all__';
-        if(isTeamAll||ownerIds.includes(mid)){
+        const isMyInit=isTeamAll||ownerIds.includes(mid);
+        if(!isMyInit)return;
+        const hasTitle=!!(init.title&&init.title.trim());
+        const justCreated=window._krlJustCreatedInits.has(init.id);
+        // 제목 있거나 방금 만든 경우만 표시 (잔재 빈 init 숨김)
+        if(hasTitle||justCreated){
           g.initGroups[init.id]={init,tasks:[]};
           g.initOrder.push(init.id);
         }
@@ -4604,17 +4610,17 @@ init();
     let emptyAddHtml='';
     if(kind==='today'&&tree.krOrder.length===0&&editable){
       if(allKR.length>0){
-        // v91 — placeholder option은 display:none으로 드롭다운 목록에서 숨김 (닫힘 상태 label만 유지)
+        // v93 — 빈 제목 init은 드롭다운에서 숨김. KR 자체도 선택 가능 (선택 시 새 init 등록)
         let opts='<option value="" disabled selected hidden style="display:none">+ 할일 추가</option>';
         allKR.forEach(kr=>{
-          opts+='<optgroup label="📌 '+escapeHtml((kr.title||'(KR)').slice(0,40))+'">';
-          (kr.initiatives||[]).forEach(i=>{
-            opts+='<option value="init:'+escapeHtml(i.id)+'">⚡ '+escapeHtml(i.title||'(제목 없는 Initiative)')+'</option>';
+          // KR row: 선택 시 그 KR에 새 이니셔티브 등록
+          opts+='<option value="newinit:'+escapeHtml(kr.id)+'">📌 '+escapeHtml((kr.title||'(KR)').slice(0,40))+'  ＋ 새 이니셔티브 등록</option>';
+          // 비어있지 않은 이니셔티브만 표시 (할일 추가용)
+          (kr.initiatives||[]).filter(i=>i.title&&i.title.trim()).forEach(i=>{
+            opts+='<option value="init:'+escapeHtml(i.id)+'">　　⚡ '+escapeHtml(i.title)+'  ＋ 할일 추가</option>';
           });
-          opts+='<option value="newinit:'+escapeHtml(kr.id)+'">＋ 새 이니셔티브 등록</option>';
-          opts+='</optgroup>';
         });
-        emptyAddHtml='<div style="padding:20px 12px;text-align:center;"><div style="font-size:12.5px;color:var(--text-soft);margin-bottom:10px;">오늘 할 일이 없습니다.</div><select data-krl-field="empty-add-picker" data-mid="'+escapeHtml(mid)+'" data-kind="'+escapeHtml(kind)+'" style="font-size:12.5px;padding:6px 10px;border:1px solid #D9CFFB;background:#EEEAFE;color:#6241F5;border-radius:6px;cursor:pointer;font-family:inherit;font-weight:700;min-width:240px;">'+opts+'</select></div>';
+        emptyAddHtml='<div style="padding:20px 12px;text-align:center;"><div style="font-size:12.5px;color:var(--text-soft);margin-bottom:10px;">오늘 할 일이 없습니다.</div><select data-krl-field="empty-add-picker" data-mid="'+escapeHtml(mid)+'" data-kind="'+escapeHtml(kind)+'" style="font-size:12.5px;padding:6px 10px;border:1px solid #D9CFFB;background:#EEEAFE;color:#6241F5;border-radius:6px;cursor:pointer;font-family:inherit;font-weight:700;min-width:280px;">'+opts+'</select></div>';
       }else{
         emptyAddHtml='<div style="padding:20px 12px;text-align:center;font-size:12.5px;color:var(--text-soft);">KR이 없습니다.<br>OKR 탭에서 먼저 Objective와 KR을 추가해주세요.</div>';
       }
@@ -4962,6 +4968,9 @@ init();
       const newInit={id:newId,title:'',ownerId:mid||state.selfId||null,status:'todo',dueDate:null,confidence:'mid',realityBlocker:'',realityHelp:''};
       if(!targetKR.initiatives)targetKR.initiatives=[];
       targetKR.initiatives.push(newInit);
+      // v93 — 방금 만든 빈 init임을 표시 (제목 채우면 자동 해제됨)
+      if(!window._krlJustCreatedInits)window._krlJustCreatedInits=new Set();
+      window._krlJustCreatedInits.add(newId);
       if(typeof saveInitiative==='function')saveInitiative(krId,newInit);
       rerenderTaskBlock(mid,kind);
       // 새 이니셔티브 제목 input에 포커스
@@ -5194,6 +5203,9 @@ init();
         const newInit={id:newInitId,title:'',ownerId:mid||state.selfId||null,status:'todo',dueDate:null,confidence:'mid',realityBlocker:'',realityHelp:''};
         if(!targetKR.initiatives)targetKR.initiatives=[];
         targetKR.initiatives.push(newInit);
+        // v93 — 방금 만든 빈 init 표시
+        if(!window._krlJustCreatedInits)window._krlJustCreatedInits=new Set();
+        window._krlJustCreatedInits.add(newInitId);
         if(typeof saveInitiative==='function')saveInitiative(krId,newInit);
         rerenderTaskBlock(mid,kind);
         setTimeout(()=>{const inp=document.querySelector('input[data-field="init-title"][data-iid="'+newInitId+'"]');if(inp)inp.focus();},80);
@@ -5333,9 +5345,16 @@ init();
           delete state.initiativeTasks[iid];
           (state.objectives||[]).forEach(o=>(o.keyResults||[]).forEach(k=>{if(k.id===krid){k.initiatives=(k.initiatives||[]).filter(i=>i.id!==iid);}}));
           if(typeof sb!=='undefined')sb.from('initiatives').delete().eq('id',iid).then(()=>{});
+          // v93 — JustCreated 셋에서도 제거
+          if(window._krlJustCreatedInits)window._krlJustCreatedInits.delete(iid);
           render();
         }
       },200);
+    }
+    // v93 — init-title에 내용 채워지면 JustCreated 셋에서 제거 (다음 새로고침부터 일반 init으로 표시)
+    if(el.tagName==='INPUT'&&el.dataset.field==='init-title'&&(el.value||'').trim()!==''){
+      const iid=el.dataset.iid;
+      if(window._krlJustCreatedInits)window._krlJustCreatedInits.delete(iid);
     }
   });
 })();
