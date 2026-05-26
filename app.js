@@ -4188,7 +4188,9 @@ init();
   }
   function buildKROptions(selectedId,allKR){
     const sel=normalizeSel(selectedId);
-    let html='<option value=""'+(!sel.id?' selected':'')+'>운영 (KR 무관)</option>';
+    // v82 — 운영(KR 무관) 옵션 제거. 모든 할일은 이니셔티브에 속함.
+    let html='';
+    if(!sel.id)html+='<option value="" disabled selected>이니셔티브 선택…</option>';
     if(allKR.length===0){
       const st=getState();let msg='— 데이터 로딩 중 —';
       if(!st)msg='⚠ state 접근 불가';
@@ -4468,12 +4470,16 @@ init();
       const moveBtn=editable
         ? '<span class="krl-group-move-btn" title="다른 KR/Init으로 그룹 이동">▾<select data-krl-field="group-kr" data-mid="'+mid+'" data-kind="'+kind+'" data-groupkey="'+escapeHtml(groupKey)+'">'+buildKROptions(groupKey,allKR)+'</select></span>'
         : '';
+      // v82 — Initiative ✕ 삭제 버튼 (실제 init이고 편집 가능한 경우만)
+      const isReal=!init.isPseudo;
+      const delInitBtn=editable&&isReal?'<button data-act="krl-del-init" data-iid="'+escapeHtml(init.id)+'" data-krid="'+escapeHtml(krId)+'" title="이 이니셔티브 삭제" style="background:transparent;border:1px solid '+border+';color:'+fg+';border-radius:4px;cursor:pointer;font-size:11px;padding:1px 6px;font-family:inherit;line-height:1;flex-shrink:0;">✕</button>':'';
       const head='<div class="krl-subgroup-head" style="background:'+bg+';color:'+fg+';padding:5px 10px 5px 22px;font-size:11px;font-weight:700;display:flex;align-items:center;gap:6px;border-top:1px solid '+border+';">'+
         '<span style="flex-shrink:0;">⚡</span>'+
         titleInput+
         moveBtn+
         '<span style="font-size:10px;opacity:.75;flex-shrink:0;">'+ig.tasks.length+'건</span>'+
         addBtn+
+        delInitBtn+
       '</div>';
       // v69 — _isInitTask 여부에 따라 렌더러 분기
       const rows='<div class="krl-subgroup-tasks" style="padding:2px 10px 2px 22px;">'+
@@ -4512,7 +4518,8 @@ init();
       const directInitIds=new Set(g.directTasks.map(t=>t.id));
       const total=g.directTasks.reduce((s,t)=>{const sub=g.initGroups[t.id];return s+(sub?sub.tasks.length:0)+1;},0)+
         g.initOrder.filter(iid=>!directInitIds.has(iid)).reduce((s,iid)=>s+g.initGroups[iid].tasks.length,0);
-      const addBtn=editable?'<button class="krl-add-mini" data-act="krl-add-task-in-kr" data-mid="'+mid+'" data-kind="'+kind+'" data-kr-id="'+escapeHtml(g.krId)+'" title="이니셔티브 추가" style="background:transparent;border:1px solid '+fg+';color:'+fg+';border-radius:4px;cursor:pointer;font-size:11px;padding:1px 7px;font-family:inherit;line-height:1;font-weight:800;flex-shrink:0;">＋</button>':'';
+      // v82 — KR + 버튼: 실제 Initiative를 DB에 생성 (pseudo task 아님)
+      const addBtn=editable?'<button class="krl-add-mini" data-act="krl-add-real-init" data-mid="'+mid+'" data-kind="'+kind+'" data-kr-id="'+escapeHtml(g.krId)+'" title="새 이니셔티브 추가" style="background:transparent;border:1px solid '+fg+';color:'+fg+';border-radius:4px;cursor:pointer;font-size:11px;padding:1px 7px;font-family:inherit;line-height:1;font-weight:800;flex-shrink:0;">＋ 이니셔티브</button>':'';
       const groupKey='kr:'+g.krId;
       let krOid=null;
       if(typeof state!=='undefined'&&state.objectives){
@@ -4557,14 +4564,12 @@ init();
         '</div>'+
       '</div>';
     }
-    const groupsHtml=tree.krOrder.map(krId=>renderKRTree(tree.krGroups[krId])).join('')+
-      tree.individualTasks.map(t=>renderIndividual(t)).join('');
+    // v82 — 운영(KR 무관) 제거: individualTasks 렌더링 안 함
+    const groupsHtml=tree.krOrder.map(krId=>renderKRTree(tree.krGroups[krId])).join('');
     return '<div class="krl-block" data-krl-block="'+mid+':'+kind+'" style="background:#FAFAFB;border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin-top:8px;">'+
       '<div class="krl-block-head" data-krl-head="'+mid+':'+kind+'" style="font-size:12px;color:var(--text-soft);font-weight:600;margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">'+
-        (tasks.length>0?'<span style="display:inline-flex;align-items:center;gap:6px;">'+escapeHtml(label)+'<span class="krl-count" style="font-size:11px;color:var(--text-soft);font-weight:600;">'+tasks.length+'건</span></span>':'<span></span>')+
+        (tasks.length>0?'<span style="display:inline-flex;align-items:center;gap:6px;">'+escapeHtml(label)+'<span class="krl-count" style="font-size:11px;color:var(--text-soft);font-weight:600;">'+tasks.length+'건</span></span>':'<span style="font-size:11px;color:var(--text-soft);">KR에 + 이니셔티브 추가, 이니셔티브에 + 할일 추가</span>')+
         '<span class="krl-right" style="display:inline-flex;align-items:center;gap:6px;">'+
-          (editable?'<button data-act="krl-add-task" data-mid="'+mid+'" data-kind="'+kind+'" style="padding:4px 10px;font-size:11px;color:#6241F5;background:#EEEAFE;border:1px dashed #D9CFFB;border-radius:5px;cursor:pointer;font-weight:700;font-family:inherit;line-height:1.4;"'+dis+tip+'>＋ '+addLabel+'</button>':'')+
-        '</span>'+
       '</div>'+
       '<div class="krl-tasks" data-krl-tasks="'+mid+':'+kind+'">'+groupsHtml+'</div>'+
       (legacy?'<div class="krl-legacy" data-krl-legacy="'+mid+':'+kind+'" style="font-size:12.5px;color:var(--text);background:#FFF8E1;border:1px dashed #E5B340;border-radius:6px;padding:8px 10px;margin-top:6px;line-height:1.55;"><div style="font-size:10.5px;font-weight:700;color:#946800;margin-bottom:3px;">기존 평문 메모</div>'+escapeHtml(legacy)+'<br><button data-act="krl-clear-legacy" data-mid="'+mid+'" data-kind="'+kind+'" style="margin-top:5px;font-size:11px;color:#6241F5;background:none;border:none;cursor:pointer;padding:0;font-weight:700;">이 메모 정리 →</button></div>':'')+
@@ -4887,6 +4892,40 @@ init();
       ref.task.c.splice(idx,1);
       updateMemberTasks(mid,kind,ref.data.legacy,ref.data.tasks,ref.date);
       rerenderTaskCommentsThread(mid,kind,tid,date||undefined);
+      return;
+    }
+    // v82 — KR 헤더의 "+ 이니셔티브" 버튼: 실제 Initiative를 DB에 신규 생성
+    if(a==='krl-add-real-init'){
+      const mid=btn.dataset.mid,kind=btn.dataset.kind,krId=btn.dataset.krId;
+      if(!krId){showToast('KR 정보 없음',true);return;}
+      // KR을 state에서 찾기
+      let targetKR=null;
+      (state.objectives||[]).forEach(o=>(o.keyResults||[]).forEach(k=>{if(k.id===krId)targetKR=k;}));
+      if(!targetKR){showToast('KR을 찾을 수 없음',true);return;}
+      const newId=(typeof uid==='function'?uid():('i_'+Math.random().toString(36).slice(2,10)));
+      const newInit={id:newId,title:'',ownerId:state.selfId||null,status:'todo',dueDate:null,confidence:'mid',realityBlocker:'',realityHelp:''};
+      if(!targetKR.initiatives)targetKR.initiatives=[];
+      targetKR.initiatives.push(newInit);
+      if(typeof saveInitiative==='function')saveInitiative(krId,newInit);
+      rerenderTaskBlock(mid,kind);
+      // 새 이니셔티브 제목 input에 포커스
+      setTimeout(()=>{const inp=document.querySelector('input[data-field="init-title"][data-iid="'+newId+'"]');if(inp)inp.focus();},80);
+      return;
+    }
+    // v82 — Initiative 삭제 (오늘 할 일 화면에서)
+    if(a==='krl-del-init'){
+      const iid=btn.dataset.iid,krid=btn.dataset.krid;
+      const tasksUnder=(state.initiativeTasks[iid]||[]).length;
+      const confirmMsg=tasksUnder>0?`이 이니셔티브와 하위 할일 ${tasksUnder}건을 모두 삭제할까요?`:'이 이니셔티브를 삭제할까요?';
+      if(!confirm(confirmMsg))return;
+      // 1. 하위 init_tasks DB 삭제
+      (state.initiativeTasks[iid]||[]).forEach(t=>{if(typeof deleteInitiativeTask==='function')deleteInitiativeTask(t.id);});
+      delete state.initiativeTasks[iid];
+      // 2. state에서 initiative 제거
+      (state.objectives||[]).forEach(o=>(o.keyResults||[]).forEach(k=>{if(k.id===krid){k.initiatives=(k.initiatives||[]).filter(i=>i.id!==iid);}}));
+      // 3. DB에서 initiative 삭제
+      if(typeof sb!=='undefined'){sb.from('initiatives').delete().eq('id',iid).then(()=>{});}
+      render();
       return;
     }
     // v28 — KR/Init 헤더 ＋ 버튼: 그 KR/Init에 직접 묶이는 할일을 즉시 추가
