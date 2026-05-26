@@ -693,7 +693,8 @@ function startObserverLogoutWatcher(){
     }
   },30000);
 }
-function canEditOKR(){return isAdmin()||selfIsObserver();} // 옵저버도 시도 가능 (DB 저장 안 됨)
+// v81 — 모든 팀원이 OKR 수정 가능 (옵저버는 DB 저장 우회되어 자동으로 view-only)
+function canEditOKR(){return !!selfMember();}
 // v16 — Initiative 다중 담당자 + 팀 전원 지원
 function getInitOwnerIds(init){
   if(!init)return[];
@@ -713,12 +714,9 @@ function initOwnersDisplay(init){
   if(names.length===2)return{text:names.join(', '),color:'var(--text)',isTeamAll:false};
   return{text:names[0]+' +'+(names.length-1)+'명',color:'var(--text)',isTeamAll:false};
 }
+// v81 — 모든 팀원이 Initiative 수정 가능
 function canEditInit(init){
-  const s=selfMember();if(!s)return false;
-  if(s.isAdmin||s.isObserver)return true;
-  if(!init)return false;
-  const owners=getInitOwnerIds(init);
-  return owners.includes(s.id);
+  return !!selfMember();
 }
 // 옵저버는 모든 DB 쓰기 우회 — 화면에서만 동작
 function isObserverMode(){return selfIsObserver();}
