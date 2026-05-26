@@ -293,43 +293,10 @@ html.dark .member-card.is-readonly .member-head::after{background:#22252F;color:
 html.dark .krl-group-title-input:hover:not([readonly]){background:rgba(255,255,255,.08)}
 html.dark .krl-group-title-input:focus{background:#1A1D27;color:#E5E7EB}
 html.dark .krl-group-move-btn:hover{background:rgba(255,255,255,.10)}
-/* v34 — 댓글 작성자 아바타 (이름 앞 작은 컬러 원) */
-.krl-cmt-avatar{width:18px;height:18px;border-radius:50%;color:white;font-weight:800;font-size:9.5px;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;line-height:1}
-/* v26 — 할일 댓글 (토글 없이 상시 노출 · 짧은 글은 이름 옆에 인라인) */
+/* v105 — 댓글 기능 제거 (관련 모든 CSS 삭제) */
 .krl-task-container,.recent-task-container{position:relative}
-.krl-cmt-thread{margin:2px 0 8px 26px;padding:5px 10px;background:rgba(98,65,245,.04);border-left:2px solid var(--primary-soft);border-radius:0 6px 6px 0}
-.krl-cmt-item{padding:3px 0;border-bottom:1px dashed rgba(0,0,0,.05);font-size:12.5px;line-height:1.5}
-.krl-cmt-item:last-of-type{border-bottom:none}
-.krl-cmt-inline{display:flex;align-items:center;gap:7px;flex-wrap:wrap;padding:3px 0}
-.krl-cmt-inline .krl-cmt-author{font-weight:700;color:var(--text);font-size:12px;flex-shrink:0}
-.krl-cmt-inline .krl-cmt-body{flex:1;min-width:80px;font-size:12.5px;color:var(--text);word-break:break-word}
-.krl-cmt-inline .krl-cmt-time{font-size:10.5px;color:var(--text-soft);flex-shrink:0;opacity:.85}
-.krl-cmt-meta{display:flex;align-items:center;gap:6px;margin-bottom:2px;font-size:11px;color:var(--text-soft)}
-.krl-cmt-author{font-weight:700;color:var(--text)}
-.krl-cmt-body{white-space:pre-wrap;word-break:break-word;color:var(--text)}
-.krl-cmt-edited{font-size:10px;opacity:.55;margin-left:3px}
-/* v87 — 댓글 액션 버튼: 항상 보이게 (모바일/터치 대응) */
-.krl-cmt-actions{display:inline-flex;gap:4px;margin-left:auto;opacity:.6;transition:opacity .15s}
-.krl-cmt-item:hover .krl-cmt-actions,.krl-cmt-item:focus-within .krl-cmt-actions{opacity:1}
-.krl-cmt-act{background:#F4F4F5;border:1px solid var(--line);cursor:pointer;color:var(--text-soft);font-size:11px;padding:2px 6px;border-radius:4px;line-height:1;font-family:inherit;font-weight:600}
-.krl-cmt-act:hover{background:rgba(0,0,0,.08);color:var(--text);border-color:var(--text-soft)}
-.krl-cmt-input-wrap{margin-top:4px;display:flex;gap:4px;align-items:flex-start}
-.krl-cmt-input{flex:1;min-width:0;padding:5px 9px;border:1px solid var(--line);border-radius:5px;font-size:12.5px;line-height:1.45;font-family:inherit;background:white;resize:none;outline:none;min-height:28px;box-sizing:border-box;transition:border-color .12s,background-color .12s,box-shadow .12s}
-.krl-cmt-input:focus{border-color:var(--primary);background:#FAFAFB;box-shadow:0 0 0 2px var(--primary-soft)}
-.krl-cmt-submit{padding:5px 11px;background:var(--primary);color:white;border:none;border-radius:5px;cursor:pointer;font-size:13px;font-weight:700;line-height:1;flex-shrink:0;font-family:inherit;white-space:nowrap;min-height:28px}
-.krl-cmt-submit:hover{filter:brightness(1.08)}
-.krl-cmt-submit:disabled{opacity:.5;cursor:not-allowed}
-html.dark .krl-cmt-thread{background:rgba(98,65,245,.12);border-left-color:var(--primary)}
-html.dark .krl-cmt-input{background:#1B1E27;color:#D1D5DB;border-color:#22252F}
-html.dark .krl-cmt-item{border-bottom-color:rgba(255,255,255,.06)}
 /* v97 — 새 이니셔티브 빈 제목 입력 강조 */
 @keyframes krl-pulse{0%,100%{box-shadow:0 0 0 0 rgba(229,179,64,.45)}50%{box-shadow:0 0 0 4px rgba(229,179,64,0)}}
-/* v95 — 최근 한 일: 댓글 스레드 기본 숨김, hover/focus 시 펼침, 댓글 수는 말풍선 배지로 표기 */
-.recent-task-container .krl-cmt-thread{display:none;margin-left:24px}
-.recent-task-container:hover .krl-cmt-thread,.recent-task-container:focus-within .krl-cmt-thread,.recent-task-container.cmt-open .krl-cmt-thread{display:block}
-.recent-cmt-pill{display:inline-flex;align-items:center;gap:3px;background:#EEEAFE;color:#6241F5;font-size:10.5px;font-weight:700;padding:1px 7px;border-radius:999px;cursor:pointer;flex-shrink:0;margin-left:6px;line-height:1.4;border:1px solid #D9CFFB;user-select:none;align-self:center}
-.recent-cmt-pill:hover{background:#E5DEFB}
-html.dark .recent-cmt-pill{background:rgba(98,65,245,.18);border-color:rgba(98,65,245,.35);color:#C8BBFB}
 /* v21 — WBS 막대 드래그 */
 .wbs-bar{cursor:grab;user-select:none;touch-action:none;transition:box-shadow .12s,filter .12s;position:absolute}
 .wbs-bar:hover{filter:brightness(1.05);box-shadow:0 2px 6px rgba(0,0,0,.18)!important}
@@ -4298,69 +4265,10 @@ init();
     const data=getMemberTasks(mid,kind,d);
     return{data,task:(data.tasks||[]).find(x=>x.id===tid),date:d};
   }
-  function renderCommentItem(c,task,mid,kind,date){
-    const dAttr=date?' data-date="'+escapeHtml(date)+'"':'';
-    const me=(typeof selfMember==='function')?selfMember():null;
-    const isMine=!!(me&&c.uid===me.id);
-    const editedMark=c.e?'<span class="krl-cmt-edited" title="수정됨">·수정됨</span>':'';
-    const body=String(c.t||'');
-    const isShort=!body.includes('\n')&&body.length<=60;
-    const actions=isMine
-      ? '<span class="krl-cmt-actions">'+
-          '<button class="krl-cmt-act" data-act="cmt-edit-start" data-mid="'+mid+'" data-kind="'+kind+'" data-tid="'+task.id+'" data-cid="'+escapeHtml(c.id)+'"'+dAttr+' title="수정">✎</button>'+
-          '<button class="krl-cmt-act" data-act="cmt-del" data-mid="'+mid+'" data-kind="'+kind+'" data-tid="'+task.id+'" data-cid="'+escapeHtml(c.id)+'"'+dAttr+' title="삭제">✕</button>'+
-        '</span>'
-      : '';
-    // v34 — 댓글 작성자 아바타 (색·이니셜)
-    const member=c.uid&&typeof state!=='undefined'&&state.members?state.members.find(m=>m.id===c.uid):null;
-    const avBg=member&&member.color?member.color:'#9CA3AF';
-    const avName=(member&&member.name)||c.uname||'?';
-    const avChar=String(avName).slice(0,1).toUpperCase();
-    const avatarHtml='<span class="krl-cmt-avatar" style="background:'+avBg+';" title="'+escapeHtml(avName)+'">'+escapeHtml(avChar)+'</span>';
-    if(isShort){
-      return '<div class="krl-cmt-item krl-cmt-inline" data-cmt-id="'+escapeHtml(c.id)+'">'+
-        avatarHtml+
-        '<span class="krl-cmt-author">'+escapeHtml(c.uname||'(이름없음)')+'</span>'+
-        '<span class="krl-cmt-body">'+escapeHtml(body)+'</span>'+
-        '<span class="krl-cmt-time">'+escapeHtml(formatCmtTime(c.ts))+'</span>'+
-        editedMark+actions+
-      '</div>';
-    }
-    return '<div class="krl-cmt-item" data-cmt-id="'+escapeHtml(c.id)+'">'+
-      '<div class="krl-cmt-meta">'+
-        avatarHtml+
-        '<span class="krl-cmt-author">'+escapeHtml(c.uname||'(이름없음)')+'</span>'+
-        '<span>·</span>'+
-        '<span>'+escapeHtml(formatCmtTime(c.ts))+'</span>'+
-        editedMark+actions+
-      '</div>'+
-      '<div class="krl-cmt-body">'+escapeHtml(body)+'</div>'+
-    '</div>';
-  }
-  function renderCommentsThread(task,mid,kind,date){
-    const dAttr=date?' data-date="'+escapeHtml(date)+'"':'';
-    const comments=Array.isArray(task.c)?task.c:[];
-    const me=(typeof selfMember==='function')?selfMember():null;
-    const canWrite=!!me;
-    if(comments.length===0&&!canWrite)return''; // 옵저버 + 댓글 없음 → 아예 안 그림
-    const itemsHtml=comments.map(c=>renderCommentItem(c,task,mid,kind,date)).join('');
-    const inputHtml=canWrite
-      ? '<div class="krl-cmt-input-wrap">'+
-          '<textarea class="krl-cmt-input" data-cmt-input data-mid="'+mid+'" data-kind="'+kind+'" data-tid="'+task.id+'"'+dAttr+' placeholder="댓글 (Enter 저장 · Alt+Enter 줄바꿈)" rows="1"></textarea>'+
-          '<button class="krl-cmt-submit" data-act="cmt-submit" data-mid="'+mid+'" data-kind="'+kind+'" data-tid="'+task.id+'"'+dAttr+' title="등록 (Enter)">↵</button>'+
-        '</div>'
-      : '';
-    return '<div class="krl-cmt-thread" data-cmt-tid="'+task.id+'"'+dAttr+'>'+itemsHtml+inputHtml+'</div>';
-  }
-  function rerenderTaskCommentsThread(mid,kind,tid,date){
-    const ref=findTaskRef(mid,kind,tid,date);if(!ref.task)return;
-    const sel='.krl-cmt-thread[data-cmt-tid="'+tid+'"]'+(date?'[data-date="'+date+'"]':':not([data-date])');
-    const oldThread=document.querySelector(sel);
-    if(!oldThread)return;
-    const tmp=document.createElement('div');tmp.innerHTML=renderCommentsThread(ref.task,mid,kind,date);
-    const newThread=tmp.firstElementChild;if(!newThread)return;
-    oldThread.replaceWith(newThread);
-  }
+  // v105 — 댓글 기능 제거 (사용자 요청). 호출부 안전을 위해 stub 만 남김.
+  function renderCommentItem(){return '';}
+  function renderCommentsThread(){return '';}
+  function rerenderTaskCommentsThread(){}
   // v16 — 그룹화된 작업 행 (KR/Init 칩은 상위 그룹 헤더에 한 번만 표시 → 행 자체는 간결)
   function renderTaskRowGrouped(task,mid,kind){
     const editable=(typeof canEditAs==='function')?canEditAs(mid):true;
@@ -4376,13 +4284,13 @@ init();
     // v32 — 상위 KR/Init 정보는 그룹 헤더(renderInitSub/renderKRTree)에 이미 표시되므로
     // task 행에는 별도 칩 표시하지 않음 (중복 제거). 상위 변경이 필요하면 별도 UI로 처리.
     // v26 — 댓글은 토글 없이 행 아래에 바로 표시
+    // v105 — 댓글 기능 제거
     return '<div class="krl-task-container" data-task-container="'+task.id+'">'+
       '<div class="krl-task-row" data-tid="'+task.id+'" data-mid="'+mid+'" data-kind="'+kind+'" style="display:flex;align-items:flex-start;gap:6px;padding:6px 0;border-bottom:1px dashed #F0F0F2;">'+
         '<button class="rt-check '+(task.d?'checked':'')+'" style="width:18px;height:18px;border-width:1.5px;border-radius:4px;flex-shrink:0;margin-top:9px;" data-act="krl-toggle-task" data-mid="'+mid+'" data-kind="'+kind+'" data-tid="'+task.id+'"'+dis+tip+'>'+(task.d?'✓':'')+'</button>'+
         '<textarea data-krl-field="task-text" data-krl-autogrow data-mid="'+mid+'" data-kind="'+kind+'" data-tid="'+task.id+'" rows="1" placeholder="'+placeholder+'" style="'+textStyle+'"'+ro+tip+'>'+escapeHtml(task.t||'')+'</textarea>'+
         (editable?'<button data-act="krl-del-task" data-mid="'+mid+'" data-kind="'+kind+'" data-tid="'+task.id+'" style="padding:4px 6px;margin-top:6px;background:none;border:1px solid transparent;border-radius:5px;cursor:pointer;color:var(--text-soft);font-size:12px;flex-shrink:0;line-height:1;" title="이 작업 삭제">✕</button>':'')+
       '</div>'+
-      renderCommentsThread(task,mid,kind)+
     '</div>';
   }
   // 호환성 — 기존 호출은 그룹 헤더가 없는 단독 행 (예: krl-add-task 후 신규 행 추가)
@@ -4491,18 +4399,30 @@ init();
     const allKR=collectAllKR();
     const currentVal='init:'+(t._iid||'');
     const moveSelect=ed?'<span class="krl-task-move" title="다른 KR/Initiative/운영으로 이동" style="display:inline-flex;align-items:center;flex-shrink:0;margin-top:5px;font-size:10px;color:var(--text-soft);position:relative;">▾<select data-krl-field="init-task-kr" data-mid="'+escapeHtml(mid)+'" data-kind="'+escapeHtml(kind)+'" data-tid="'+escapeHtml(t.id)+'" data-init-id="'+escapeHtml(t._iid||'')+'" style="position:absolute;inset:0;opacity:0;cursor:pointer;">'+buildKROptions(currentVal,allKR)+'</select></span>':'';
-    // v104 — 마감일 입력 (오늘 탭에서도 OKR 탭과 동일하게 날짜 지정 가능)
+    // v105 — From-To 날짜 입력 (시작일, 마감일) — OKR 탭과 동일 개념
+    const startVal=t._startDate||'';
     const dueVal=t._dueDate||'';
     const today=(typeof todayKey==='function')?todayKey():'';
     const overdue=dueVal&&dueVal<today&&!t.d;
+    const startColor='var(--text-soft)';
     const dueColor=overdue?'#E5343B':'var(--text-soft)';
-    const dueLabel=dueVal?dueVal.slice(5):'📅';
-    const dueInput=ed?'<label class="krl-task-due" title="마감일" style="display:inline-flex;align-items:center;gap:2px;flex-shrink:0;margin-top:5px;font-size:11px;color:'+dueColor+';position:relative;cursor:pointer;padding:2px 5px;border:1px solid '+(dueVal?dueColor:'transparent')+';border-radius:4px;'+(overdue?'background:#FFF1F1;font-weight:700;':'')+'"><span style="pointer-events:none;">'+dueLabel+'</span><input type="date" data-krl-field="init-task-due" data-mid="'+escapeHtml(mid)+'" data-kind="'+escapeHtml(kind)+'" data-tid="'+escapeHtml(t.id)+'" data-init-id="'+escapeHtml(t._iid||'')+'" value="'+escapeHtml(dueVal)+'" style="position:absolute;inset:0;opacity:0;cursor:pointer;border:none;padding:0;" /></label>':(dueVal?'<span style="font-size:11px;color:'+dueColor+';margin-top:5px;flex-shrink:0;">'+dueLabel+'</span>':'');
+    const fmtShort=(v)=>v?v.slice(5):'';
+    const makeDate=(field,val,colr,placeholder,isOverdue,titleTxt)=>{
+      if(!ed)return val?'<span style="font-size:11px;color:'+colr+';margin-top:5px;flex-shrink:0;">'+fmtShort(val)+'</span>':'';
+      const labelTxt=val?fmtShort(val):placeholder;
+      const borderC=val?colr:'transparent';
+      const bg=isOverdue?'background:#FFF1F1;font-weight:700;':'';
+      return '<label class="krl-task-date" title="'+titleTxt+'" style="display:inline-flex;align-items:center;gap:2px;flex-shrink:0;margin-top:5px;font-size:11px;color:'+colr+';position:relative;cursor:pointer;padding:2px 5px;border:1px solid '+borderC+';border-radius:4px;'+bg+'"><span style="pointer-events:none;">'+labelTxt+'</span><input type="date" data-krl-field="'+field+'" data-mid="'+escapeHtml(mid)+'" data-kind="'+escapeHtml(kind)+'" data-tid="'+escapeHtml(t.id)+'" data-init-id="'+escapeHtml(t._iid||'')+'" value="'+escapeHtml(val)+'" style="position:absolute;inset:0;opacity:0;cursor:pointer;border:none;padding:0;" /></label>';
+    };
+    const startInput=makeDate('init-task-start',startVal,startColor,'시작',false,'시작일');
+    const dueInput=makeDate('init-task-due',dueVal,dueColor,'마감',overdue,'마감일');
+    const arrow=ed&&(startVal||dueVal)?'<span style="font-size:9px;color:var(--text-soft);margin-top:7px;flex-shrink:0;">→</span>':'';
+    const dateGroup=ed||startVal||dueVal?'<span style="display:inline-flex;align-items:center;gap:3px;flex-shrink:0;">'+startInput+arrow+dueInput+'</span>':'';
     return '<div class="krl-task-container" data-task-container="'+escapeHtml(t.id)+'">' +
       '<div class="krl-task-row" data-tid="'+escapeHtml(t.id)+'" data-mid="'+escapeHtml(mid)+'" data-kind="'+escapeHtml(kind)+'" style="display:flex;align-items:flex-start;gap:6px;padding:4px 0;border-bottom:1px dashed #F0F0F2;">'+
         '<button class="rt-check '+(t.d?'checked':'')+'" style="width:18px;height:18px;border-width:1.5px;border-radius:4px;flex-shrink:0;margin-top:6px;" data-act="krl-toggle-init-task" data-mid="'+escapeHtml(mid)+'" data-kind="'+escapeHtml(kind)+'" data-tid="'+escapeHtml(t.id)+'" data-init-id="'+escapeHtml(t._iid||'')+'"'+dis+tip+'>'+(t.d?'✓':'')+'</button>'+
         '<textarea data-krl-field="task-text" data-krl-autogrow data-mid="'+escapeHtml(mid)+'" data-kind="'+escapeHtml(kind)+'" data-tid="'+escapeHtml(t.id)+'" data-is-init-task="1" data-init-id="'+escapeHtml(t._iid||'')+'" rows="1" placeholder="할일을 적어주세요" style="'+textSt+'"'+(ed?'':' readonly')+tip+'>'+escapeHtml(t.t||'')+'</textarea>'+
-        dueInput+
+        dateGroup+
         moveSelect+
         (ed?'<button data-act="krl-del-init-task" data-mid="'+escapeHtml(mid)+'" data-kind="'+escapeHtml(kind)+'" data-tid="'+escapeHtml(t.id)+'" data-init-id="'+escapeHtml(t._iid||'')+'" style="padding:2px 5px;margin-top:4px;background:none;border:1px solid transparent;border-radius:5px;cursor:pointer;color:var(--text-soft);font-size:12px;flex-shrink:0;line-height:1;" title="삭제">✕</button>':'')+
       '</div></div>';
@@ -4872,16 +4792,12 @@ init();
                     }else{
                       checkHtml='<span style="display:inline-block;width:16px;text-align:center;margin-right:4px;color:'+(t.d?'var(--growth)':'var(--text-soft)')+';">'+(t.d?'✓':'•')+'</span>';
                     }
-                    const cmtCount=Array.isArray(t.c)?t.c.length:0;
-                    // v96 — 댓글 없으면 말풍선 자체를 표시하지 않음
-                    const cmtPill=cmtCount>0?'<span class="recent-cmt-pill" title="'+cmtCount+'개 댓글">💬 '+cmtCount+'</span>':'';
+                    // v105 — 댓글 기능 제거
                     return '<div class="recent-task-container" data-task-container="'+t.id+'" data-recent-date="'+r.date+'">'+
                       '<div class="recent-task-row" data-recent-tid="'+t.id+'" data-recent-mid="'+mid+'" data-recent-date="'+r.date+'" style="font-size:12.5px;line-height:1.55;padding:2px 0 2px 8px;display:flex;align-items:flex-start;">'+
                         checkHtml+
                         '<span class="recent-task-text" style="flex:1;color:'+(t.d?'var(--text-soft)':'var(--text)')+';'+(t.d?'text-decoration:line-through;':'')+'">'+esc((t.t||'').slice(0,300))+'</span>'+
-                        cmtPill+
                       '</div>'+
-                      renderCommentsThread(t,mid,'today',r.date)+
                     '</div>';
                   }).join('');
                   return `<div style="margin-bottom:6px;">${head}${taskItems}</div>`;
@@ -4955,70 +4871,7 @@ init();
       }catch(err){console.warn('[KR-Link] clear-all-yesterday failed',err);}
       return;
     }
-    // v26 — 할일 댓글 동작 (토글 없이 상시 노출 · 과거 날짜 댓글 지원)
-    if(a==='cmt-submit'){
-      const mid=btn.dataset.mid,kind=btn.dataset.kind,tid=btn.dataset.tid,date=btn.dataset.date||'';
-      const sel='.krl-cmt-thread[data-cmt-tid="'+tid+'"]'+(date?'[data-date="'+date+'"]':':not([data-date])');
-      const thread=document.querySelector(sel);
-      const inp=thread&&thread.querySelector('[data-cmt-input]');
-      if(!inp)return;
-      const text=String(inp.value||'').trim();if(!text)return;
-      const me=(typeof selfMember==='function')?selfMember():null;if(!me)return;
-      const ref=findTaskRef(mid,kind,tid,date||undefined);if(!ref.task)return;
-      if(!Array.isArray(ref.task.c))ref.task.c=[];
-      ref.task.c.push({id:newCommentId(),uid:me.id,uname:me.name||'',t:text,ts:Date.now()});
-      updateMemberTasks(mid,kind,ref.data.legacy,ref.data.tasks,ref.date);
-      inp.value='';
-      rerenderTaskCommentsThread(mid,kind,tid,date||undefined);
-      return;
-    }
-    if(a==='cmt-edit-start'){
-      const mid=btn.dataset.mid,kind=btn.dataset.kind,tid=btn.dataset.tid,cid=btn.dataset.cid,date=btn.dataset.date||'';
-      const sel='.krl-cmt-thread[data-cmt-tid="'+tid+'"]'+(date?'[data-date="'+date+'"]':':not([data-date])');
-      const item=document.querySelector(sel+' .krl-cmt-item[data-cmt-id="'+cid+'"]');
-      if(!item)return;
-      const body=item.querySelector('.krl-cmt-body');if(!body)return;
-      const orig=body.textContent;
-      const dAttr=date?' data-date="'+escapeHtml(date)+'"':'';
-      const editHtml='<div class="krl-cmt-input-wrap" data-cmt-edit-wrap>'+
-        '<textarea class="krl-cmt-input" data-cmt-edit-input rows="1">'+escapeHtml(orig)+'</textarea>'+
-        '<button class="krl-cmt-submit" data-act="cmt-edit-save" data-mid="'+mid+'" data-kind="'+kind+'" data-tid="'+tid+'" data-cid="'+escapeHtml(cid)+'"'+dAttr+' title="저장 (Enter)">↵</button>'+
-        '<button class="krl-cmt-act" data-act="cmt-edit-cancel" data-mid="'+mid+'" data-kind="'+kind+'" data-tid="'+tid+'" data-cid="'+escapeHtml(cid)+'"'+dAttr+' style="margin-top:6px;">취소</button>'+
-      '</div>';
-      body.outerHTML=editHtml;
-      const ta=item.querySelector('[data-cmt-edit-input]');
-      if(ta){ta.focus();ta.setSelectionRange(ta.value.length,ta.value.length);if(typeof autoGrow==='function')autoGrow(ta);}
-      return;
-    }
-    if(a==='cmt-edit-save'){
-      const mid=btn.dataset.mid,kind=btn.dataset.kind,tid=btn.dataset.tid,cid=btn.dataset.cid,date=btn.dataset.date||'';
-      const sel='.krl-cmt-thread[data-cmt-tid="'+tid+'"]'+(date?'[data-date="'+date+'"]':':not([data-date])');
-      const ta=document.querySelector(sel+' .krl-cmt-item[data-cmt-id="'+cid+'"] [data-cmt-edit-input]');
-      if(!ta)return;
-      const text=String(ta.value||'').trim();if(!text)return;
-      const me=(typeof selfMember==='function')?selfMember():null;if(!me)return;
-      const ref=findTaskRef(mid,kind,tid,date||undefined);if(!ref.task||!Array.isArray(ref.task.c))return;
-      const c=ref.task.c.find(x=>x.id===cid);if(!c||c.uid!==me.id)return;
-      c.t=text;c.e=Date.now();
-      updateMemberTasks(mid,kind,ref.data.legacy,ref.data.tasks,ref.date);
-      rerenderTaskCommentsThread(mid,kind,tid,date||undefined);
-      return;
-    }
-    if(a==='cmt-edit-cancel'){
-      rerenderTaskCommentsThread(btn.dataset.mid,btn.dataset.kind,btn.dataset.tid,btn.dataset.date||undefined);
-      return;
-    }
-    if(a==='cmt-del'){
-      const mid=btn.dataset.mid,kind=btn.dataset.kind,tid=btn.dataset.tid,cid=btn.dataset.cid,date=btn.dataset.date||'';
-      if(!confirm('이 댓글을 삭제할까요?'))return;
-      const me=(typeof selfMember==='function')?selfMember():null;if(!me)return;
-      const ref=findTaskRef(mid,kind,tid,date||undefined);if(!ref.task||!Array.isArray(ref.task.c))return;
-      const idx=ref.task.c.findIndex(x=>x.id===cid&&x.uid===me.id);if(idx<0)return;
-      ref.task.c.splice(idx,1);
-      updateMemberTasks(mid,kind,ref.data.legacy,ref.data.tasks,ref.date);
-      rerenderTaskCommentsThread(mid,kind,tid,date||undefined);
-      return;
-    }
+    // v105 — 댓글 기능 제거 (cmt-submit/cmt-edit/cmt-del 핸들러 삭제)
     // v82 — KR 헤더의 "+ 이니셔티브" 버튼: 실제 Initiative를 DB에 신규 생성
     if(a==='krl-add-real-init'){
       const mid=btn.dataset.mid,kind=btn.dataset.kind,krId=btn.dataset.krId;
@@ -5225,19 +5078,8 @@ init();
       if(sav)sav.click();
       return;
     }
-    if(el.hasAttribute('data-cmt-input')){
-      e.preventDefault();
-      const wrap=el.closest('.krl-cmt-input-wrap');
-      const sub=wrap&&wrap.querySelector('[data-act="cmt-submit"]');
-      if(sub)sub.click();
-    }else if(el.hasAttribute('data-cmt-edit-input')){
-      e.preventDefault();
-      const wrap=el.closest('.krl-cmt-input-wrap');
-      const sav=wrap&&wrap.querySelector('[data-act="cmt-edit-save"]');
-      if(sav)sav.click();
-    }
     // v103 — 할일 textarea: Enter = 저장 완료(blur). Shift+Enter / Alt+Enter 는 줄바꿈
-    else if(el.dataset&&el.dataset.krlField==='task-text'){
+    if(el.dataset&&el.dataset.krlField==='task-text'){
       e.preventDefault();
       // input 이벤트로 이미 state 반영 + debouncedSave 가 진행. blur 로 명시적 완료 처리.
       el.blur();
@@ -5245,8 +5087,7 @@ init();
   });
   document.addEventListener('input',function(e){
     const el=e.target;
-    // v20 — 댓글 입력란 자동 확장
-    if(el.classList&&(el.classList.contains('krl-cmt-input'))){autoGrow(el);return;}
+    // v105 — 댓글 기능 제거 (krl-cmt-input 자동 확장 분기 삭제)
     if(el.dataset.krlField!=='task-text')return;
     autoGrow(el);
     const mid=el.dataset.mid,kind=el.dataset.kind,tid=el.dataset.tid;
@@ -5416,22 +5257,25 @@ init();
       scheduleDistributionUpdate();
       return;
     }
-    // v104 — initiative_task 마감일 변경 (오늘 탭에서 직접 입력)
-    if(el.dataset.krlField==='init-task-due'){
-      const tid=el.dataset.tid,initId=el.dataset.initId,mid=el.dataset.mid,kind=el.dataset.kind;
+    // v104/v105 — initiative_task 시작일/마감일 변경 (오늘 탭에서 직접 입력 · From-To)
+    if(el.dataset.krlField==='init-task-due'||el.dataset.krlField==='init-task-start'){
+      const isDue=el.dataset.krlField==='init-task-due';
+      const tid=el.dataset.tid,initId=el.dataset.initId;
       const t=(state.initiativeTasks[initId]||[]).find(x=>x.id===tid);
       if(t){
-        t.due_date=el.value||null;
+        if(isDue)t.due_date=el.value||null;
+        else t.start_date=el.value||null;
         if(typeof saveInitiativeTask==='function')saveInitiativeTask(t);
-        // 즉시 UI 갱신: 라벨 텍스트와 색 변경 (전체 재렌더는 불필요)
+        // 즉시 UI 갱신: 라벨 텍스트/색 (전체 재렌더 X)
         const label=el.parentElement;
         if(label){
           const today=(typeof todayKey==='function')?todayKey():'';
-          const overdue=t.due_date&&t.due_date<today&&t.status!=='done';
+          const overdue=isDue&&t.due_date&&t.due_date<today&&t.status!=='done';
           const span=label.querySelector('span');
-          if(span)span.textContent=t.due_date?t.due_date.slice(5):'📅';
+          const val=isDue?t.due_date:t.start_date;
+          if(span)span.textContent=val?val.slice(5):(isDue?'마감':'시작');
           label.style.color=overdue?'#E5343B':'var(--text-soft)';
-          label.style.borderColor=t.due_date?(overdue?'#E5343B':'var(--text-soft)'):'transparent';
+          label.style.borderColor=val?(overdue?'#E5343B':'var(--text-soft)'):'transparent';
           label.style.background=overdue?'#FFF1F1':'';
           label.style.fontWeight=overdue?'700':'';
         }
