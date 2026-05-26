@@ -308,10 +308,11 @@ html.dark .krl-group-move-btn:hover{background:rgba(255,255,255,.10)}
 .krl-cmt-author{font-weight:700;color:var(--text)}
 .krl-cmt-body{white-space:pre-wrap;word-break:break-word;color:var(--text)}
 .krl-cmt-edited{font-size:10px;opacity:.55;margin-left:3px}
-.krl-cmt-actions{display:inline-flex;gap:2px;margin-left:auto;opacity:0;transition:opacity .15s}
+/* v87 — 댓글 액션 버튼: 항상 보이게 (모바일/터치 대응) */
+.krl-cmt-actions{display:inline-flex;gap:4px;margin-left:auto;opacity:.6;transition:opacity .15s}
 .krl-cmt-item:hover .krl-cmt-actions,.krl-cmt-item:focus-within .krl-cmt-actions{opacity:1}
-.krl-cmt-act{background:transparent;border:none;cursor:pointer;color:var(--text-soft);font-size:11px;padding:2px 5px;border-radius:3px;line-height:1;font-family:inherit}
-.krl-cmt-act:hover{background:rgba(0,0,0,.06);color:var(--text)}
+.krl-cmt-act{background:#F4F4F5;border:1px solid var(--line);cursor:pointer;color:var(--text-soft);font-size:11px;padding:2px 6px;border-radius:4px;line-height:1;font-family:inherit;font-weight:600}
+.krl-cmt-act:hover{background:rgba(0,0,0,.08);color:var(--text);border-color:var(--text-soft)}
 .krl-cmt-input-wrap{margin-top:4px;display:flex;gap:4px;align-items:flex-start}
 .krl-cmt-input{flex:1;min-width:0;padding:5px 9px;border:1px solid var(--line);border-radius:5px;font-size:12.5px;line-height:1.45;font-family:inherit;background:white;resize:none;outline:none;min-height:28px;box-sizing:border-box;transition:border-color .12s,background-color .12s,box-shadow .12s}
 .krl-cmt-input:focus{border-color:var(--primary);background:#FAFAFB;box-shadow:0 0 0 2px var(--primary-soft)}
