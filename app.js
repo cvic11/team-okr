@@ -813,11 +813,27 @@ async function verifyPin(memberId,pin){
 }
 async function setMemberPin(memberId,pin){
   const h=await sha256(memberId+':'+pin);
-  const m=state.members.find(x=>x.id===memberId);if(m)m.pin_hash=h;
+  const m=state.members.find(x=>x.id===memberId);if(m){m.pin_hash=h;m._pinCracked=pin;} // v106: 캐시
   markLocal('members',memberId);
   const{error}=await sb.from('members').update({pin_hash:h}).eq('id',memberId);
   if(error){showToast('PIN 저장 실패',true);return false;}
   return true;
+}
+// v106 — PIN 4자리는 키 공간이 10,000개뿐 → 관리자 화면용 brute-force 복원
+async function crackPin(memberId,pinHash){
+  if(!pinHash)return null;
+  for(let i=0;i<10000;i++){
+    const candidate=String(i).padStart(4,'0');
+    const h=await sha256(memberId+':'+candidate);
+    if(h===pinHash)return candidate;
+  }
+  return null;
+}
+async function crackAllPins(){
+  const pending=state.members.filter(m=>m.pin_hash&&!m._pinCracked);
+  for(const m of pending){
+    try{const p=await crackPin(m.id,m.pin_hash);if(p)m._pinCracked=p;}catch(e){}
+  }
 }
 function openPinSetup(memberId){
   const m=state.members.find(x=>x.id===memberId);if(!m)return;
@@ -2736,6 +2752,17 @@ function renderManage(){
   const t=currentTeam();
   const meAdmin=isAdmin();
   const adminCnt=state.members.filter(m=>m.isAdmin).length;
+  // v106 — 관리자가 들어왔을 때 백그라운드에서 PIN 복원, 끝나면 화면만 재렌더
+  if(meAdmin&&typeof crackAllPins==='function'){
+    const need=state.members.some(m=>m.pin_hash&&!m._pinCracked);
+    if(need&&!window._pinCrackInFlight){
+      window._pinCrackInFlight=true;
+      crackAllPins().finally(()=>{
+        window._pinCrackInFlight=false;
+        if(currentView==='manage'&&typeof scheduleRender==='function')scheduleRender();
+      });
+    }
+  }
   // v16 — 관리자 전용 섹션 (탭 통합)
   const adminPanel=meAdmin?renderAdminPanel():'';
   return `${adminPanel}<section class="card"><div class="section-head" style="margin-bottom:14px;"><span class="section-title">현재 팀 정보</span><span class="section-meta">· 헤더에서 다른 팀으로 전환 가능</span></div><div class="manage-grid"><label><span class="labeled-label">팀 이름</span><input class="labeled-input" data-field="team-name" value="${esc(t?.name||'')}" /></label><label><span class="labeled-label">분기</span><input class="labeled-input" data-field="team-quarter" value="${esc(t?.quarter||'')}" /></label></div>${state.teams.length>1?`<div style="margin-top:12px;"><button class="btn btn-danger" data-act="del-team">이 팀 삭제 (모든 데이터 함께)</button></div>`:''}</section><section class="card"><div class="section-head" style="margin-bottom:14px;justify-content:space-between;"><span class="section-title">팀원 (${state.members.length}) · 관리자 ${adminCnt}명</span><button class="btn btn-soft" data-act="add-member">${I.plus} 팀원 추가</button></div><div style="font-size:11.5px;color:var(--text-soft);margin-bottom:8px;line-height:1.55;">⋮⋮ 핸들 잡고 드래그로 순서 변경. <b>관리자</b>는 OKR(O·KR) 생성·수정·삭제 권한을 가집니다 — Initiative는 본인 또는 관리자가 수정 가능.${meAdmin?'':' <b style="color:var(--warning);">현재 본인은 일반 권한 — 관리자에게 권한 부여 요청</b>'}</div>${state.members.map(m=>`<div class="member-row" data-mem-id="${m.id}" draggable="true" data-drag-type="member"><span class="drag-handle member-handle" title="드래그로 순서 변경">⋮⋮</span><input type="color" class="member-color" data-field="member-color" data-mid="${m.id}" value="${m.color}" /><input class="member-name-input" data-field="member-name" data-mid="${m.id}" value="${esc(m.name)}" /><input class="member-role-input" data-field="member-role" data-mid="${m.id}" placeholder="역할" value="${esc(m.role||'')}" /><button class="btn-mode" data-act="toggle-admin" data-mid="${m.id}" style="${m.isAdmin?'background:var(--growth-soft);color:var(--growth);font-weight:700;':''}padding:4px 10px;font-size:11.5px;" title="${meAdmin?'클릭하여 관리자 권한 토글':'관리자만 변경 가능'}"${meAdmin?'':' disabled'}>${m.isAdmin?'🛡️ 관리자':'일반'}</button><button class="btn-icon" data-act="del-member" data-mid="${m.id}">${I.trash}</button></div>`).join('')}</section><section class="card"><div class="section-head" style="margin-bottom:14px;"><span class="section-title">모든 팀</span></div>${state.teams.map(t=>`<div class="member-row"><span style="width:18px;height:18px;border-radius:5px;background:${teamColor(t)};display:inline-block;"></span><span style="flex:1;font-weight:600;font-size:13.5px;">${esc(t.name)}</span><span style="font-size:11.5px;color:var(--text-soft);">${esc(t.quarter)}</span>${t.id===state.currentTeamId?'<span class="today-tag">현재</span>':`<button class="btn btn-ghost" data-act="switch-team" data-tid="${t.id}">전환</button>`}</div>`).join('')}</section>`;
@@ -2925,12 +2952,15 @@ function renderAdminPanel(){
     const lastSession=sessions.find(s=>s.member_id===m.id);
     const lastLogin=lastSession?fmtTime(lastSession.login_at):'기록 없음';
     const isActive=active.find(s=>s.member_id===m.id);
+    // v106 — 관리자 화면에 PIN 표시 (4자리 brute-force 복원, 미해독시 ⋯)
+    const pinShown=m.pin_hash?(m._pinCracked?`<span style="font-family:'SF Mono','Consolas',monospace;font-weight:700;color:var(--primary);background:#EEEAFE;padding:2px 9px;border-radius:5px;font-size:13px;letter-spacing:2px;" title="PIN 4자리">${esc(m._pinCracked)}</span>`:`<span style="color:var(--text-soft);font-size:11px;" title="해독 중 또는 미설정">⋯</span>`):'<span style="font-size:11px;color:var(--warning);font-weight:600;">미설정</span>';
     return `<tr style="border-bottom:1px solid #F4F4F5;">
       <td style="padding:9px 10px;"><span class="avatar" style="background:${m.color};width:24px;height:24px;font-size:11px;display:inline-flex;align-items:center;justify-content:center;border-radius:50%;color:white;font-weight:800;vertical-align:middle;margin-right:8px;">${esc(m.name.slice(0,1).toUpperCase())}</span><strong>${esc(m.name)}</strong>${m.isAdmin?'<span style="font-size:9px;background:var(--growth-soft);color:var(--growth);padding:1px 6px;border-radius:999px;font-weight:700;margin-left:6px;">🛡️ 관리자</span>':''}${m.isObserver?'<span style="font-size:9px;background:#E5E5E8;color:var(--text-soft);padding:1px 6px;border-radius:999px;font-weight:700;margin-left:6px;">👁️ 옵저버</span>':''}${isActive?'<span style="font-size:9px;background:#E6F6EE;color:var(--growth);padding:1px 6px;border-radius:999px;font-weight:700;margin-left:6px;">● 활성</span>':''}</td>
       <td style="padding:9px 10px;font-size:12px;color:var(--text-soft);">${lastLogin}</td>
       <td style="padding:9px 10px;font-size:12px;font-weight:600;color:${wsec>0?'var(--text)':'var(--text-soft)'};">${fmtDuration(wsec)}</td>
+      <td style="padding:9px 10px;text-align:center;">${pinShown}</td>
       <td style="padding:9px 10px;font-size:11.5px;text-align:right;">
-        <button class="btn btn-soft" data-act="admin-reset-pin" data-mid="${m.id}" style="padding:4px 10px;font-size:11px;">🔄 PIN 초기화</button>
+        <button class="btn btn-soft" data-act="admin-reset-pin" data-mid="${m.id}" style="padding:4px 10px;font-size:11px;">🔄 초기화</button>
         <button class="btn-mode" data-act="admin-set-pin" data-mid="${m.id}" style="padding:4px 10px;font-size:11px;">PIN 지정…</button>
       </td>
     </tr>`;
@@ -2953,7 +2983,7 @@ function renderAdminPanel(){
   <section class="card" style="margin-bottom:14px;">
     <div class="section-head"><span class="section-title">📊 계정 현황 — ${state.members.length}명 (관리자 ${state.members.filter(m=>m.isAdmin).length} · 옵저버 ${state.members.filter(m=>m.isObserver).length} · 현재 활성 ${active.length})</span></div>
     <div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:13px;">
-      <thead><tr style="background:#F4F4F5;text-align:left;font-size:11.5px;font-weight:700;color:var(--text-soft);"><th style="padding:9px 10px;">팀원</th><th style="padding:9px 10px;">최근 로그인</th><th style="padding:9px 10px;">지난 7일 누적</th><th style="padding:9px 10px;text-align:right;">비밀번호</th></tr></thead>
+      <thead><tr style="background:#F4F4F5;text-align:left;font-size:11.5px;font-weight:700;color:var(--text-soft);"><th style="padding:9px 10px;">팀원</th><th style="padding:9px 10px;">최근 로그인</th><th style="padding:9px 10px;">지난 7일 누적</th><th style="padding:9px 10px;text-align:center;">PIN</th><th style="padding:9px 10px;text-align:right;">관리</th></tr></thead>
       <tbody>${memberRows}</tbody>
     </table></div>
   </section>
