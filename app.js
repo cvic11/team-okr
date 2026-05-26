@@ -4993,10 +4993,11 @@ init();
       setTimeout(()=>{const inp=document.querySelector('input[data-field="init-title"][data-iid="'+newId+'"]');if(inp)inp.focus();},80);
       return;
     }
-    // v98 — 새 이니셔티브 인라인 폼 저장
+    // v98/v99 — 새 이니셔티브 인라인 폼 저장
     if(a==='newinit-save'){
       const krId=btn.dataset.krId,mid=btn.dataset.mid,kind=btn.dataset.kind;
       const form=btn.parentElement;
+      const wrap=form&&form.parentElement; // picker를 감싸는 div
       const inp=form&&form.querySelector('input[data-krl-field="newinit-title-pending"]');
       const title=(inp&&inp.value||'').trim();
       if(!title){if(inp){inp.focus();inp.style.borderColor='#E5343B';}showToast('제목을 입력하세요',true);return;}
@@ -5007,11 +5008,37 @@ init();
       const newInit={id:newId,title:title,ownerId:mid||state.selfId||null,status:'todo',dueDate:null,confidence:'mid',realityBlocker:'',realityHelp:''};
       if(!targetKR.initiatives)targetKR.initiatives=[];
       targetKR.initiatives.push(newInit);
+      // v99 — JustCreated 셋에 추가해 빈 init도 보장 표시
+      if(!window._krlJustCreatedInits)window._krlJustCreatedInits=new Set();
+      window._krlJustCreatedInits.add(newId);
       if(typeof saveInitiative==='function')saveInitiative(krId,newInit);
       if(typeof showToast==='function')showToast('이니셔티브 등록 완료');
+      // v99 — rerender 의존 X: 폼 자리에 성공 상태(이니셔티브 헤더 + 할일 입력칸)를 직접 삽입
+      if(wrap){
+        const krTitle=(targetKR.title||'').replace(/"/g,'&quot;');
+        wrap.innerHTML=
+          '<div style="font-size:11px;color:var(--text-soft);margin-bottom:5px;text-align:left;">📌 '+escapeHtml(krTitle)+'</div>'+
+          '<div style="background:#D9CFFB;color:#3A2670;padding:6px 10px;border-radius:6px 6px 0 0;font-size:12px;font-weight:700;display:flex;align-items:center;gap:6px;">'+
+            '<span>⚡</span>'+
+            '<span style="flex:1;text-align:left;">'+escapeHtml(title)+'</span>'+
+            '<button data-act="newinit-add-task" data-init-id="'+escapeHtml(newId)+'" data-kr-id="'+escapeHtml(krId)+'" data-mid="'+escapeHtml(mid)+'" data-kind="'+escapeHtml(kind)+'" style="background:white;color:#3A2670;border:1px solid #3A2670;border-radius:4px;cursor:pointer;font-size:11px;padding:2px 8px;font-weight:700;font-family:inherit;">＋ 할일 추가</button>'+
+          '</div>'+
+          '<div style="background:#FDFCFF;border:1px solid #D9CFFB;border-top:none;padding:8px 10px;text-align:left;font-size:11.5px;color:var(--text-soft);">이니셔티브가 등록되었습니다. 할일을 추가하려면 위의 <b>＋ 할일 추가</b> 버튼을 누르세요.</div>';
+      }
+      // 뒤늦게 전체 트리를 동기화 (다른 화면 영향)
+      setTimeout(()=>{if(typeof render==='function')try{render();}catch(_){}},600);
+      return;
+    }
+    // v99 — 성공 상태 카드의 + 할일 추가
+    if(a==='newinit-add-task'){
+      const initId=btn.dataset.initId,mid=btn.dataset.mid,kind=btn.dataset.kind;
+      const newT={id:newTaskId(),initiative_id:initId,title:'',status:'todo',owner_id:mid||null,start_date:null,due_date:null,sort_order:(state.initiativeTasks[initId]||[]).length};
+      if(!state.initiativeTasks[initId])state.initiativeTasks[initId]=[];
+      state.initiativeTasks[initId].push(newT);
+      if(typeof saveInitiativeTask==='function')saveInitiativeTask(newT);
+      // 이제 정상 트리로 전환
       rerenderTaskBlock(mid,kind);
-      // 새 이니셔티브 자리에 "+ 할일 추가" 버튼이 보이도록 풀 렌더도 호출
-      if(typeof render==='function')try{render();}catch(_){}
+      setTimeout(()=>{const ta=document.querySelector('textarea[data-krl-field="task-text"][data-tid="'+newT.id+'"]');if(ta){ta.focus();autoGrow(ta);}},80);
       return;
     }
     // v98 — 새 이니셔티브 인라인 폼 취소 (picker 복원)
