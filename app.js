@@ -4437,9 +4437,9 @@ init();
   function renderTaskListBlock(mid,kind,label){
     const data=getMemberTasks(mid,kind);
     const legacy=data.legacy;
-    // v69/v75 — initiative_tasks 연동
-    // v75 fix: JSON 태스크를 realInitId로 필터하면 카테고리 선택 후 사라지는 문제
-    //          → JSON 태스크 전체 포함 (ID 충돌 없음: DB=uid, JSON=t_xxx)
+    // v28 — KR > Init > 할일 트리 구조
+    const allKR=collectAllKR();
+    // v69/v75 — initiative_tasks 연동 (allKR 선언 후에 사용)
     const vDate=typeof viewingDate!=='undefined'?viewingDate:todayKey();
     const _realInitIds=new Set(allKR.flatMap(k=>(k.initiatives||[]).map(i=>i.id)));
     const tasks=kind==='today'
@@ -4451,8 +4451,6 @@ init();
     const editable=(typeof canEditAs==='function')?canEditAs(mid):true;
     const dis=editable?'':' disabled';
     const tip=editable?'':' title="본인이 작성한 항목만 수정할 수 있습니다"';
-    // v28 — KR > Init > 할일 트리 구조 (이니셔티브 하위에 할일 묶기)
-    const allKR=collectAllKR();
     const tree=buildTaskTree(tasks);
     function renderInitSub(ig,krId){
       const init=ig.init;
