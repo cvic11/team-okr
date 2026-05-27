@@ -781,23 +781,30 @@ async function sha256(text){
   const buf=await crypto.subtle.digest('SHA-256',enc);
   return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
 }
+// v107 — localStorage 가 실패해도 (private 모드/쿼터 초과/race) 메모리 fallback 으로 PIN 인증 유지
+const _pinAuthMemory=new Map(); // memberId → timestamp
 function isPinAuthValid(memberId){
   try{
-    const o=JSON.parse(localStorage.getItem(PIN_AUTH_KEY)||'{}');
-    const a=o[memberId];if(!a)return false;
-    // v16 — 옵저버는 1시간 후 자동 로그아웃 (PIN 재인증 강제)
+    let a=_pinAuthMemory.get(memberId);
+    if(!a){
+      try{const o=JSON.parse(localStorage.getItem(PIN_AUTH_KEY)||'{}');a=o[memberId];}catch(_){}
+    }
+    if(!a)return false;
     const m=state.members&&state.members.find(x=>x.id===memberId);
     const ttl=(m&&m.isObserver)?(60*60*1000):PIN_AUTH_TTL;
     return (Date.now()-a)<ttl;
   }catch(e){return false;}
 }
 function setPinAuth(memberId){
+  const now=Date.now();
+  _pinAuthMemory.set(memberId,now); // v107: 메모리 우선
   try{
     const o=JSON.parse(localStorage.getItem(PIN_AUTH_KEY)||'{}');
-    o[memberId]=Date.now();localStorage.setItem(PIN_AUTH_KEY,JSON.stringify(o));
-  }catch(e){}
+    o[memberId]=now;localStorage.setItem(PIN_AUTH_KEY,JSON.stringify(o));
+  }catch(e){console.warn('[pin-auth] localStorage set failed, using memory only',e);}
 }
 function clearPinAuth(memberId){
+  _pinAuthMemory.delete(memberId);
   try{
     const o=JSON.parse(localStorage.getItem(PIN_AUTH_KEY)||'{}');
     delete o[memberId];localStorage.setItem(PIN_AUTH_KEY,JSON.stringify(o));
@@ -1418,8 +1425,16 @@ function restoreFocus(sig){
 // v42 — realtime 이벤트 폭주 시 render() 합치기 (한 프레임에 1회만)
 let _renderScheduled=false;
 let _lastRenderAt=0;const RENDER_MIN_GAP_MS=250;
+// v107 — PIN 인증 진행 중에는 render 지연 (이슈: PIN 확인 도중 비동기 echo 가 login wall 을 다시 그림)
+window._pinVerifyInFlight=false;
 function scheduleRender(){
   if(_renderScheduled)return;
+  // v107 — PIN 인증 처리 중이면 완료 후로 미룬다
+  if(window._pinVerifyInFlight){
+    _renderScheduled=true;
+    setTimeout(()=>{_renderScheduled=false;if(window._pinVerifyInFlight)scheduleRender();else _throttledRender();},80);
+    return;
+  }
   // v102 — 사용자가 입력 중이면 blur 전까지 렌더 지연 (깜빡임/입력 손실 방지)
   const ae=document.activeElement;
   if(ae&&(ae.tagName==='INPUT'||ae.tagName==='TEXTAREA')&&!ae._blurRenderPending){
@@ -2752,17 +2767,7 @@ function renderManage(){
   const t=currentTeam();
   const meAdmin=isAdmin();
   const adminCnt=state.members.filter(m=>m.isAdmin).length;
-  // v106 — 관리자가 들어왔을 때 백그라운드에서 PIN 복원, 끝나면 화면만 재렌더
-  if(meAdmin&&typeof crackAllPins==='function'){
-    const need=state.members.some(m=>m.pin_hash&&!m._pinCracked);
-    if(need&&!window._pinCrackInFlight){
-      window._pinCrackInFlight=true;
-      crackAllPins().finally(()=>{
-        window._pinCrackInFlight=false;
-        if(currentView==='manage'&&typeof scheduleRender==='function')scheduleRender();
-      });
-    }
-  }
+  // v107 — PIN 자동 brute-force 제거 (배경 작업이 '뚝뚝 끊김' 유발). '🔍 PIN 보기' 버튼 클릭 시에만 복원
   // v16 — 관리자 전용 섹션 (탭 통합)
   const adminPanel=meAdmin?renderAdminPanel():'';
   return `${adminPanel}<section class="card"><div class="section-head" style="margin-bottom:14px;"><span class="section-title">현재 팀 정보</span><span class="section-meta">· 헤더에서 다른 팀으로 전환 가능</span></div><div class="manage-grid"><label><span class="labeled-label">팀 이름</span><input class="labeled-input" data-field="team-name" value="${esc(t?.name||'')}" /></label><label><span class="labeled-label">분기</span><input class="labeled-input" data-field="team-quarter" value="${esc(t?.quarter||'')}" /></label></div>${state.teams.length>1?`<div style="margin-top:12px;"><button class="btn btn-danger" data-act="del-team">이 팀 삭제 (모든 데이터 함께)</button></div>`:''}</section><section class="card"><div class="section-head" style="margin-bottom:14px;justify-content:space-between;"><span class="section-title">팀원 (${state.members.length}) · 관리자 ${adminCnt}명</span><button class="btn btn-soft" data-act="add-member">${I.plus} 팀원 추가</button></div><div style="font-size:11.5px;color:var(--text-soft);margin-bottom:8px;line-height:1.55;">⋮⋮ 핸들 잡고 드래그로 순서 변경. <b>관리자</b>는 OKR(O·KR) 생성·수정·삭제 권한을 가집니다 — Initiative는 본인 또는 관리자가 수정 가능.${meAdmin?'':' <b style="color:var(--warning);">현재 본인은 일반 권한 — 관리자에게 권한 부여 요청</b>'}</div>${state.members.map(m=>`<div class="member-row" data-mem-id="${m.id}" draggable="true" data-drag-type="member"><span class="drag-handle member-handle" title="드래그로 순서 변경">⋮⋮</span><input type="color" class="member-color" data-field="member-color" data-mid="${m.id}" value="${m.color}" /><input class="member-name-input" data-field="member-name" data-mid="${m.id}" value="${esc(m.name)}" /><input class="member-role-input" data-field="member-role" data-mid="${m.id}" placeholder="역할" value="${esc(m.role||'')}" /><button class="btn-mode" data-act="toggle-admin" data-mid="${m.id}" style="${m.isAdmin?'background:var(--growth-soft);color:var(--growth);font-weight:700;':''}padding:4px 10px;font-size:11.5px;" title="${meAdmin?'클릭하여 관리자 권한 토글':'관리자만 변경 가능'}"${meAdmin?'':' disabled'}>${m.isAdmin?'🛡️ 관리자':'일반'}</button><button class="btn-icon" data-act="del-member" data-mid="${m.id}">${I.trash}</button></div>`).join('')}</section><section class="card"><div class="section-head" style="margin-bottom:14px;"><span class="section-title">모든 팀</span></div>${state.teams.map(t=>`<div class="member-row"><span style="width:18px;height:18px;border-radius:5px;background:${teamColor(t)};display:inline-block;"></span><span style="flex:1;font-weight:600;font-size:13.5px;">${esc(t.name)}</span><span style="font-size:11.5px;color:var(--text-soft);">${esc(t.quarter)}</span>${t.id===state.currentTeamId?'<span class="today-tag">현재</span>':`<button class="btn btn-ghost" data-act="switch-team" data-tid="${t.id}">전환</button>`}</div>`).join('')}</section>`;
@@ -2840,11 +2845,12 @@ function renderPinSetupInline(memberId){
     if(!/^[0-9]{4}$/.test(p1)){if(msg)msg.textContent='4자리 숫자만 입력 가능';return;}
     if(p1!==p2){if(msg)msg.textContent='두 PIN이 일치하지 않습니다';return;}
     if(msg){msg.textContent='저장 중...';msg.style.color='var(--text-soft)';}
+    window._pinVerifyInFlight=true; // v107
     try{
       const ok=await setMemberPin(mid,p1);
-      if(ok){setSelfId(mid);setPinAuth(mid);try{startMemberSession();}catch(e){}try{startObserverLogoutWatcher();}catch(e){}initialized=true;render();try{refreshHelpBadge();}catch(e){}}
-      else{if(msg){msg.style.color='var(--warning)';msg.textContent='저장 실패. 다시 시도하세요';}}
-    }catch(e){console.error(e);if(msg){msg.style.color='var(--warning)';msg.textContent='오류: '+(e.message||e);}}
+      if(ok){setSelfId(mid);setPinAuth(mid);try{startMemberSession();}catch(e){}try{startObserverLogoutWatcher();}catch(e){}initialized=true;window._pinVerifyInFlight=false;render();try{refreshHelpBadge();}catch(e){}}
+      else{window._pinVerifyInFlight=false;if(msg){msg.style.color='var(--warning)';msg.textContent='저장 실패. 다시 시도하세요';}}
+    }catch(e){window._pinVerifyInFlight=false;console.error(e);if(msg){msg.style.color='var(--warning)';msg.textContent='오류: '+(e.message||e);}}
   };
   setTimeout(()=>{
     const p1=document.getElementById('inline-pin-new'),p2=document.getElementById('inline-pin-confirm');
@@ -2875,17 +2881,19 @@ function renderPinVerifyInline(memberId){
     const lockKey='pin-lock-'+mid;const failKey='pin-fail-'+mid;
     const lockUntil=parseInt(localStorage.getItem(lockKey)||'0');
     if(lockUntil>Date.now()){const remain=Math.ceil((lockUntil-Date.now())/60000);if(msg)msg.textContent=`잠금 — ${remain}분 후 재시도`;return;}
+    window._pinVerifyInFlight=true; // v107: 인증 도중 비동기 render 가 login wall 다시 그리지 않도록 차단
     try{
       const ok=await verifyPin(mid,p);
-      if(ok){localStorage.removeItem(failKey);localStorage.removeItem(lockKey);setSelfId(mid);setPinAuth(mid);try{startMemberSession();}catch(e){}try{startObserverLogoutWatcher();}catch(e){}initialized=true;render();try{refreshHelpBadge();}catch(e){}}
+      if(ok){localStorage.removeItem(failKey);localStorage.removeItem(lockKey);setSelfId(mid);setPinAuth(mid);try{startMemberSession();}catch(e){}try{startObserverLogoutWatcher();}catch(e){}initialized=true;window._pinVerifyInFlight=false;render();try{refreshHelpBadge();}catch(e){}}
       else{
+        window._pinVerifyInFlight=false; // v107
         const fails=parseInt(localStorage.getItem(failKey)||'0')+1;
         localStorage.setItem(failKey,String(fails));
         if(fails>=5){localStorage.setItem(lockKey,String(Date.now()+30*60*1000));localStorage.removeItem(failKey);if(msg)msg.textContent='5회 실패 — 30분 잠금됨';}
         else if(msg)msg.textContent=`PIN 불일치 (${5-fails}회 남음)`;
         const el=document.getElementById('inline-pin-enter');if(el){el.value='';el.focus();}
       }
-    }catch(e){console.error(e);if(msg)msg.textContent='오류: '+(e.message||e);}
+    }catch(e){window._pinVerifyInFlight=false;console.error(e);if(msg)msg.textContent='오류: '+(e.message||e);}
   };
   window.__doPinReset=async function(mid){
     try{
@@ -2952,8 +2960,12 @@ function renderAdminPanel(){
     const lastSession=sessions.find(s=>s.member_id===m.id);
     const lastLogin=lastSession?fmtTime(lastSession.login_at):'기록 없음';
     const isActive=active.find(s=>s.member_id===m.id);
-    // v106 — 관리자 화면에 PIN 표시 (4자리 brute-force 복원, 미해독시 ⋯)
-    const pinShown=m.pin_hash?(m._pinCracked?`<span style="font-family:'SF Mono','Consolas',monospace;font-weight:700;color:var(--primary);background:#EEEAFE;padding:2px 9px;border-radius:5px;font-size:13px;letter-spacing:2px;" title="PIN 4자리">${esc(m._pinCracked)}</span>`:`<span style="color:var(--text-soft);font-size:11px;" title="해독 중 또는 미설정">⋯</span>`):'<span style="font-size:11px;color:var(--warning);font-weight:600;">미설정</span>';
+    // v106/v107 — 관리자 화면 PIN: 캐시된 값이 있으면 표시, 없으면 '🔍 보기' 버튼 (클릭 시 brute-force, 끊김 방지)
+    const pinShown=m.pin_hash
+      ?(m._pinCracked
+        ?`<span style="font-family:'SF Mono','Consolas',monospace;font-weight:700;color:var(--primary);background:#EEEAFE;padding:2px 9px;border-radius:5px;font-size:13px;letter-spacing:2px;" title="PIN 4자리">${esc(m._pinCracked)}</span>`
+        :`<button class="btn-mode" data-act="admin-crack-pin" data-mid="${m.id}" style="padding:3px 9px;font-size:11px;">🔍 보기</button>`)
+      :'<span style="font-size:11px;color:var(--warning);font-weight:600;">미설정</span>';
     return `<tr style="border-bottom:1px solid #F4F4F5;">
       <td style="padding:9px 10px;"><span class="avatar" style="background:${m.color};width:24px;height:24px;font-size:11px;display:inline-flex;align-items:center;justify-content:center;border-radius:50%;color:white;font-weight:800;vertical-align:middle;margin-right:8px;">${esc(m.name.slice(0,1).toUpperCase())}</span><strong>${esc(m.name)}</strong>${m.isAdmin?'<span style="font-size:9px;background:var(--growth-soft);color:var(--growth);padding:1px 6px;border-radius:999px;font-weight:700;margin-left:6px;">🛡️ 관리자</span>':''}${m.isObserver?'<span style="font-size:9px;background:#E5E5E8;color:var(--text-soft);padding:1px 6px;border-radius:999px;font-weight:700;margin-left:6px;">👁️ 옵저버</span>':''}${isActive?'<span style="font-size:9px;background:#E6F6EE;color:var(--growth);padding:1px 6px;border-radius:999px;font-weight:700;margin-left:6px;">● 활성</span>':''}</td>
       <td style="padding:9px 10px;font-size:12px;color:var(--text-soft);">${lastLogin}</td>
@@ -3295,6 +3307,18 @@ document.addEventListener('click',async e=>{
   }
   // v16 — 관리자 패널 액션들
   if(a==='admin-refresh'){_adminCachedSessions=null;_adminLastFetch=0;render();return;}
+  // v107 — PIN 1명만 클릭 시 복원 (background 부하 없음)
+  if(a==='admin-crack-pin'){
+    if(!isAdmin()){showToast('관리자만 가능',true);return;}
+    const mid=btn.dataset.mid;const m=state.members.find(x=>x.id===mid);if(!m||!m.pin_hash)return;
+    btn.disabled=true;btn.textContent='🔍 해독 중...';
+    try{
+      const pin=await crackPin(mid,m.pin_hash);
+      if(pin){m._pinCracked=pin;render();}
+      else{btn.disabled=false;btn.textContent='⚠ 실패';showToast('PIN 해독 실패',true);}
+    }catch(e){btn.disabled=false;btn.textContent='⚠ 오류';}
+    return;
+  }
   if(a==='admin-reset-pin'){
     if(!isAdmin()){showToast('관리자만 가능',true);return;}
     const mid=btn.dataset.mid;const m=state.members.find(x=>x.id===mid);if(!m)return;
