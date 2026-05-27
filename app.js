@@ -1424,15 +1424,23 @@ function restoreFocus(sig){
 }
 // v42 — realtime 이벤트 폭주 시 render() 합치기 (한 프레임에 1회만)
 let _renderScheduled=false;
-let _lastRenderAt=0;const RENDER_MIN_GAP_MS=250;
+let _lastRenderAt=0;const RENDER_MIN_GAP_MS=400; // v108 — 좀 더 적극적 throttle (팀원 끊김 완화)
 // v107 — PIN 인증 진행 중에는 render 지연 (이슈: PIN 확인 도중 비동기 echo 가 login wall 을 다시 그림)
 window._pinVerifyInFlight=false;
+// v108 — render 의 모든 진입점에서 PIN 인증 진행중을 점검 (단일 가드)
+function _renderGuarded(){
+  if(window._pinVerifyInFlight){
+    // 인증 완료까지 폴링 (단, 인증이 완료되면 즉시 1회 render)
+    setTimeout(_renderGuarded,60);
+    return;
+  }
+  render();
+}
 function scheduleRender(){
   if(_renderScheduled)return;
-  // v107 — PIN 인증 처리 중이면 완료 후로 미룬다
   if(window._pinVerifyInFlight){
     _renderScheduled=true;
-    setTimeout(()=>{_renderScheduled=false;if(window._pinVerifyInFlight)scheduleRender();else _throttledRender();},80);
+    setTimeout(()=>{_renderScheduled=false;scheduleRender();},80);
     return;
   }
   // v102 — 사용자가 입력 중이면 blur 전까지 렌더 지연 (깜빡임/입력 손실 방지)
@@ -1459,11 +1467,15 @@ function scheduleRender(){
 // v104 — 250ms 내 여러 번 호출되면 한 번만 렌더 (탭/헤더 깜빡임 차단)
 let _throttleTimer=null;
 function _throttledRender(){
+  // v108 — PIN 인증 중이면 throttle 도 차단
+  if(window._pinVerifyInFlight){setTimeout(_throttledRender,60);return;}
   const now=Date.now();const gap=now-_lastRenderAt;
   if(gap>=RENDER_MIN_GAP_MS){_lastRenderAt=now;render();return;}
   if(_throttleTimer)return;
   _throttleTimer=setTimeout(()=>{
-    _throttleTimer=null;_lastRenderAt=Date.now();render();
+    _throttleTimer=null;_lastRenderAt=Date.now();
+    if(window._pinVerifyInFlight){_throttledRender();return;}
+    render();
   },RENDER_MIN_GAP_MS-gap);
 }
 function render(){
@@ -2814,12 +2826,14 @@ function renderLoginWall(){
     try{
       console.log('[login] pick',mid);
       if(!mid)return;
+      // v108 — PIN 입력 화면 표시 시작 → 비동기 render 가 이 화면을 덮어쓰지 못하게 차단
+      window._pinVerifyInFlight=true;
       // PIN 미설정이면 등록 화면, 설정돼 있으면 입력 화면
       const m=state.members.find(x=>x.id===mid);
-      if(!m){alert('팀원을 찾을 수 없습니다');return;}
+      if(!m){window._pinVerifyInFlight=false;alert('팀원을 찾을 수 없습니다');return;}
       if(!m.pin_hash){renderPinSetupInline(mid);}
       else{renderPinVerifyInline(mid);}
-    }catch(e){console.error('[login] pick fail',e);alert('오류: '+(e.message||e));}
+    }catch(e){window._pinVerifyInFlight=false;console.error('[login] pick fail',e);alert('오류: '+(e.message||e));}
   };
 }
 // v16 — PIN 등록 화면을 로그인 가드 안에 인라인으로 렌더 (모달 없이)
@@ -2837,7 +2851,7 @@ function renderPinSetupInline(memberId){
       <div style="display:flex;gap:6px;"><button type="button" onclick="window.__loginBack&&window.__loginBack()" style="flex:0 0 auto;padding:11px 18px;border:1px solid var(--line);background:white;border-radius:8px;cursor:pointer;font-size:13px;font-family:inherit;">뒤로</button><button type="button" onclick="window.__doPinSetup&&window.__doPinSetup('${String(memberId).replace(/'/g,"\\'")}')" style="flex:1;padding:11px;border:none;background:var(--primary);color:white;border-radius:8px;cursor:pointer;font-size:14px;font-weight:700;font-family:inherit;">등록</button></div>
     </div>
   </div>`;
-  window.__loginBack=function(){renderLoginWall();};
+  window.__loginBack=function(){window._pinVerifyInFlight=false;renderLoginWall();};
   window.__doPinSetup=async function(mid){
     const p1=document.getElementById('inline-pin-new')?.value||'';
     const p2=document.getElementById('inline-pin-confirm')?.value||'';
@@ -2873,7 +2887,7 @@ function renderPinVerifyInline(memberId){
       <div style="margin-top:12px;text-align:center;"><button type="button" onclick="if(confirm('PIN을 초기화하고 다시 등록하시겠습니까?'))window.__doPinReset&&window.__doPinReset('${String(memberId).replace(/'/g,"\\'")}')" style="background:none;border:none;color:var(--text-soft);font-size:11px;cursor:pointer;text-decoration:underline;">PIN 잊음 (초기화)</button></div>
     </div>
   </div>`;
-  window.__loginBack=function(){renderLoginWall();};
+  window.__loginBack=function(){window._pinVerifyInFlight=false;renderLoginWall();};
   window.__doPinVerify=async function(mid){
     const p=document.getElementById('inline-pin-enter')?.value||'';
     const msg=document.getElementById('inline-pin-msg');
