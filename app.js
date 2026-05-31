@@ -297,6 +297,19 @@ html.dark .krl-group-move-btn:hover{background:rgba(255,255,255,.10)}
 .krl-task-container,.recent-task-container{position:relative}
 /* v97 — 새 이니셔티브 빈 제목 입력 강조 */
 @keyframes krl-pulse{0%,100%{box-shadow:0 0 0 0 rgba(229,179,64,.45)}50%{box-shadow:0 0 0 4px rgba(229,179,64,0)}}
+/* v110 — KR 진척바: 클릭/드래그로 진척 입력 (일상 진척 갱신 UX) */
+.progress-track,.kr-bar-track{cursor:pointer;touch-action:none;transition:box-shadow .12s}
+.progress-track:hover,.kr-bar-track:hover{box-shadow:0 0 0 3px rgba(98,65,245,.14)}
+.kr-bar-scrubbing{box-shadow:0 0 0 3px rgba(98,65,245,.28)!important}
+.kr-num-input{transition:border-color .12s,box-shadow .12s,background-color .12s}
+.kr-num-input:focus{border-color:var(--primary)!important;box-shadow:0 0 0 2px var(--primary-soft);background:#fff;outline:none}
+/* v110 — 진척 % 저장 확인 펄스 */
+@keyframes kr-saved-pop{0%{transform:scale(1)}40%{transform:scale(1.18)}100%{transform:scale(1)}}
+.kr-pct.kr-saved,.kr-strip-pct.kr-saved{animation:kr-saved-pop .32s ease-out}
+/* v110 — KR 진척 스텝 버튼 */
+.kr-step{width:22px;height:24px;flex-shrink:0;border:1px solid var(--line);background:#fff;border-radius:6px;cursor:pointer;font-size:14px;font-weight:800;color:var(--primary);line-height:1;display:inline-flex;align-items:center;justify-content:center;font-family:inherit;padding:0;transition:background-color .1s,border-color .1s}
+.kr-step:hover{background:var(--primary-soft);border-color:var(--primary)}
+.kr-step:active{transform:scale(.92)}
 /* v21 — WBS 막대 드래그 */
 .wbs-bar{cursor:grab;user-select:none;touch-action:none;transition:box-shadow .12s,filter .12s;position:absolute}
 .wbs-bar:hover{filter:brightness(1.05);box-shadow:0 2px 6px rgba(0,0,0,.18)!important}
@@ -1690,10 +1703,12 @@ function renderInlineKRRow(kr,oid,idx){
   return `<div class="kr-inline-row" data-kr-id="${kr.id}" style="padding:12px 0;border-bottom:1px solid #F4F4F5;">
     <div style="display:flex;align-items:center;gap:8px;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;line-height:1.6;">
       ${idxBadge}<span class="kr-inline-title" style="font-size:14px;font-weight:700;color:var(--text);flex:1 1 auto;min-width:0;line-height:1.6;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:1px 2px;" title="${esc(kr.title||'')}">${esc(kr.title||'(제목 없음)')}</span>
-      <input type="number" class="kr-num-input" data-field="kr-current" data-oid="${oid}" data-krid="${kr.id}" value="${kr.current}" title="현재값 입력" style="width:58px;font-size:13px;padding:5px 7px;font-weight:700;flex-shrink:0;" />
+      <button class="kr-step" data-act="kr-step" data-delta="-1" data-oid="${oid}" data-krid="${kr.id}" title="진척 -1" tabindex="-1">−</button>
+      <input type="number" class="kr-num-input" data-field="kr-current" data-oid="${oid}" data-krid="${kr.id}" value="${kr.current}" title="현재값 입력 (바를 클릭/드래그해도 됩니다)" style="width:52px;font-size:13px;padding:5px 6px;font-weight:700;flex-shrink:0;text-align:center;" />
+      <button class="kr-step" data-act="kr-step" data-delta="1" data-oid="${oid}" data-krid="${kr.id}" title="진척 +1" tabindex="-1">＋</button>
       <span style="color:var(--text-soft);font-size:12px;flex-shrink:0;">/</span>
       <span style="font-size:12.5px;color:var(--text-soft);font-weight:600;flex-shrink:0;white-space:nowrap;">${kr.target}${kr.unit?' '+esc(kr.unit):''}</span>
-      <div class="progress-track" data-kr-bar-wrap style="flex:1 1 auto;min-width:70px;height:6px;border-radius:3px;background:#F0F0F2;overflow:hidden;margin:0 4px;"><div class="progress-fill" data-kr-bar style="width:${p}%;height:100%;background:${progressColor(p)};transition:width .2s;"></div></div>
+      <div class="progress-track" data-kr-bar-wrap title="클릭 또는 드래그로 진척 입력" style="flex:1 1 auto;min-width:70px;height:8px;border-radius:4px;background:#F0F0F2;overflow:hidden;margin:0 4px;"><div class="progress-fill" data-kr-bar style="width:${p}%;height:100%;background:${progressColor(p)};transition:width .2s;"></div></div>
       <span class="kr-strip-pct" data-kr-pct style="color:${progressColor(p)};font-weight:800;font-size:14px;flex-shrink:0;min-width:38px;text-align:right;">${p}%</span>
       <span class="conf-chip ${kr.confidence||'mid'}" style="cursor:default;font-size:10.5px;padding:1px 7px;flex-shrink:0;">${CONF_LABELS[kr.confidence||'mid']}</span>
       ${kr.dueDate?`<span style="font-size:11px;color:${overdue?'var(--warning)':'var(--text-soft)'};font-weight:600;flex-shrink:0;white-space:nowrap;">${dueShort(kr.dueDate)}${overdue?'·지연':''}</span>`:''}
@@ -1997,8 +2012,8 @@ function renderKR(oid,kr,idx){
   const okrDis=okrEdit?'':' disabled';
   const okrTip=okrEdit?'':' title="관리자만 수정 가능"';
   // v58 — 진척바를 kr-row-line 안으로 흡수해 단일 행 (별도 kr-bar-wrap 제거)
-  const inlineBar=`<div class="kr-bar-track" data-kr-bar-wrap style="flex:1 1 auto;min-width:70px;height:6px;border-radius:3px;background:#F0F0F2;overflow:hidden;margin:0 6px;"><div class="progress-fill" data-kr-bar style="width:${p}%;height:100%;background:${progressColor(p)};transition:width .2s;"></div></div>`;
-  return `<div class="kr-row" data-kr-id="${kr.id}" data-oid="${oid}" draggable="${okrEdit?'true':'false'}" data-drag-type="kr" data-drag-parent="${oid}"><div class="kr-row-line"><span class="drag-handle" style="font-size:13px;${okrEdit?'':'opacity:.3;'}" title="드래그로 순서 변경">⋮⋮</span><span class="kr-id">KR${idx+1}</span>${guideHelp('kr')}<input class="kr-title-input" data-field="kr-title" data-oid="${oid}" data-krid="${kr.id}" value="${esc(kr.title)}" placeholder="결과 측정 기준 (예: 매장당 평균 매출 GS25 대비 200% / NPS 70점 / 가맹문의 월 1,000건)"${okrRo}${okrTip} /><input type="number" class="kr-num-input" data-field="kr-current" data-oid="${oid}" data-krid="${kr.id}" value="${kr.current}" title="현재 진척" /><span style="color:var(--text-soft);font-size:12px;">/</span><input type="number" class="kr-num-input" data-field="kr-target" data-oid="${oid}" data-krid="${kr.id}" value="${kr.target}"${okrRo}${okrTip} />${inlineBar}<span class="kr-pct" data-kr-pct style="color:${progressColor(p)};">${p}%</span>${renderConfChip('kr',kr.id,kr.confidence||'mid')}${startDisp?`<span style="font-size:11px;color:var(--text-soft);font-weight:600;" title="시작">${startDisp}</span>`:''}${dueDisp?`<span style="font-size:11px;color:${dueClr};font-weight:600;" title="마감">~${dueDisp}</span>`:''}${hr?`<span style="font-size:10.5px;color:var(--primary);font-weight:600;" title="Reality 작성됨">●</span>`:''}<button class="kr-menu-btn ${mo?'open':''}" data-act="toggle-kr-menu" data-krid="${kr.id}" title="추가 메뉴">⋯</button><button class="btn-icon" data-act="toggle-kr" data-krid="${kr.id}" title="이니셔티브 ${kr.initiatives.length}건">${caret(ko,16)}${kr.initiatives.length>0?`<span style="font-size:9px;margin-left:2px;color:var(--primary);font-weight:700;">${kr.initiatives.length}</span>`:''}</button></div>${mo?`<div class="kr-menu-panel"><label>단위 <input class="kr-unit-input" placeholder="%, 점, 건" data-field="kr-unit" data-oid="${oid}" data-krid="${kr.id}" value="${esc(kr.unit||'')}" style="width:80px;"${okrRo}${okrTip} /></label><label>시작 <input type="date" class="kr-due-input" data-field="kr-start" data-oid="${oid}" data-krid="${kr.id}" value="${kr.startDate||''}"${okrRo}${okrTip} /></label><label>마감 <input type="date" class="kr-due-input ${isOverdue(kr.dueDate)?'overdue':''}" data-field="kr-due" data-oid="${oid}" data-krid="${kr.id}" value="${kr.dueDate||''}"${okrRo}${okrTip} /></label><button class="reality-toggle ${hr?'has-content':''}" data-act="toggle-reality" data-key="${rk}" style="font-size:11.5px;">${ro?'Reality ▴':'Reality ▾'}</button><button class="btn-icon" data-act="show-history" data-etype="key_result" data-eid="${kr.id}" title="이력">${I.clock} 이력</button><button class="btn-icon" data-act="open-reflection" data-etype="key_result" data-eid="${kr.id}" data-period="final" title="리뷰 작성">${I.star} 리뷰</button>${okrEdit?`<button class="btn-icon" data-act="del-kr" data-oid="${oid}" data-krid="${kr.id}" title="삭제" style="color:var(--warning);margin-left:auto;">${I.trash} 삭제</button>`:''}</div>`:''}${ro?renderRealityBox('kr',kr.id,kr.realityBlocker,kr.realityHelp):''}${ko?renderInitiativesList(kr):''}</div>`;
+  const inlineBar=`<div class="kr-bar-track" data-kr-bar-wrap title="클릭 또는 드래그로 진척 입력" style="flex:1 1 auto;min-width:70px;height:8px;border-radius:4px;background:#F0F0F2;overflow:hidden;margin:0 6px;"><div class="progress-fill" data-kr-bar style="width:${p}%;height:100%;background:${progressColor(p)};transition:width .2s;"></div></div>`;
+  return `<div class="kr-row" data-kr-id="${kr.id}" data-oid="${oid}" draggable="${okrEdit?'true':'false'}" data-drag-type="kr" data-drag-parent="${oid}"><div class="kr-row-line"><span class="drag-handle" style="font-size:13px;${okrEdit?'':'opacity:.3;'}" title="드래그로 순서 변경">⋮⋮</span><span class="kr-id">KR${idx+1}</span>${guideHelp('kr')}<input class="kr-title-input" data-field="kr-title" data-oid="${oid}" data-krid="${kr.id}" value="${esc(kr.title)}" placeholder="결과 측정 기준 (예: 매장당 평균 매출 GS25 대비 200% / NPS 70점 / 가맹문의 월 1,000건)"${okrRo}${okrTip} /><button class="kr-step" data-act="kr-step" data-delta="-1" data-oid="${oid}" data-krid="${kr.id}" title="진척 -1" tabindex="-1">−</button><input type="number" class="kr-num-input" data-field="kr-current" data-oid="${oid}" data-krid="${kr.id}" value="${kr.current}" title="현재 진척 (바를 클릭/드래그해도 됩니다)" style="text-align:center;" /><button class="kr-step" data-act="kr-step" data-delta="1" data-oid="${oid}" data-krid="${kr.id}" title="진척 +1" tabindex="-1">＋</button><span style="color:var(--text-soft);font-size:12px;">/</span><input type="number" class="kr-num-input" data-field="kr-target" data-oid="${oid}" data-krid="${kr.id}" value="${kr.target}"${okrRo}${okrTip} />${inlineBar}<span class="kr-pct" data-kr-pct style="color:${progressColor(p)};">${p}%</span>${renderConfChip('kr',kr.id,kr.confidence||'mid')}${startDisp?`<span style="font-size:11px;color:var(--text-soft);font-weight:600;" title="시작">${startDisp}</span>`:''}${dueDisp?`<span style="font-size:11px;color:${dueClr};font-weight:600;" title="마감">~${dueDisp}</span>`:''}${hr?`<span style="font-size:10.5px;color:var(--primary);font-weight:600;" title="Reality 작성됨">●</span>`:''}<button class="kr-menu-btn ${mo?'open':''}" data-act="toggle-kr-menu" data-krid="${kr.id}" title="추가 메뉴">⋯</button><button class="btn-icon" data-act="toggle-kr" data-krid="${kr.id}" title="이니셔티브 ${kr.initiatives.length}건">${caret(ko,16)}${kr.initiatives.length>0?`<span style="font-size:9px;margin-left:2px;color:var(--primary);font-weight:700;">${kr.initiatives.length}</span>`:''}</button></div>${mo?`<div class="kr-menu-panel"><label>단위 <input class="kr-unit-input" placeholder="%, 점, 건" data-field="kr-unit" data-oid="${oid}" data-krid="${kr.id}" value="${esc(kr.unit||'')}" style="width:80px;"${okrRo}${okrTip} /></label><label>시작 <input type="date" class="kr-due-input" data-field="kr-start" data-oid="${oid}" data-krid="${kr.id}" value="${kr.startDate||''}"${okrRo}${okrTip} /></label><label>마감 <input type="date" class="kr-due-input ${isOverdue(kr.dueDate)?'overdue':''}" data-field="kr-due" data-oid="${oid}" data-krid="${kr.id}" value="${kr.dueDate||''}"${okrRo}${okrTip} /></label><button class="reality-toggle ${hr?'has-content':''}" data-act="toggle-reality" data-key="${rk}" style="font-size:11.5px;">${ro?'Reality ▴':'Reality ▾'}</button><button class="btn-icon" data-act="show-history" data-etype="key_result" data-eid="${kr.id}" title="이력">${I.clock} 이력</button><button class="btn-icon" data-act="open-reflection" data-etype="key_result" data-eid="${kr.id}" data-period="final" title="리뷰 작성">${I.star} 리뷰</button>${okrEdit?`<button class="btn-icon" data-act="del-kr" data-oid="${oid}" data-krid="${kr.id}" title="삭제" style="color:var(--warning);margin-left:auto;">${I.trash} 삭제</button>`:''}</div>`:''}${ro?renderRealityBox('kr',kr.id,kr.realityBlocker,kr.realityHelp):''}${ko?renderInitiativesList(kr):''}</div>`;
 }
 function renderInitiativesList(kr){
   // v15·v16 — 본인이 본인 이니셔티브를 만들 수 있도록 (관리자 = 자유)
@@ -3213,6 +3228,21 @@ document.addEventListener('click',async e=>{
   if(a==='setup-save'){const u=document.getElementById('setup-url').value.trim();const k=document.getElementById('setup-key').value.trim();const m=document.getElementById('setup-msg');if(!u||!k){m.textContent='두 값 모두 입력';return;}m.textContent='연결 중…';const r=await tryConnect(u,k);if(!r.ok){m.textContent='실패: '+r.msg;return;}saveConfig(u,k);location.reload();return;}
   if(a==='reset-config'){if(!confirm('연결 정보를 초기화할까요?'))return;clearConfig();location.reload();return;}
   if(a==='goto-home'){currentView='today';presentMode=false;viewingDate=todayKey();render();window.scrollTo({top:0,behavior:'smooth'});return;}
+  // v110 — KR 진척 ± 스텝 (일상 진척 갱신: 전체 재렌더 없이 즉시 반영)
+  if(a==='kr-step'){
+    if(!selfMember()){showToast('진척 입력은 본인 인증 후 가능합니다',true);return;}
+    const oid=btn.dataset.oid,krid=btn.dataset.krid,delta=Number(btn.dataset.delta)||0;
+    let kr=null;const o=state.objectives.find(x=>x.id===oid);if(o)kr=o.keyResults.find(k=>k.id===krid);
+    if(!kr)return;
+    const oldCur=Number(kr.current)||0;let nc=oldCur+delta;if(nc<0)nc=0;
+    if(nc===oldCur)return;
+    kr.current=nc;
+    updateKRRowDom(oid,krid);
+    document.querySelectorAll('input[data-field="kr-current"][data-krid="'+krid+'"]').forEach(inp=>{if(document.activeElement!==inp)inp.value=nc;});
+    logChange('key_result',krid,'update','current',oldCur,nc,kr.title);
+    saveKR(oid,kr);
+    return;
+  }
   if(a==='my-init-filter'){myInitFilter=btn.dataset.filter;render();return;}
   if(a==='clear-search'){okrSearchQuery='';render();return;}
   if(a==='clear-refl-search'){reflSearchQuery='';render();return;}
@@ -3429,7 +3459,8 @@ document.addEventListener('click',async e=>{
     init.status=(init.status==='done')?'todo':'done';
     saveInitiative(krid,init);
     logChange('initiative',iid,'update','status',old,init.status,init.title);
-    render();
+    // v110 — 전체 render() 대신 해당 init 행만 부분 갱신 (스크롤 점프 제거)
+    if(!rerenderInitRowOKR(krid,iid))render();
     return;
   }
   // v14 — "최근 한 일"에서 담당자 본인이 과거 작업을 ✓ 체크 가능
@@ -3476,9 +3507,9 @@ document.addEventListener('click',async e=>{
   }
   if(a==='show-history'){openHistory(btn.dataset.etype,btn.dataset.eid);return;}
   if(a==='close-modal'){closeModal();return;}
-  if(a==='add-obj'){if(!canEditOKR()){showToast('관리자만 추가 가능',true);return;}const id=uid();const o={id,title:'',description:'',ownerId:state.members[0]?.id||null,confidence:'mid',realityBlocker:'',realityHelp:'',keyResults:[]};state.objectives.push(o);expanded.add(id);render();const{error}=await sb.from('objectives').insert({id,team_id:state.currentTeamId,title:'',description:'',owner_id:o.ownerId,confidence:'mid',sort_order:state.objectives.length-1});if(error)showToast('저장 실패',true);else logChange('objective',id,'create','','','(작성 중)','(작성 중)');setTimeout(()=>{const el=document.querySelector(`input[data-field="obj-title"][data-oid="${id}"]`);if(el)el.focus();},100);return;}
+  if(a==='add-obj'){if(!canEditOKR()){showToast('관리자만 추가 가능',true);return;}const id=uid();const o={id,title:'',description:'',ownerId:state.members[0]?.id||null,confidence:'mid',realityBlocker:'',realityHelp:'',keyResults:[]};state.objectives.push(o);expanded.add(id);render();const{error}=await sb.from('objectives').insert({id,team_id:state.currentTeamId,title:'',description:'',owner_id:o.ownerId,confidence:'mid',sort_order:state.objectives.length-1});if(error)showToast('저장 실패',true);else logChange('objective',id,'create','','','(작성 중)','(작성 중)');setTimeout(()=>{const el=document.querySelector(`input[data-field="obj-title"][data-oid="${id}"]`);if(el){el.focus();el.scrollIntoView({block:"center",behavior:"smooth"});}},100);return;}
   if(a==='del-obj'){if(!canEditOKR()){showToast('관리자만 삭제 가능',true);return;}if(!confirm('이 Objective와 하위 KR/Initiative를 삭제할까요?'))return;const oid=btn.dataset.oid;const o=state.objectives.find(x=>x.id===oid);state.objectives=state.objectives.filter(x=>x.id!==oid);render();await sb.from('objectives').delete().eq('id',oid);logChange('objective',oid,'delete','',o?.title||'','',o?.title||'');return;}
-  if(a==='add-kr'){if(!canEditOKR()){showToast('관리자만 추가 가능',true);return;}const oid=btn.dataset.oid;const o=state.objectives.find(x=>x.id===oid);if(!o)return;const id=uid();const kr={id,title:'',target:100,current:0,unit:'%',ownerId:null,confidence:'mid',realityBlocker:'',realityHelp:'',initiatives:[]};o.keyResults.push(kr);render();const{error}=await sb.from('key_results').insert({id,objective_id:oid,title:'',target:kr.target,current:kr.current,unit:kr.unit,owner_id:null,confidence:'mid',sort_order:o.keyResults.length-1});if(error)showToast('저장 실패',true);else logChange('key_result',id,'create','','','(작성 중)','(작성 중)');setTimeout(()=>{const el=document.querySelector(`input[data-field="kr-title"][data-krid="${id}"]`);if(el)el.focus();},100);return;}
+  if(a==='add-kr'){if(!canEditOKR()){showToast('관리자만 추가 가능',true);return;}const oid=btn.dataset.oid;const o=state.objectives.find(x=>x.id===oid);if(!o)return;const id=uid();const kr={id,title:'',target:100,current:0,unit:'%',ownerId:null,confidence:'mid',realityBlocker:'',realityHelp:'',initiatives:[]};o.keyResults.push(kr);render();const{error}=await sb.from('key_results').insert({id,objective_id:oid,title:'',target:kr.target,current:kr.current,unit:kr.unit,owner_id:null,confidence:'mid',sort_order:o.keyResults.length-1});if(error)showToast('저장 실패',true);else logChange('key_result',id,'create','','','(작성 중)','(작성 중)');setTimeout(()=>{const el=document.querySelector(`input[data-field="kr-title"][data-krid="${id}"]`);if(el){el.focus();el.scrollIntoView({block:"center",behavior:"smooth"});}},100);return;}
   if(a==='del-kr'){if(!canEditOKR()){showToast('관리자만 삭제 가능',true);return;}if(!confirm('이 KR을 삭제할까요?'))return;const oid=btn.dataset.oid,krid=btn.dataset.krid;const o=state.objectives.find(x=>x.id===oid);const kr=o?.keyResults.find(k=>k.id===krid);if(o)o.keyResults=o.keyResults.filter(k=>k.id!==krid);render();await sb.from('key_results').delete().eq('id',krid);logChange('key_result',krid,'delete','',kr?.title||'','',kr?.title||'');return;}
   if(a==='add-init'){
     // v15 — 본인 담당 Initiative만 추가 (관리자는 누구든 추가)
@@ -3486,7 +3517,7 @@ document.addEventListener('click',async e=>{
     const krid=btn.dataset.krid;let kr=null;state.objectives.forEach(o=>o.keyResults.forEach(k=>{if(k.id===krid)kr=k;}));if(!kr)return;
     const id=uid();
     const init={id,title:'',ownerId:me.id,status:'todo',confidence:'mid',realityBlocker:'',realityHelp:''};
-    kr.initiatives.push(init);render();const{error}=await sb.from('initiatives').insert({id,kr_id:krid,title:'',status:'todo',owner_id:me.id,confidence:'mid',sort_order:kr.initiatives.length-1});if(error)showToast('저장 실패',true);else logChange('initiative',id,'create','','','(작성 중)','(작성 중)');setTimeout(()=>{const el=document.querySelector(`input[data-field="init-title"][data-iid="${id}"]`);if(el)el.focus();},100);return;
+    kr.initiatives.push(init);render();const{error}=await sb.from('initiatives').insert({id,kr_id:krid,title:'',status:'todo',owner_id:me.id,confidence:'mid',sort_order:kr.initiatives.length-1});if(error)showToast('저장 실패',true);else logChange('initiative',id,'create','','','(작성 중)','(작성 중)');setTimeout(()=>{const el=document.querySelector(`input[data-field="init-title"][data-iid="${id}"]`);if(el){el.focus();el.scrollIntoView({block:"center",behavior:"smooth"});}},100);return;
   }
   if(a==='del-init'){
     const krid=btn.dataset.krid,iid=btn.dataset.iid;let kr=null,init=null;state.objectives.forEach(o=>o.keyResults.forEach(k=>{if(k.id===krid){kr=k;init=k.initiatives.find(i=>i.id===iid);}}));
@@ -4112,7 +4143,7 @@ document.addEventListener('change',async e=>{
   const f=el.dataset.field;if(!f)return;
   if(f==='kr-owner'){const oid=el.dataset.oid;const kr=state.objectives.find(x=>x.id===oid)?.keyResults.find(k=>k.id===el.dataset.krid);if(kr){kr.ownerId=el.value||null;saveKR(oid,kr);}}
   else if(f==='obj-owner'){const o=state.objectives.find(x=>x.id===el.dataset.oid);if(o){o.ownerId=el.value||null;saveObjective(o);}}
-  else if(f==='init-status'){const krid=el.dataset.krid;let init=null;state.objectives.forEach(o=>o.keyResults.forEach(k=>{if(k.id===krid)init=k.initiatives.find(i=>i.id===el.dataset.iid);}));if(init){const old=init.status;init.status=el.value;saveInitiative(krid,init);logChange('initiative',init.id,'update','status',old,el.value,init.title);render();}}
+  else if(f==='init-status'){const krid=el.dataset.krid;let init=null;state.objectives.forEach(o=>o.keyResults.forEach(k=>{if(k.id===krid)init=k.initiatives.find(i=>i.id===el.dataset.iid);}));if(init){const old=init.status;init.status=el.value;saveInitiative(krid,init);logChange('initiative',init.id,'update','status',old,el.value,init.title);if(!rerenderInitRowOKR(krid,init.id))render();}}/* v110 — 부분 갱신 */
   else if(f==='init-owner'){const krid=el.dataset.krid;let init=null;state.objectives.forEach(o=>o.keyResults.forEach(k=>{if(k.id===krid)init=k.initiatives.find(i=>i.id===el.dataset.iid);}));if(init){init.ownerId=el.value||null;saveInitiative(krid,init);}}
   else if(f==='rt-frequency'){const r=state.routines.find(x=>x.id===el.dataset.rid);if(r){r.frequency=el.value;if(r.frequency==='weekdays'&&(!r.days_of_week||r.days_of_week.length===0))r.days_of_week=[1,2,3,4,5];saveRoutine(r);render();}}
   else if(f==='rt-owner'){const r=state.routines.find(x=>x.id===el.dataset.rid);if(r){r.owner_id=el.value||null;saveRoutine(r);}}
@@ -4120,12 +4151,67 @@ document.addEventListener('change',async e=>{
   else if(f==='init-sub-owner'){const iid=el.dataset.iid,stid=el.dataset.stid;const t=(state.initiativeTasks[iid]||[]).find(x=>x.id===stid);if(t){t.owner_id=el.value||null;saveInitiativeTask(t);}}
   // v71 — init-sub-title: blur/Enter 시 즉시 저장 (debounce 타이머 미실행 시 손실 방지)
   else if(f==='init-sub-title'){const iid=el.dataset.iid,stid=el.dataset.stid;const t=(state.initiativeTasks[iid]||[]).find(x=>x.id===stid);if(t){t.title=el.value;saveInitiativeTask(t);}}
-  else if(f==='init-sub-status'){const iid=el.dataset.iid,stid=el.dataset.stid;const t=(state.initiativeTasks[iid]||[]).find(x=>x.id===stid);if(t){t.status=el.value;saveInitiativeTask(t);scheduleRender();}}
+  else if(f==='init-sub-status'){const iid=el.dataset.iid,stid=el.dataset.stid;const t=(state.initiativeTasks[iid]||[]).find(x=>x.id===stid);if(t){t.status=el.value;saveInitiativeTask(t);let krid=null;state.objectives.forEach(o=>o.keyResults.forEach(k=>{if((k.initiatives||[]).some(i=>i.id===iid))krid=k.id;}));if(!(krid&&rerenderInitRowOKR(krid,iid)))scheduleRender();}}/* v110 — 부분 갱신 */
   else if(f==='member-color'){const m=state.members.find(x=>x.id===el.dataset.mid);if(m){m.color=el.value;saveMember(m);}}
   else if(f==='helper-member'){saveEntry(viewingDate,el.dataset.mid,'helper_member_id',el.value);}
 });
 
-function updateKRRowDom(oid,krid){const o=state.objectives.find(x=>x.id===oid);const kr=o?.keyResults.find(k=>k.id===krid);if(!kr)return;const p=pct(kr.current,kr.target);const col=progressColor(p);const row=document.querySelector(`[data-kr-id="${krid}"]`);if(!row)return;const pe=row.querySelector('[data-kr-pct]');if(pe){pe.textContent=p+'%';pe.style.color=col;}const bar=row.querySelector('[data-kr-bar]');if(bar){bar.style.width=p+'%';bar.style.background=col;}if(o){const avg=o.keyResults.length?Math.round(o.keyResults.reduce((s,k)=>s+pct(k.current,k.target),0)/o.keyResults.length):0;const oe=document.querySelector(`[data-obj-id="${oid}"]`);if(oe){const av=oe.querySelector('[data-obj-avg]');if(av){av.textContent=avg+'%';av.style.color=progressColor(avg);}}}}
+function updateKRRowDom(oid,krid){const o=state.objectives.find(x=>x.id===oid);const kr=o?.keyResults.find(k=>k.id===krid);if(!kr)return;const p=pct(kr.current,kr.target);const col=progressColor(p);
+  // v110 — 같은 KR 이 여러 화면(대시보드/OKR 탭)에 동시에 있을 수 있어 전부 갱신
+  document.querySelectorAll(`[data-kr-id="${krid}"]`).forEach(row=>{
+    const pe=row.querySelector('[data-kr-pct]');if(pe){pe.textContent=p+'%';pe.style.color=col;pe.classList.remove('kr-saved');void pe.offsetWidth;pe.classList.add('kr-saved');}
+    const bar=row.querySelector('[data-kr-bar]');if(bar){bar.style.width=p+'%';bar.style.background=col;}
+  });
+  if(o){const avg=o.keyResults.length?Math.round(o.keyResults.reduce((s,k)=>s+pct(k.current,k.target),0)/o.keyResults.length):0;document.querySelectorAll(`[data-obj-id="${oid}"]`).forEach(oe=>{const av=oe.querySelector('[data-obj-avg]');if(av){av.textContent=avg+'%';av.style.color=progressColor(avg);}});}}
+// v110 — OKR 탭 이니셔티브 행만 부분 재렌더 (상태 변경 시 전체 render() 의 스크롤 점프 제거)
+function rerenderInitRowOKR(krid,iid){
+  const el=document.querySelector('.init-row[data-init-id="'+iid+'"]');
+  if(!el)return false;
+  let init=null;state.objectives.forEach(o=>o.keyResults.forEach(k=>{if(k.id===krid){const f=(k.initiatives||[]).find(i=>i.id===iid);if(f)init=f;}}));
+  if(!init)return false;
+  try{const tmp=document.createElement('div');tmp.innerHTML=renderInitiative(krid,init);const nw=tmp.firstElementChild;if(nw){el.replaceWith(nw);return true;}}catch(_){}
+  return false;
+}
+// v110 — KR 진척바 클릭/드래그로 진척 입력 (일상 진척 갱신을 빠르고 직관적으로)
+(function(){
+  let dragWrap=null,dragOid=null,dragKrid=null,moved=false;
+  function findKR(krid){let oid=null,kr=null;state.objectives.forEach(o=>o.keyResults.forEach(k=>{if(k.id===krid){oid=o.id;kr=k;}}));return{oid,kr};}
+  function applyAt(wrap,clientX){
+    const {oid,kr}=findKR(dragKrid);if(!kr)return;
+    const rect=wrap.getBoundingClientRect();if(rect.width<=0)return;
+    let frac=(clientX-rect.left)/rect.width;frac=frac<0?0:frac>1?1:frac;
+    const target=Number(kr.target)||0;if(target<=0)return;
+    const nc=Math.round(frac*target);
+    if(nc===Number(kr.current))return;
+    kr.current=nc;
+    updateKRRowDom(oid,dragKrid);
+    document.querySelectorAll('input[data-field="kr-current"][data-krid="'+dragKrid+'"]').forEach(inp=>{if(document.activeElement!==inp)inp.value=nc;});
+  }
+  document.addEventListener('pointerdown',function(e){
+    const wrap=e.target.closest('[data-kr-bar-wrap]');if(!wrap)return;
+    if(typeof selfMember==='function'&&!selfMember())return; // 옵저버/미인증은 진척 입력 불가
+    const row=wrap.closest('[data-kr-id]');if(!row)return;
+    dragKrid=row.dataset.krId;const {oid}=findKR(dragKrid);if(!oid)return;
+    dragOid=oid;dragWrap=wrap;moved=false;wrap.classList.add('kr-bar-scrubbing');
+    try{wrap.setPointerCapture(e.pointerId);}catch(_){}
+    e.preventDefault();
+    applyAt(wrap,e.clientX);
+  });
+  document.addEventListener('pointermove',function(e){if(dragWrap){moved=true;applyAt(dragWrap,e.clientX);}});
+  function endDrag(){
+    if(!dragWrap)return;
+    dragWrap.classList.remove('kr-bar-scrubbing');
+    const {oid,kr}=findKR(dragKrid);
+    if(kr&&oid){if(typeof logChange==='function')logChange('key_result',dragKrid,'update','current','',kr.current,kr.title);saveKR(oid,kr);}
+    dragWrap=null;dragOid=null;dragKrid=null;
+  }
+  document.addEventListener('pointerup',endDrag);
+  document.addEventListener('pointercancel',endDrag);
+  // 진척바에서 시작한 드래그가 행 순서변경(HTML5 drag)을 트리거하지 않도록 차단
+  document.addEventListener('dragstart',function(e){if(e.target.closest&&e.target.closest('[data-kr-bar-wrap]'))e.preventDefault();},true);
+  // 진척 숫자 입력 포커스 시 전체 선택 → 빠른 덮어쓰기
+  document.addEventListener('focusin',function(e){const el=e.target;if(el.classList&&el.classList.contains('kr-num-input')){try{el.select();}catch(_){}}});
+})();
 function updateBrand(){const t=currentTeam();if(!t)return;const tt=document.querySelector('.brand-title');const s=document.querySelector('.brand-sub');if(tt&&tt.firstChild)tt.firstChild.textContent=`${t.name} OKR `;if(s)s.textContent=`${t.quarter} · 일일 스프린트`;const m=document.querySelector('.brand-mark');if(m){m.textContent=teamInitial(t.name);m.style.background=teamColor(t);}}
 
 async function init(){
