@@ -99,8 +99,18 @@ function checkDangerousRender(src) {
   return issues;
 }
 const dangerousRender = checkDangerousRender(code);
-if (dangerousRender.length === 0) console.log('✓ 5/5 no dangerous setTimeout(render) calls');
-else { console.log('⚠ 5/5 setTimeout(render) found (UI 깜빡임 위험):', JSON.stringify(dangerousRender.slice(0, 5), null, 2)); warnCount++; }
+if (dangerousRender.length === 0) console.log('✓ 5/6 no dangerous setTimeout(render) calls');
+else { console.log('⚠ 5/6 setTimeout(render) found (UI 깜빡임 위험):', JSON.stringify(dangerousRender.slice(0, 5), null, 2)); warnCount++; }
+
+// 6) 오늘 탭 이니셔티브/할일 가시성·트리 전수 테스트 (사라짐 버그 회귀 차단)
+try {
+  require('child_process').execSync('node .test-tasks.js', { cwd: __dirname, stdio: 'pipe' });
+  console.log('✓ 6/6 task visibility suite (203 cases)');
+} catch (e) {
+  const out = (e.stdout ? e.stdout.toString() : '') + (e.stderr ? e.stderr.toString() : '');
+  console.log('✗ 6/6 TASK VISIBILITY FAIL:\n' + out.split('\n').slice(-15).join('\n'));
+  pass = false;
+}
 
 console.log(pass ? `\n✅ PASS — 푸시 가능${warnCount > 0 ? ' (경고 ' + warnCount + '건)' : ''}` : '\n❌ FAIL — 푸시 전 수정 필요');
 process.exit(pass ? 0 : 1);

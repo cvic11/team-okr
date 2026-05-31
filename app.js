@@ -1268,26 +1268,18 @@ function setupRealtime(){
 function onInitTaskChange(p){
   const r=p.new||p.old;if(!r)return;
   if(isLocal('initiative_tasks',r.id))return;
-  if(p.eventType==='DELETE'){
-    Object.keys(state.initiativeTasks).forEach(iid=>{
-      state.initiativeTasks[iid]=(state.initiativeTasks[iid]||[]).filter(x=>x.id!==r.id);
-    });
-  }else{
+  // v109 — 재배치(initiative_id 변경) 시 중복 방지: 먼저 모든 init 에서 제거 후 재삽입
+  Object.keys(state.initiativeTasks).forEach(iid=>{
+    state.initiativeTasks[iid]=(state.initiativeTasks[iid]||[]).filter(x=>x.id!==r.id);
+  });
+  if(p.eventType!=='DELETE'){
     const iid=r.initiative_id;
     if(!state.initiativeTasks[iid])state.initiativeTasks[iid]=[];
-    const i=state.initiativeTasks[iid].findIndex(x=>x.id===r.id);
-    if(i>=0)state.initiativeTasks[iid][i]={...r};
-    else state.initiativeTasks[iid].push({...r});
+    state.initiativeTasks[iid].push({...r});
     state.initiativeTasks[iid].sort((a,b)=>(a.sort_order||0)-(b.sort_order||0));
   }
-  // v67/v72 — 타이핑 중 re-render 방지: blur 후 렌더, 리스너 중복 방지
-  if(currentView==='okr'){
-    const a=document.activeElement;
-    if(a&&(a.tagName==='INPUT'||a.tagName==='TEXTAREA')&&!a._blurRenderPending){
-      a._blurRenderPending=true;
-      a.addEventListener('blur',()=>{a._blurRenderPending=false;if(currentView==='okr')scheduleRender();},{once:true});
-    }else if(!a||a.tagName==='BODY'){scheduleRender();}
-  }
+  // v109 — 할일 변경은 모든 관련 탭에 반영 (scheduleRender 가 입력 중이면 자동 지연)
+  if(['today','okr','wbs','dashboard'].includes(currentView))scheduleRender();
 }
 async function saveInitiativeTask(it){debouncedSave(`init-task-${it.id}`,async()=>{markLocal('initiative_tasks',it.id);const{error}=await sb.from('initiative_tasks').upsert({id:it.id,initiative_id:it.initiative_id,title:it.title,status:it.status||'todo',owner_id:it.owner_id||null,start_date:it.start_date||null,due_date:it.due_date||null,sort_order:it.sort_order||0,updated_at:new Date().toISOString()});if(error){
   // v46 — 테이블 누락 에러는 한 번만 명확하게 안내
@@ -1312,7 +1304,16 @@ function onKRChange(p){const r=p.new||p.old;if(isLocal('key_results',r.id))retur
     showToast(`⚠ ${who?who.name:'다른 사용자'}가 이 KR 진척을 ${oldCur}→${kr.current}로 변경했습니다. 본인 입력 충돌 가능`,true);
   }
 }scheduleRender();}
-function onInitChange(p){const r=p.new||p.old;if(isLocal('initiatives',r.id))return;let kr=null;state.objectives.forEach(o=>o.keyResults.forEach(k=>{if(k.id===r.kr_id)kr=k;}));if(!kr){state.objectives.forEach(o=>o.keyResults.forEach(k=>{k.initiatives=k.initiatives.filter(i=>i.id!==r.id);}));scheduleRender();return;}if(p.eventType==='DELETE'){kr.initiatives=kr.initiatives.filter(i=>i.id!==r.id);}else{const init={id:r.id,title:r.title,ownerId:r.owner_id,status:r.status||'todo',dueDate:r.due_date,confidence:r.confidence||'mid',realityBlocker:r.reality_blocker||'',realityHelp:r.reality_help||''};const i=kr.initiatives.findIndex(x=>x.id===r.id);if(i>=0)kr.initiatives[i]=init;else kr.initiatives.push(init);}scheduleRender();}
+function onInitChange(p){
+  const r=p.new||p.old;if(isLocal('initiatives',r.id))return;
+  // v109 — 재배치(kr_id 변경)/삭제 시 중복 방지: 먼저 모든 KR 에서 제거
+  state.objectives.forEach(o=>o.keyResults.forEach(k=>{k.initiatives=k.initiatives.filter(i=>i.id!==r.id);}));
+  if(p.eventType!=='DELETE'){
+    let kr=null;state.objectives.forEach(o=>o.keyResults.forEach(k=>{if(k.id===r.kr_id)kr=k;}));
+    if(kr){kr.initiatives.push({id:r.id,title:r.title,ownerId:r.owner_id,status:r.status||'todo',dueDate:r.due_date,startDate:r.start_date||null,confidence:r.confidence||'mid',realityBlocker:r.reality_blocker||'',realityHelp:r.reality_help||''});}
+  }
+  scheduleRender();
+}
 function onStandupChange(p){const r=p.new||p.old;if(!r)return;if(r.team_id&&r.team_id!==state.currentTeamId)return;if(isLocal('standups',`${r.team_id}-${r.date}`))return;ensureStandup(r.date);if(p.eventType!=='DELETE')state.standups[r.date].headline=r.headline||'';if(currentView==='today'&&r.date===viewingDate){const ta=document.querySelector(`textarea[data-field="headline"][data-date="${viewingDate}"]`);if(ta&&document.activeElement!==ta)ta.value=r.headline||'';}}
 function onEntryChange(p){const r=p.new||p.old;if(!r)return;if(r.team_id&&r.team_id!==state.currentTeamId)return;if(isLocal('standup_entries',`${r.team_id}-${r.date}-${r.member_id}`))return;ensureStandup(r.date);if(p.eventType==='DELETE'){delete state.standups[r.date].entries[r.member_id];}else{state.standups[r.date].entries[r.member_id]={yesterday:r.yesterday||'',today:r.today||'',blockers:r.blockers||'',helper_member_id:r.helper_member_id||'',helper_name:r.helper_name||'',support_type:r.support_type||'',support_detail:r.support_detail||''};}if(currentView==='today'&&r.date===viewingDate){['yesterday','today','blockers'].forEach(f=>{const ta=document.querySelector(`textarea[data-field="standup"][data-mid="${r.member_id}"][data-fieldname="${f}"][data-date="${viewingDate}"]`);if(ta&&document.activeElement!==ta)ta.value=(state.standups[r.date].entries[r.member_id]||{})[f]||'';});const c=document.querySelector(`[data-member-card="${r.member_id}"]`);if(c){c.classList.remove('remote-edit');void c.offsetWidth;c.classList.add('remote-edit');setTimeout(()=>c.classList.remove('remote-edit'),1500);}updateBlockerUI(r.date,r.member_id);}}
 function onRoutineChange(p){const r=p.new||p.old;if(r.team_id&&r.team_id!==state.currentTeamId)return;if(isLocal('routines',r.id))return;if(p.eventType==='DELETE'){state.routines=state.routines.filter(x=>x.id!==r.id);}else{const i=state.routines.findIndex(x=>x.id===r.id);if(i>=0)state.routines[i]={...r};else state.routines.push({...r});}scheduleRender();}
@@ -4231,8 +4232,10 @@ init();
   }
   function collectAllKR(){
     // v101 — ownerId 등 전체 필드 유지 (v86/renderKRTree 의 owned-init 필터가 동작하려면 필수)
+    // v109 — 제목은 원본 그대로 보존 (빈 제목을 placeholder 로 치환하면 가시성 판단(hasTitle)이 오작동)
+    //        표시용 placeholder 는 각 렌더 함수에서 (title||'(제목 없는 …)') 로 처리.
     const list=[];const st=getState();if(!st||!st.objectives)return list;
-    st.objectives.forEach(o=>{(o.keyResults||[]).forEach(k=>{list.push({id:k.id,title:k.title||'(제목 없는 KR)',objTitle:o.title||'(이름 없는 Objective)',ownerId:k.ownerId,startDate:k.startDate,dueDate:k.dueDate,initiatives:(k.initiatives||[]).map(i=>({id:i.id,title:i.title||'(제목 없는 Initiative)',krId:k.id,status:i.status||'todo',ownerId:i.ownerId,startDate:i.startDate,dueDate:i.dueDate,confidence:i.confidence}))});});});
+    st.objectives.forEach(o=>{(o.keyResults||[]).forEach(k=>{list.push({id:k.id,title:k.title||'',objTitle:o.title||'(이름 없는 Objective)',ownerId:k.ownerId,startDate:k.startDate,dueDate:k.dueDate,initiatives:(k.initiatives||[]).map(i=>({id:i.id,title:i.title||'',krId:k.id,status:i.status||'todo',ownerId:i.ownerId,startDate:i.startDate,dueDate:i.dueDate,confidence:i.confidence}))});});});
     return list;
   }
   // v15 — Initiative 포함 평탄화된 옵션 목록 (값 prefix로 KR/Init 구분)
@@ -4279,11 +4282,15 @@ init();
     if(s.startsWith('init:'))return{type:'init',id:s.slice(5)};
     return{type:'kr',id:s}; // 레거시 호환
   }
-  function buildKROptions(selectedId,allKR){
+  // v109 — mode: 'task'(할일→이니셔티브 이동: init만 선택 가능), 'group'(이니셔티브→KR 이동: KR만 선택 가능), 'all'(레거시)
+  function buildKROptions(selectedId,allKR,mode){
+    mode=mode||'all';
+    const krDisabled=mode==='task';     // 할일 이동 시 KR 행은 헤더(선택 불가)
+    const initDisabled=mode==='group';  // 이니셔티브/그룹 이동 시 init 행은 맥락용(선택 불가)
     const sel=normalizeSel(selectedId);
     // v82 — 운영(KR 무관) 옵션 제거. 모든 할일은 이니셔티브에 속함.
     let html='';
-    if(!sel.id)html+='<option value="" disabled selected>이니셔티브 선택…</option>';
+    if(!sel.id)html+='<option value="" disabled selected>'+(mode==='group'?'KR 선택…':'이니셔티브 선택…')+'</option>';
     if(allKR.length===0){
       const st=getState();let msg='— 데이터 로딩 중 —';
       if(!st)msg='⚠ state 접근 불가';
@@ -4299,18 +4306,19 @@ init();
       const label=ot.length>45?ot.slice(0,45)+'…':ot;
       html+='<optgroup label="'+escapeHtml(label)+'">';
       groups[ot].forEach(k=>{
-        const title=k.title.length>40?k.title.slice(0,40)+'…':k.title;
+        const ktitle=k.title||'(제목 없는 KR)'; // v109 — collectAllKR 빈 제목 보존 → 표시용 fallback
+        const title=ktitle.length>40?ktitle.slice(0,40)+'…':ktitle;
         const krVal='kr:'+k.id;
         const isSel=sel.type==='kr'&&sel.id===k.id;
         // v19 — 헤더 아이콘(h.icon)에서 📌 표시하므로 옵션 텍스트는 이모지 제거 (중복 방지)
-        html+='<option value="'+escapeHtml(krVal)+'"'+(isSel?' selected':'')+'>KR · '+escapeHtml(title)+'</option>';
+        html+='<option value="'+escapeHtml(krVal)+'"'+(isSel?' selected':'')+(krDisabled?' disabled':'')+'>KR · '+escapeHtml(title)+'</option>';
         // Initiative들도 같은 optgroup 안에 자식으로 표시
-        (k.initiatives||[]).forEach(i=>{
+        (k.initiatives||[]).filter(i=>i.title&&i.title.trim()).forEach(i=>{
           const itTitle=i.title.length>36?i.title.slice(0,36)+'…':i.title;
           const initVal='init:'+i.id;
           const isInitSel=sel.type==='init'&&sel.id===i.id;
           // v19 — 헤더 아이콘(h.icon)에서 ⚡ 표시하므로 옵션 텍스트는 이모지 제거 (중복 방지). 들여쓰기 ↳ 유지
-          html+='<option value="'+escapeHtml(initVal)+'"'+(isInitSel?' selected':'')+'>  ↳ '+escapeHtml(itTitle)+'</option>';
+          html+='<option value="'+escapeHtml(initVal)+'"'+(isInitSel?' selected':'')+(initDisabled?' disabled':'')+'>  ↳ '+escapeHtml(itTitle)+'</option>';
         });
       });
       html+='</optgroup>';
@@ -4466,7 +4474,7 @@ init();
     // v77 — 카테고리 변경 selector (현재 init: 선택된 상태)
     const allKR=collectAllKR();
     const currentVal='init:'+(t._iid||'');
-    const moveSelect=ed?'<span class="krl-task-move" title="다른 KR/Initiative/운영으로 이동" style="display:inline-flex;align-items:center;flex-shrink:0;margin-top:5px;font-size:10px;color:var(--text-soft);position:relative;">▾<select data-krl-field="init-task-kr" data-mid="'+escapeHtml(mid)+'" data-kind="'+escapeHtml(kind)+'" data-tid="'+escapeHtml(t.id)+'" data-init-id="'+escapeHtml(t._iid||'')+'" style="position:absolute;inset:0;opacity:0;cursor:pointer;">'+buildKROptions(currentVal,allKR)+'</select></span>':'';
+    const moveSelect=ed?'<span class="krl-task-move" title="이 할일을 다른 이니셔티브로 이동" style="display:inline-flex;align-items:center;flex-shrink:0;margin-top:5px;font-size:10px;color:var(--text-soft);position:relative;">▾<select data-krl-field="init-task-kr" data-mid="'+escapeHtml(mid)+'" data-kind="'+escapeHtml(kind)+'" data-tid="'+escapeHtml(t.id)+'" data-init-id="'+escapeHtml(t._iid||'')+'" style="position:absolute;inset:0;opacity:0;cursor:pointer;">'+buildKROptions(currentVal,allKR,'task')+'</select></span>':'';
     // v105 — From-To 날짜 입력 (시작일, 마감일) — OKR 탭과 동일 개념
     const startVal=t._startDate||'';
     const dueVal=t._dueDate||'';
@@ -4513,21 +4521,27 @@ init();
     const dis=editable?'':' disabled';
     const tip=editable?'':' title="본인이 작성한 항목만 수정할 수 있습니다"';
     const tree=buildTaskTree(tasks);
-    // v86/v102 — kind='today'에서 KR 강제 표시는 "방금 만든 init"만 (집중도 유지 + 깜빡임 방지)
-    // 빈 owned init을 모두 띄우면 화면이 매우 산만해지고 깜빡임 원인이 됨
+    // v109 — kind='today': 본인(mid) 담당 이니셔티브는 task가 없어도 항상 표시
+    //   조건: 본인 담당 && (제목 있고 미완료 || 방금 생성) → 제목 입력 후에도 절대 사라지지 않음 (핵심 버그 수정)
     if(kind==='today'){
       if(!window._krlJustCreatedInits)window._krlJustCreatedInits=new Set();
       const justSet=window._krlJustCreatedInits;
-      if(justSet.size>0){
-        allKR.forEach(krObj=>{
-          const inits=krObj.initiatives||[];
-          const hasJustCreated=inits.some(init=>justSet.has(init.id));
-          if(hasJustCreated&&!tree.krGroups[krObj.id]){
-            tree.krGroups[krObj.id]={krId:krObj.id,kr:krObj,directTasks:[],initGroups:{},initOrder:[]};
-            tree.krOrder.push(krObj.id);
-          }
-        });
-      }
+      const isVisibleOwnedInit=(init)=>{
+        const owners=(typeof getInitOwnerIds==='function')?getInitOwnerIds(init):(init.ownerId?String(init.ownerId).split(','):[]);
+        const owned=init.ownerId==='__team_all__'||owners.includes(mid);
+        if(!owned)return false;
+        const hasTitle=!!(init.title&&init.title.trim());
+        return justSet.has(init.id)||(hasTitle&&init.status!=='done');
+      };
+      allKR.forEach(krObj=>{
+        const inits=krObj.initiatives||[];
+        if(inits.some(isVisibleOwnedInit)&&!tree.krGroups[krObj.id]){
+          tree.krGroups[krObj.id]={krId:krObj.id,kr:krObj,directTasks:[],initGroups:{},initOrder:[]};
+          tree.krOrder.push(krObj.id);
+        }
+      });
+      // 트리에서 본인 visible-init 목록을 renderKRTree가 쓸 수 있게 저장
+      renderTaskListBlock._isVisibleOwnedInit=isVisibleOwnedInit;
     }
     function renderInitSub(ig,krId){
       const init=ig.init;
@@ -4543,8 +4557,9 @@ init();
       // v97 — 빈 제목 init은 placeholder + 강조 테두리로 표시 (값을 비워두어 바로 타이핑 가능)
       const emptyStyle=hasTitleSub?'':' style="background:#FFF7E0;border:2px dashed #E5B340;font-weight:700;color:#3A2670;animation:krl-pulse 1.4s ease-in-out infinite;"';
       const titleInput='<input class="krl-group-title-input" data-field="init-title" data-krid="'+escapeHtml(krId)+'" data-iid="'+escapeHtml(init.id)+'" value="'+escapeHtml(title)+'" placeholder="새 이니셔티브 제목을 입력하세요…"'+titleRo+titleTip+emptyStyle+' />';
+      // v109 — 이니셔티브의 상위 KR 변경 (할일이 아니라 이니셔티브 자체를 이동). KR만 선택 가능.
       const moveBtn=editable
-        ? '<span class="krl-group-move-btn" title="다른 KR/Init으로 그룹 이동">▾<select data-krl-field="group-kr" data-mid="'+mid+'" data-kind="'+kind+'" data-groupkey="'+escapeHtml(groupKey)+'">'+buildKROptions(groupKey,allKR)+'</select></span>'
+        ? '<span class="krl-group-move-btn" title="이 이니셔티브를 다른 KR로 이동">▾<select data-krl-field="group-kr" data-mid="'+mid+'" data-kind="'+kind+'" data-groupkey="'+escapeHtml(groupKey)+'">'+buildKROptions('kr:'+krId,allKR,'group')+'</select></span>'
         : '';
       // v82 — Initiative ✕ 삭제 버튼 (실제 init이고 편집 가능한 경우만)
       const isReal=!init.isPseudo;
@@ -4590,13 +4605,14 @@ init();
       const kr=g.kr;
       const title=kr?(kr.title||'(제목 없는 KR)'):'(삭제된 KR)';
       const bg='#EEEAFE',fg='#6241F5',border='#D9CFFB';
-      // v102 — 방금 만든(justCreated) init만 빈 상태로 표시. 그 외 빈 owned init은 숨김 (깜빡임/혼잡 방지)
+      // v109 — 본인 담당 init은 task 없어도 표시 (제목 있고 미완료 || 방금 생성). 사라짐 버그 근본 수정.
       if(!window._krlJustCreatedInits)window._krlJustCreatedInits=new Set();
       const allKRInits=(kr&&kr.initiatives)||[];
+      const visFn=(kind==='today'&&renderTaskListBlock._isVisibleOwnedInit)?renderTaskListBlock._isVisibleOwnedInit:null;
       allKRInits.forEach(init=>{
         if(g.initGroups[init.id])return; // 이미 task 있는 init
-        const justCreated=window._krlJustCreatedInits.has(init.id);
-        if(justCreated){
+        const show=visFn?visFn(init):window._krlJustCreatedInits.has(init.id);
+        if(show){
           g.initGroups[init.id]={init,tasks:[]};
           g.initOrder.push(init.id);
         }
@@ -4617,7 +4633,7 @@ init();
       const titleTip=titleEditable?' title="클릭하여 KR 제목 편집"':' title="관리자만 수정 가능"';
       const titleInput='<span style="flex-shrink:0;">KR · </span><input class="krl-group-title-input" data-field="kr-title" data-oid="'+escapeHtml(krOid||'')+'" data-krid="'+escapeHtml(g.krId)+'" value="'+escapeHtml(title)+'"'+titleRo+titleTip+' />';
       const moveBtn=editable
-        ? '<span class="krl-group-move-btn" title="이 KR 직속 이니셔티브들을 다른 KR로 이동">▾<select data-krl-field="group-kr" data-mid="'+mid+'" data-kind="'+kind+'" data-groupkey="'+escapeHtml(groupKey)+'">'+buildKROptions(groupKey,allKR)+'</select></span>'
+        ? '<span class="krl-group-move-btn" title="이 KR 직속 이니셔티브들을 다른 KR로 이동">▾<select data-krl-field="group-kr" data-mid="'+mid+'" data-kind="'+kind+'" data-groupkey="'+escapeHtml(groupKey)+'">'+buildKROptions(groupKey,allKR,'group')+'</select></span>'
         : '';
       const head='<div class="krl-group-head" style="background:'+bg+';color:'+fg+';padding:6px 10px;font-size:11.5px;font-weight:700;display:flex;align-items:center;gap:6px;">'+
         '<span style="flex-shrink:0;">📌</span>'+
@@ -4890,9 +4906,20 @@ init();
     console.log('[KR-Link v4] 패치 적용 완료');
   }
   applyPatches();
+  // v109 — select 의 용도에 따른 mode 결정 (재생성 시 동일 mode 유지 → 선택 제약 보존)
+  function _krlSelMode(sel){
+    const f=sel.dataset.krlField;
+    if(f==='init-task-kr')return 'task';
+    if(f==='group-kr'){
+      const gk=sel.dataset.groupkey||'';
+      if(gk.startsWith('task:'))return 'all'; // 레거시 directTask 마이그레이션
+      return 'group'; // 이니셔티브/KR 그룹 이동 → KR만 선택
+    }
+    return 'all';
+  }
   // 드롭다운 열리는 순간 최신 state로 옵션 재생성 (task-kr 구버전 + group-kr 신버전)
-  document.addEventListener('mousedown',function(e){const sel=e.target.closest('select[data-krl-field="task-kr"],select[data-krl-field="group-kr"],select[data-krl-field="init-task-kr"]');if(!sel)return;const cur=sel.value;sel.innerHTML=buildKROptions(cur,collectAllKR());},true);
-  document.addEventListener('focusin',function(e){const sel=e.target;if(sel.tagName!=='SELECT'||(sel.dataset.krlField!=='task-kr'&&sel.dataset.krlField!=='group-kr'&&sel.dataset.krlField!=='init-task-kr'))return;sel.innerHTML=buildKROptions(sel.value,collectAllKR());},true);
+  document.addEventListener('mousedown',function(e){const sel=e.target.closest('select[data-krl-field="task-kr"],select[data-krl-field="group-kr"],select[data-krl-field="init-task-kr"]');if(!sel)return;const cur=sel.value;sel.innerHTML=buildKROptions(cur,collectAllKR(),_krlSelMode(sel));},true);
+  document.addEventListener('focusin',function(e){const sel=e.target;if(sel.tagName!=='SELECT'||(sel.dataset.krlField!=='task-kr'&&sel.dataset.krlField!=='group-kr'&&sel.dataset.krlField!=='init-task-kr'))return;sel.innerHTML=buildKROptions(sel.value,collectAllKR(),_krlSelMode(sel));},true);
   // v18 — 그룹 헤더 어디를 눌러도 KR/Initiative 드롭다운 열기 (운영 그룹 = renderIndividual용)
   // v34 — KR/Init 그룹은 제목 input + 별도 ▾ 이동 칩으로 분리되어 이 핸들러 적용 안 됨
   document.addEventListener('click',function(e){
@@ -4902,7 +4929,7 @@ init();
     if(e.target.closest('[data-act]'))return; // + 버튼 등 다른 액션은 자기 핸들러로
     const sel=head.querySelector('select[data-krl-field="group-kr"]');
     if(!sel||sel.disabled)return;
-    try{sel.innerHTML=buildKROptions(sel.value,collectAllKR());}catch(_){}
+    try{sel.innerHTML=buildKROptions(sel.value,collectAllKR(),_krlSelMode(sel));}catch(_){}
     if(typeof sel.showPicker==='function'){
       try{sel.focus();sel.showPicker();return;}catch(_){}
     }
@@ -5275,34 +5302,27 @@ init();
       const mid=el.dataset.mid,kind=el.dataset.kind,oldKey=el.dataset.groupkey;
       const data=getMemberTasks(mid,kind);
       const sel=parseKRSelectValue(el.value||'');
-      // v80 — init: 헤더의 ▾로 init 그룹 전체 이동: DB 태스크들도 함께 처리
-      if(oldKey&&oldKey.startsWith('init:')&&kind==='today'){
-        const oldInitId=oldKey.slice(5);
-        const dbTasks=(state.initiativeTasks[oldInitId]||[]).filter(t=>!t.owner_id||t.owner_id===mid);
-        if(dbTasks.length>0){
-          const realInitIds=_realInitIdsForChange();
-          if(sel.i&&realInitIds.has(sel.i)&&sel.i!==oldInitId){
-            // init A의 본인 DB 태스크들을 init B로 이동
-            if(!state.initiativeTasks[sel.i])state.initiativeTasks[sel.i]=[];
-            dbTasks.forEach(t=>{
-              state.initiativeTasks[oldInitId]=state.initiativeTasks[oldInitId].filter(x=>x.id!==t.id);
-              t.initiative_id=sel.i;
-              state.initiativeTasks[sel.i].push(t);
-              if(typeof saveInitiativeTask==='function')saveInitiativeTask(t);
-            });
-            rerenderTaskBlock(mid,kind);autoRecalcKRFromInitTasks();return;
-          }
-          if(!sel.i){
-            // init A의 본인 DB 태스크들을 JSON으로 (KR pseudo or 운영)
-            dbTasks.forEach(t=>{
-              state.initiativeTasks[oldInitId]=state.initiativeTasks[oldInitId].filter(x=>x.id!==t.id);
-              if(typeof deleteInitiativeTask==='function')deleteInitiativeTask(t.id);
-              data.tasks.push({id:newTaskId(),t:t.title||'',k:sel.k||'',i:'',d:t.status==='done'});
-            });
-            updateMemberTasks(mid,kind,data.legacy,data.tasks);
-            rerenderTaskBlock(mid,kind);autoRecalcKRFromInitTasks();return;
+      // v109 — init: 헤더의 ▾ = 이니셔티브 자체를 다른 KR로 이동 (할일이 아니라 init 의 상위 KR 변경)
+      //   초기화 행위가 아니라 부모 재연결. 하위 DB 할일은 initiative_id 유지 → 자동으로 따라감.
+      if(oldKey&&oldKey.startsWith('init:')){
+        const movingInitId=oldKey.slice(5);
+        let curKr=null,initObj=null;
+        (state.objectives||[]).forEach(o=>(o.keyResults||[]).forEach(k=>{const f=(k.initiatives||[]).find(i=>i.id===movingInitId);if(f){curKr=k;initObj=f;}}));
+        if(!initObj){rerenderTaskBlock(mid,kind);return;}
+        // 목표 KR 결정: sel.k (KR 선택) 우선, init 선택 시 그 init 의 부모 KR
+        const targetKrId=sel.k||'';
+        if(targetKrId&&(!curKr||targetKrId!==curKr.id)){
+          let targetKr=null;
+          (state.objectives||[]).forEach(o=>(o.keyResults||[]).forEach(k=>{if(k.id===targetKrId)targetKr=k;}));
+          if(targetKr){
+            if(curKr)curKr.initiatives=(curKr.initiatives||[]).filter(i=>i.id!==movingInitId);
+            if(!targetKr.initiatives)targetKr.initiatives=[];
+            targetKr.initiatives.push(initObj);
+            if(typeof saveInitiative==='function')saveInitiative(targetKrId,initObj);
+            if(typeof showToast==='function')showToast('이니셔티브를 다른 KR로 이동했습니다');
           }
         }
+        rerenderTaskBlock(mid,kind);autoRecalcKRFromInitTasks();return;
       }
       // v78 — oldKey가 'task:xxx'면 task ID로 직접 매칭 (directTask selector도 지원)
       const matchByOldKey=(t)=>{
@@ -5350,31 +5370,27 @@ init();
       }
       return;
     }
-    // v77 — initiative_task의 카테고리 변경 (DB 행을 KR/Init/운영으로 이동)
+    // v109 — initiative_task 이동: 다른 "실제 이니셔티브" 로만 이동 가능 (할일은 항상 이니셔티브 하위, DB 동기화 유지)
     if(el.dataset.krlField==='init-task-kr'){
       const mid=el.dataset.mid,kind=el.dataset.kind,tid=el.dataset.tid,oldInitId=el.dataset.initId;
       const sel=parseKRSelectValue(el.value||'');
       const arr=state.initiativeTasks[oldInitId]||[];
-      const t=arr.find(x=>x.id===tid);if(!t)return;
+      const t=arr.find(x=>x.id===tid);if(!t){rerenderTaskBlock(mid,kind);return;}
       const realInitIds=_realInitIdsForChange();
       if(sel.i&&realInitIds.has(sel.i)){
-        // 다른 실제 initiative로 이동 → DB의 initiative_id만 변경
         if(sel.i===oldInitId){rerenderTaskBlock(mid,kind);return;}
         state.initiativeTasks[oldInitId]=arr.filter(x=>x.id!==tid);
         if(!state.initiativeTasks[sel.i])state.initiativeTasks[sel.i]=[];
         t.initiative_id=sel.i;
         state.initiativeTasks[sel.i].push(t);
         if(typeof saveInitiativeTask==='function')saveInitiativeTask(t);
+        rerenderTaskBlock(mid,kind);
+        autoRecalcKRFromInitTasks();
       }else{
-        // KR pseudo or 운영 → DB 삭제 + JSON으로 역마이그레이션
-        state.initiativeTasks[oldInitId]=arr.filter(x=>x.id!==tid);
-        if(typeof deleteInitiativeTask==='function')deleteInitiativeTask(tid);
-        const data=getMemberTasks(mid,kind);
-        data.tasks.push({id:newTaskId(),t:t.title||'',k:sel.k||'',i:'',d:t.status==='done'});
-        updateMemberTasks(mid,kind,data.legacy,data.tasks);
+        // KR만 선택 등 잘못된 선택 → 변경 없이 복원 (할일은 이니셔티브 하위로만)
+        if(typeof showToast==='function')showToast('할일은 이니셔티브 하위로만 이동할 수 있습니다',true);
+        rerenderTaskBlock(mid,kind);
       }
-      rerenderTaskBlock(mid,kind);
-      autoRecalcKRFromInitTasks();
       return;
     }
     // v29 — 할일 행 안의 KR/Init 변경 chip (개별 task 재배치)
