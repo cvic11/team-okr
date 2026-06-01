@@ -623,7 +623,13 @@ function setSelfId(id){if(id==='__observer__'){localStorage.setItem(SELF_KEY,id)
 function selfMember(){if(!state.selfId||state.selfId==='__observer__')return null;return state.members.find(m=>m.id===state.selfId)||null;}
 function isObserver(){return state.selfId==='__observer__';}
 // v11 — 본인만 본인이 작성한 것 수정 가능
-function canEditAs(memberId){const s=selfMember();if(!s||!memberId)return false;return s.id===memberId||!!s.isAdmin;}
+// v111 — 권한은 selfId(인증) 기준. members 배열 로딩/실시간 교체 타이밍과 무관하게 본인 카드는 항상 편집 가능.
+function canEditAs(memberId){
+  if(!memberId)return false;
+  if(!state.selfId||state.selfId==='__observer__')return false; // 옵저버/미인증 불가
+  if(state.selfId===memberId)return true;                       // 본인 카드는 무조건 가능
+  const s=selfMember();return !!(s&&s.isAdmin);                 // 타인 카드는 관리자만
+}
 // v16 — 세션 추적 (로그인 시작·하트비트)
 let _currentSessionId=null,_heartbeatTimer=null;
 async function startMemberSession(){
@@ -683,7 +689,8 @@ function startObserverLogoutWatcher(){
   },30000);
 }
 // v81 — 모든 팀원이 OKR 수정 가능 (옵저버는 DB 저장 우회되어 자동으로 view-only)
-function canEditOKR(){return !!selfMember();}
+// v111 — 인증된 일반 멤버(비옵저버)면 편집 가능 (members 로딩 타이밍 의존 제거)
+function canEditOKR(){return !!state.selfId&&state.selfId!=='__observer__';}
 // v16 — Initiative 다중 담당자 + 팀 전원 지원
 function getInitOwnerIds(init){
   if(!init)return[];
@@ -705,7 +712,7 @@ function initOwnersDisplay(init){
 }
 // v81 — 모든 팀원이 Initiative 수정 가능
 function canEditInit(init){
-  return !!selfMember();
+  return !!state.selfId&&state.selfId!=='__observer__'; // v111 — 인증 멤버면 가능
 }
 // 옵저버는 모든 DB 쓰기 우회 — 화면에서만 동작
 function isObserverMode(){return selfIsObserver();}
@@ -1291,8 +1298,18 @@ function onInitTaskChange(p){
     state.initiativeTasks[iid].push({...r});
     state.initiativeTasks[iid].sort((a,b)=>(a.sort_order||0)-(b.sort_order||0));
   }
-  // v109 — 할일 변경은 모든 관련 탭에 반영 (scheduleRender 가 입력 중이면 자동 지연)
-  if(['today','okr','wbs','dashboard'].includes(currentView))scheduleRender();
+  // v111 — '오늘' 탭에서는 전체 render() 대신 할일 블록만 부분 갱신 (아침 동시 편집 깜빡임 차단)
+  if(currentView==='today'){_scheduleTodayBlocksRerender();}
+  else if(['okr','wbs','dashboard'].includes(currentView))scheduleRender();
+}
+// v111 — 다발성 echo 를 150ms 로 합쳐 today 블록 부분 갱신 (입력 중 카드는 자동 보존)
+let _todayBlocksTimer=null;
+function _scheduleTodayBlocksRerender(){
+  if(_todayBlocksTimer)return;
+  _todayBlocksTimer=setTimeout(()=>{
+    _todayBlocksTimer=null;
+    if(currentView==='today'&&typeof window.__rerenderTodayTaskBlocks==='function')window.__rerenderTodayTaskBlocks();
+  },150);
 }
 async function saveInitiativeTask(it){debouncedSave(`init-task-${it.id}`,async()=>{markLocal('initiative_tasks',it.id);const{error}=await sb.from('initiative_tasks').upsert({id:it.id,initiative_id:it.initiative_id,title:it.title,status:it.status||'todo',owner_id:it.owner_id||null,start_date:it.start_date||null,due_date:it.due_date||null,sort_order:it.sort_order||0,updated_at:new Date().toISOString()});if(error){
   // v46 — 테이블 누락 에러는 한 번만 명확하게 안내
@@ -1307,7 +1324,10 @@ async function saveInitiativeTask(it){debouncedSave(`init-task-${it.id}`,async()
 async function deleteInitiativeTask(id){const{error}=await sb.from('initiative_tasks').delete().eq('id',id);if(error)showToast('삭제 실패',true);}
 function onIDLChange(p){const r=p.new||p.old;if(!r)return;if(isLocal('initiative_daily_logs',`${r.initiative_id}-${r.member_id}-${r.date}`))return;if(!state.initiativeDailyLogs[r.date])state.initiativeDailyLogs[r.date]={};if(!state.initiativeDailyLogs[r.date][r.member_id])state.initiativeDailyLogs[r.date][r.member_id]={};if(p.eventType==='DELETE'){delete state.initiativeDailyLogs[r.date][r.member_id][r.initiative_id];}else{state.initiativeDailyLogs[r.date][r.member_id][r.initiative_id]={checked:!!r.checked,note:r.note||''};}if(currentView==='today'&&r.date===viewingDate)scheduleRender();}
 function onTeamsChange(p){const r=p.new||p.old;if(!r)return;if(isLocal('teams',r.id))return;if(p.eventType==='DELETE'){state.teams=state.teams.filter(t=>t.id!==r.id);}else{const i=state.teams.findIndex(t=>t.id===r.id);if(i>=0)state.teams[i]={...r};else state.teams.push({...r});state.teams.sort((a,b)=>(a.sort_order||0)-(b.sort_order||0));}scheduleRender();}
-function onMembersChange(p){const r=p.new||p.old;if(r.team_id&&r.team_id!==state.currentTeamId)return;if(isLocal('members',r.id))return;if(p.eventType==='DELETE'){state.members=state.members.filter(m=>m.id!==r.id);}else{const i=state.members.findIndex(m=>m.id===r.id);if(i>=0)state.members[i]={...r};else state.members.push({...r});state.members.sort((a,b)=>(a.sort_order||0)-(b.sort_order||0));}if(['today','manage','eval'].includes(currentView))scheduleRender();}
+function onMembersChange(p){const r=p.new||p.old;if(r.team_id&&r.team_id!==state.currentTeamId)return;if(isLocal('members',r.id))return;if(p.eventType==='DELETE'){state.members=state.members.filter(m=>m.id!==r.id);}else{
+  // v111 — is_admin/is_observer → isAdmin/isObserver 매핑 보존 (안 하면 실시간 갱신 시 관리자 권한 소실)
+  const mapped={...r,isAdmin:!!r.is_admin,isObserver:!!r.is_observer};
+  const i=state.members.findIndex(m=>m.id===r.id);if(i>=0)state.members[i]=mapped;else state.members.push(mapped);state.members.sort((a,b)=>(a.sort_order||0)-(b.sort_order||0));}if(['today','manage','eval'].includes(currentView))scheduleRender();}
 function onObjectivesChange(p){const r=p.new||p.old;if(r.team_id&&r.team_id!==state.currentTeamId)return;if(isLocal('objectives',r.id))return;if(p.eventType==='DELETE'){state.objectives=state.objectives.filter(o=>o.id!==r.id);}else{const i=state.objectives.findIndex(o=>o.id===r.id);if(i>=0){Object.assign(state.objectives[i],{title:r.title,description:r.description,ownerId:r.owner_id,confidence:r.confidence||'mid',realityBlocker:r.reality_blocker||'',realityHelp:r.reality_help||''});}else{state.objectives.push({id:r.id,title:r.title,description:r.description||'',ownerId:r.owner_id,confidence:r.confidence||'mid',realityBlocker:r.reality_blocker||'',realityHelp:r.reality_help||'',keyResults:[]});expanded.add(r.id);}}scheduleRender();}
 function onKRChange(p){const r=p.new||p.old;if(isLocal('key_results',r.id))return;const o=state.objectives.find(x=>x.id===r.objective_id);if(!o&&p.eventType!=='DELETE')return;if(p.eventType==='DELETE'){if(o)o.keyResults=o.keyResults.filter(k=>k.id!==r.id);}else{if(!o)return;const idx=o.keyResults.findIndex(k=>k.id===r.id);const exist=idx>=0?o.keyResults[idx].initiatives:[];const oldCur=idx>=0?o.keyResults[idx].current:null;const kr={id:r.id,title:r.title,target:Number(r.target||0),current:Number(r.current||0),unit:r.unit||'',ownerId:r.owner_id,dueDate:r.due_date,confidence:r.confidence||'mid',realityBlocker:r.reality_blocker||'',realityHelp:r.reality_help||'',initiatives:exist};if(idx>=0)o.keyResults[idx]=kr;else o.keyResults.push(kr);
   // 충돌 감지: 본인이 같은 KR을 입력 중이고 다른 사람이 current를 바꿨다면 경고
@@ -1325,7 +1345,9 @@ function onInitChange(p){
     let kr=null;state.objectives.forEach(o=>o.keyResults.forEach(k=>{if(k.id===r.kr_id)kr=k;}));
     if(kr){kr.initiatives.push({id:r.id,title:r.title,ownerId:r.owner_id,status:r.status||'todo',dueDate:r.due_date,startDate:r.start_date||null,confidence:r.confidence||'mid',realityBlocker:r.reality_blocker||'',realityHelp:r.reality_help||''});}
   }
-  scheduleRender();
+  // v111 — today 탭은 부분 갱신 (깜빡임 차단), 그 외(OKR/WBS 등 구조 변동)는 전체 render
+  if(currentView==='today')_scheduleTodayBlocksRerender();
+  else scheduleRender();
 }
 function onStandupChange(p){const r=p.new||p.old;if(!r)return;if(r.team_id&&r.team_id!==state.currentTeamId)return;if(isLocal('standups',`${r.team_id}-${r.date}`))return;ensureStandup(r.date);if(p.eventType!=='DELETE')state.standups[r.date].headline=r.headline||'';if(currentView==='today'&&r.date===viewingDate){const ta=document.querySelector(`textarea[data-field="headline"][data-date="${viewingDate}"]`);if(ta&&document.activeElement!==ta)ta.value=r.headline||'';}}
 function onEntryChange(p){const r=p.new||p.old;if(!r)return;if(r.team_id&&r.team_id!==state.currentTeamId)return;if(isLocal('standup_entries',`${r.team_id}-${r.date}-${r.member_id}`))return;ensureStandup(r.date);if(p.eventType==='DELETE'){delete state.standups[r.date].entries[r.member_id];}else{state.standups[r.date].entries[r.member_id]={yesterday:r.yesterday||'',today:r.today||'',blockers:r.blockers||'',helper_member_id:r.helper_member_id||'',helper_name:r.helper_name||'',support_type:r.support_type||'',support_detail:r.support_detail||''};}if(currentView==='today'&&r.date===viewingDate){['yesterday','today','blockers'].forEach(f=>{const ta=document.querySelector(`textarea[data-field="standup"][data-mid="${r.member_id}"][data-fieldname="${f}"][data-date="${viewingDate}"]`);if(ta&&document.activeElement!==ta)ta.value=(state.standups[r.date].entries[r.member_id]||{})[f]||'';});const c=document.querySelector(`[data-member-card="${r.member_id}"]`);if(c){c.classList.remove('remote-edit');void c.offsetWidth;c.classList.add('remote-edit');setTimeout(()=>c.classList.remove('remote-edit'),1500);}updateBlockerUI(r.date,r.member_id);}}
@@ -1547,8 +1569,8 @@ function renderHeader(){
 
 function renderToday(){
   const date=viewingDate;const isToday=date===todayKey();
-  // v14 — 최근 7일 스탠드업 백그라운드 로드 (비동기)
-  try{ensureRecentStandupsLoaded(date,7);}catch(e){}
+  // v111 — 최근 30일 스탠드업 백그라운드 로드 (이전엔 7일이라 마지막 작성이 7일보다 오래되면 '최근 한 일'이 비었음)
+  try{ensureRecentStandupsLoaded(date,30);}catch(e){}
   const standup=state.standups[date]||{headline:'',entries:{}};
   const allKR=[];state.objectives.forEach(o=>o.keyResults.forEach(k=>allKR.push({...k,objId:o.id})));
   const overall=allKR.length?Math.round(allKR.reduce((s,k)=>s+pct(k.current,k.target),0)/allKR.length):0;
@@ -4916,17 +4938,24 @@ init();
           const krMap={};allKR.forEach(k=>{krMap[k.id]=k;});
           const initMap={};collectAllInit().forEach(i=>{initMap[i.id]=i;});
           const recent=[];
-          // v27 — 최근 입력된 가장 가까운 날짜 1건만 표시
+          const itAll=(st.initiativeTasks)||{};
+          // v111 — 가장 가까운 '오늘 외' 날짜 1건. JSON 스탠드업 + DB initiative_tasks(그 날 완료) 모두 집계.
           for(let i=1;i<=30;i++){
             const d=window.shiftDate?window.shiftDate(viewing,-i):(()=>{const x=new Date(viewing);x.setDate(x.getDate()-i);return `${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,'0')}-${String(x.getDate()).padStart(2,'0')}`;})();
             const e=st.standups&&st.standups[d]&&st.standups[d].entries&&st.standups[d].entries[mid];
-            if(!e)continue;
-            const parsed=parseTasksField(e.today||'');
-            // v88 — 제목이 비어있는 task는 제외 (빈 댓글창 행 안 보이게)
+            const parsed=e?parseTasksField(e.today||''):{tasks:[],legacy:''};
+            // v88 — 제목이 비어있는 task는 제외
             const nonEmptyTasks=(parsed.tasks||[]).filter(t=>(t.t||'').trim());
-            const hasTask=nonEmptyTasks.length>0;
+            // v111 — 그 날 완료된 DB 할일 (initiative_tasks, updated_at 기준) — DB 전용 사용자도 '최근 한 일' 표시
+            const dbDone=[];
+            Object.keys(itAll).forEach(iid=>{(itAll[iid]||[]).forEach(t=>{
+              if(t.status==='done'&&(!t.owner_id||t.owner_id===mid)){
+                const dd=t.updated_at?String(t.updated_at).slice(0,10):'';
+                if(dd===d&&(t.title||'').trim())dbDone.push({id:t.id,t:t.title||'',i:iid,k:(initMap[iid]&&initMap[iid].krId)||'',d:true,_isInitTask:true});
+              }
+            });});
             const hasLegacy=parsed.legacy&&parsed.legacy.trim();
-            if(hasTask||hasLegacy){recent.push({date:d,tasks:nonEmptyTasks,legacy:parsed.legacy||''});break;}
+            if(nonEmptyTasks.length||dbDone.length||hasLegacy){recent.push({date:d,tasks:nonEmptyTasks.concat(dbDone),legacy:parsed.legacy||''});break;}
           }
           if(recent.length>0){
             const fmtDate=window.formatRecentDateLabel||(d=>d);
@@ -4957,7 +4986,10 @@ init();
                   const head=`<div style="display:inline-flex;align-items:center;gap:4px;background:${bg};color:${fg};padding:2px 8px;border-radius:999px;font-size:10px;font-weight:700;margin-bottom:3px;"><span>${icon}</span><span style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${esc(title)}">${esc(title)}</span><span style="opacity:.7;">${gTasks.length}</span></div>`;
                   const taskItems=gTasks.map(t=>{
                     let checkHtml;
-                    if(ownerEditable){
+                    if(t._isInitTask){
+                      // v111 — DB 완료 할일은 정적 ✓ (JSON 전용 recent-toggle 와 분리)
+                      checkHtml='<span style="display:inline-block;width:16px;text-align:center;margin-right:4px;color:var(--growth);">✓</span>';
+                    }else if(ownerEditable){
                       checkHtml='<button class="rt-check '+(t.d?'checked':'')+'" style="width:16px;height:16px;border-width:1.5px;border-radius:4px;flex-shrink:0;margin-top:2px;margin-right:6px;display:inline-flex;align-items:center;justify-content:center;font-size:11px;padding:0;line-height:1;" data-act="recent-toggle-task" data-mid="'+mid+'" data-date="'+r.date+'" data-tid="'+t.id+'" title="이 작업 완료 토글">'+(t.d?'✓':'')+'</button>';
                     }else{
                       checkHtml='<span style="display:inline-block;width:16px;text-align:center;margin-right:4px;color:'+(t.d?'var(--growth)':'var(--text-soft)')+';">'+(t.d?'✓':'•')+'</span>';
@@ -5330,6 +5362,18 @@ init();
       }
     }
   }
+  // v111 — 실시간 echo 가 전체 render() 대신 '오늘' 할일 블록만 부분 갱신 (아침 동시 편집 깜빡임 차단)
+  //   - 입력 중인(active element 포함) 블록은 건드리지 않음 → 포커스/입력 손실 방지
+  window.__rerenderTodayTaskBlocks=function(){
+    const active=document.activeElement;
+    const blocks=document.querySelectorAll('[data-krl-block$=":today"]');
+    blocks.forEach(block=>{
+      if(active&&block.contains(active))return; // 내가 타이핑 중인 카드는 보존
+      const key=block.getAttribute('data-krl-block')||'';
+      const mid=key.split(':')[0];
+      if(mid)try{rerenderTaskBlock(mid,'today');}catch(_){}
+    });
+  };
   // v74 — JSON 태스크를 실제 initiative에 연결할 때 initiative_tasks로 마이그레이션
   function migrateJsonTaskToInitiative(mid,kind,title,done){
     // 이미 선택된 sel.i를 사용하므로 호출 측에서 initId 전달

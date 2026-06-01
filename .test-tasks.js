@@ -14,7 +14,7 @@ function extractFn(name){
   while(j<src.length&&depth>0){const c=src[j];if(c==='{')depth++;else if(c==='}')depth--;j++;}
   return src.slice(m.index,j);
 }
-const fnNames=['collectAllKR','getInitOwnerIds','buildInitTasksForToday','buildInitTasksForYesterday','buildTaskTree'];
+const fnNames=['collectAllKR','getInitOwnerIds','buildInitTasksForToday','buildInitTasksForYesterday','buildTaskTree','selfMember','canEditAs','canEditInit','canEditOKR'];
 const fnSrc=fnNames.map(extractFn).join('\n');
 
 // --- 샌드박스 globals ---
@@ -152,6 +152,31 @@ assert(!r.visibleInits.has('I2'),'I2(빈제목·미생성) 숨김');
 assert(!r.visibleInits.has('I3'),'I3(타인) 숨김');
 assert(!r.visibleInits.has('I4'),'I4(완료) 숨김');
 assert(r.krOrder.includes('KR1')&&!r.krOrder.includes('KR2'),'KR1 만 노출(KR2 는 본인 가시 init 없음)');
+
+// ===== 권한(#3): 본인 콘텐츠 편집권은 members 로딩 타이밍과 무관해야 함 =====
+const {canEditAs,canEditInit,canEditOKR}=sandbox;
+// 본인 카드: members 배열이 비어 있어도(로딩 전/실시간 교체 중) 편집 가능해야 함
+sandbox.state={selfId:'m1',members:[],objectives:[]};
+assert(canEditAs('m1')===true,'본인 카드는 members 비어있어도 편집 가능(전역 transient null 방어)');
+assert(canEditOKR()===true,'인증 멤버는 members 비어있어도 OKR 편집 가능');
+assert(canEditInit({})===true,'인증 멤버는 members 비어있어도 이니셔티브 편집 가능');
+assert(canEditAs('m2')===false,'타인 카드는 비관리자가 편집 불가(members 미로딩 시 안전하게 거부)');
+// 정상 멤버 로딩 상태
+sandbox.state={selfId:'m1',members:[{id:'m1',isAdmin:false},{id:'m2',isAdmin:false}],objectives:[]};
+assert(canEditAs('m1')===true,'본인 카드 편집 가능');
+assert(canEditAs('m2')===false,'비관리자는 타인 카드 편집 불가');
+// 관리자
+sandbox.state={selfId:'m1',members:[{id:'m1',isAdmin:true},{id:'m2',isAdmin:false}],objectives:[]};
+assert(canEditAs('m2')===true,'관리자는 타인 카드 편집 가능');
+// 옵저버
+sandbox.state={selfId:'__observer__',members:[{id:'m1',isAdmin:false}],objectives:[]};
+assert(canEditAs('m1')===false,'옵저버는 편집 불가');
+assert(canEditOKR()===false,'옵저버는 OKR 편집 불가');
+assert(canEditInit({})===false,'옵저버는 이니셔티브 편집 불가');
+// 미인증
+sandbox.state={selfId:null,members:[],objectives:[]};
+assert(canEditAs('m1')===false,'미인증은 편집 불가');
+assert(canEditOKR()===false,'미인증은 OKR 편집 불가');
 
 // ===== 결과 =====
 console.log(`\n테스트: ${pass} 통과, ${fail} 실패`);
