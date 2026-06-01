@@ -4947,15 +4947,15 @@ init();
             // v88 — 제목이 비어있는 task는 제외
             const nonEmptyTasks=(parsed.tasks||[]).filter(t=>(t.t||'').trim());
             // v111 — 그 날 완료된 DB 할일 (initiative_tasks, updated_at 기준) — DB 전용 사용자도 '최근 한 일' 표시
-            const dbDone=[];
+                       const dbDay=[];
             Object.keys(itAll).forEach(iid=>{(itAll[iid]||[]).forEach(t=>{
-              if(t.status==='done'&&(!t.owner_id||t.owner_id===mid)){
+              if(!t.owner_id||t.owner_id===mid){
                 const dd=t.updated_at?String(t.updated_at).slice(0,10):'';
-                if(dd===d&&(t.title||'').trim())dbDone.push({id:t.id,t:t.title||'',i:iid,k:(initMap[iid]&&initMap[iid].krId)||'',d:true,_isInitTask:true});
+                if(dd===d&&(t.title||'').trim())dbDay.push({id:t.id,t:t.title||'',i:iid,k:(initMap[iid]&&initMap[iid].krId)||'',d:t.status==='done',_isInitTask:true});
               }
             });});
             const hasLegacy=parsed.legacy&&parsed.legacy.trim();
-            if(nonEmptyTasks.length||dbDone.length||hasLegacy){recent.push({date:d,tasks:nonEmptyTasks.concat(dbDone),legacy:parsed.legacy||''});break;}
+            if(nonEmptyTasks.length||dbDay.length||hasLegacy){recent.push({date:d,tasks:nonEmptyTasks.concat(dbDay),legacy:parsed.legacy||''});break;}
           }
           if(recent.length>0){
             const fmtDate=window.formatRecentDateLabel||(d=>d);
