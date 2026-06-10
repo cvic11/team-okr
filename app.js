@@ -4939,15 +4939,15 @@ init();
           const initMap={};collectAllInit().forEach(i=>{initMap[i.id]=i;});
           const recent=[];
           const itAll=(st.initiativeTasks)||{};
-          // v111 — 가장 가까운 '오늘 외' 날짜 1건. JSON 스탠드업 + DB initiative_tasks(그 날 완료) 모두 집계.
+          // v112 — 가장 가까운 '오늘 외' 날짜 1건. JSON 스탠드업 + DB initiative_tasks(그 날 작업분) 모두 집계.
           for(let i=1;i<=30;i++){
             const d=window.shiftDate?window.shiftDate(viewing,-i):(()=>{const x=new Date(viewing);x.setDate(x.getDate()-i);return `${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,'0')}-${String(x.getDate()).padStart(2,'0')}`;})();
             const e=st.standups&&st.standups[d]&&st.standups[d].entries&&st.standups[d].entries[mid];
             const parsed=e?parseTasksField(e.today||''):{tasks:[],legacy:''};
             // v88 — 제목이 비어있는 task는 제외
             const nonEmptyTasks=(parsed.tasks||[]).filter(t=>(t.t||'').trim());
-            // v111 — 그 날 완료된 DB 할일 (initiative_tasks, updated_at 기준) — DB 전용 사용자도 '최근 한 일' 표시
-                       const dbDay=[];
+            // v112 — 그 날 작업된 DB 할일 (initiative_tasks, updated_at 기준, 완료 여부는 d 플래그) — DB 전용 사용자도 '최근 한 일' 표시
+            const dbDay=[];
             Object.keys(itAll).forEach(iid=>{(itAll[iid]||[]).forEach(t=>{
               if(!t.owner_id||t.owner_id===mid){
                 const dd=t.updated_at?String(t.updated_at).slice(0,10):'';
@@ -4987,8 +4987,8 @@ init();
                   const taskItems=gTasks.map(t=>{
                     let checkHtml;
                     if(t._isInitTask){
-                      // v111 — DB 완료 할일은 정적 ✓ (JSON 전용 recent-toggle 와 분리)
-                      checkHtml='<span style="display:inline-block;width:16px;text-align:center;margin-right:4px;color:var(--growth);">✓</span>';
+                      // v112 — DB 할일은 정적 표시: 완료 ✓ / 미완료 • (JSON 전용 recent-toggle 와 분리)
+                      checkHtml='<span style="display:inline-block;width:16px;text-align:center;margin-right:4px;color:'+(t.d?'var(--growth)':'var(--text-soft)')+';">'+(t.d?'✓':'•')+'</span>';
                     }else if(ownerEditable){
                       checkHtml='<button class="rt-check '+(t.d?'checked':'')+'" style="width:16px;height:16px;border-width:1.5px;border-radius:4px;flex-shrink:0;margin-top:2px;margin-right:6px;display:inline-flex;align-items:center;justify-content:center;font-size:11px;padding:0;line-height:1;" data-act="recent-toggle-task" data-mid="'+mid+'" data-date="'+r.date+'" data-tid="'+t.id+'" title="이 작업 완료 토글">'+(t.d?'✓':'')+'</button>';
                     }else{
