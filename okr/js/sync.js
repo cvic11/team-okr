@@ -12,6 +12,9 @@
   const SUPABASE_URL = 'https://fmudqapruoppzlfhoxde.supabase.co';
   const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZtdWRxYXBydW9wcHpsZmhveGRlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgwNzk2NTEsImV4cCI6MjA5MzY1NTY1MX0.NLQdccHlwahIy69opYzUkPSXKGCOZIQAr5ehctCWbw0';
   const TEAM_KEY = 'team-okr-current-team'; // 플래너와 공유 — 같은 팀을 본다
+  const SELF_KEY = 'team-okr-self-id';      // 플래너의 본인 선택
+  const PIN_AUTH_KEY = 'team-okr-pin-auth'; // 플래너의 PIN 인증 기록 {memberId: ts}
+  const PIN_AUTH_TTL = 24 * 60 * 60 * 1000; // 플래너와 동일 24시간
 
   const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
   const Store = window.Store;
@@ -69,6 +72,42 @@
       S().data.members.push(this.memberOf(row)); S().persist();
       return null;
     },
+    // ── 플래너 ↔ 터미널 세션 공유 (로그인 중복 제거) ──
+    adoptPlannerSession() {
+      if (S().me()) return false;
+      try {
+        const selfId = localStorage.getItem(SELF_KEY);
+        if (!selfId || selfId === '__observer__') return false;
+        const m = S().data.members.find(x => x.id === selfId);
+        if (!m || m.isObserver) return false;
+        const auth = JSON.parse(localStorage.getItem(PIN_AUTH_KEY) || '{}')[selfId];
+        if (!auth || (Date.now() - auth) >= PIN_AUTH_TTL) return false;
+        S().login(m.name);
+        return true;
+      } catch (e) { return false; }
+    },
+    shareSessionToPlanner(name) {
+      try {
+        const m = S().data.members.find(x => x.name === name);
+        if (!m) return;
+        localStorage.setItem(SELF_KEY, m.id);
+        const o = JSON.parse(localStorage.getItem(PIN_AUTH_KEY) || '{}');
+        o[m.id] = Date.now();
+        localStorage.setItem(PIN_AUTH_KEY, JSON.stringify(o));
+      } catch (e) { }
+    },
+    clearPlannerSession(name) {
+      try {
+        const m = S().data.members.find(x => x.name === name);
+        if (m) {
+          const o = JSON.parse(localStorage.getItem(PIN_AUTH_KEY) || '{}');
+          delete o[m.id];
+          localStorage.setItem(PIN_AUTH_KEY, JSON.stringify(o));
+          if (localStorage.getItem(SELF_KEY) === m.id) localStorage.removeItem(SELF_KEY);
+        }
+      } catch (e) { }
+    },
+
     async delMember(m) {
       const r = await sb.from('members').delete().eq('id', m.id);
       if (r.error) return r.error.message; // 담당 항목 FK 참조 시 실패할 수 있음
@@ -329,6 +368,8 @@
         if (S().me() && !S().member(S().me())) S().logout();
         this.loaded = true;
         S().persist();
+        // 플래너에서 이미 본인 선택+PIN 인증을 마쳤으면 터미널 로그인 생략
+        if (!S().me() && this.adoptPlannerSession() && window.App) window.App.boot();
         if (!S().me()) { window.App && window.App.renderLogin(); }
         else {
           S().notify({ structural: true, remote: true });
@@ -360,7 +401,10 @@
   };
 
   const origLogin = Store.login.bind(Store);
-  Store.login = function (name) { origLogin(name); Sync.trackPresence(); };
+  Store.login = function (name) { origLogin(name); Sync.shareSessionToPlanner(name); Sync.trackPresence(); };
+
+  const origLogout = Store.logout.bind(Store);
+  Store.logout = function () { const name = this.me(); origLogout(); if (name) Sync.clearPlannerSession(name); };
 
   const origLog = Store.log.bind(Store);
   Store.log = function (actor, action, target, extra) {

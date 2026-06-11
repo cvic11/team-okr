@@ -6,7 +6,7 @@
 
   const ViewWBS = {
     el: null,
-    filter: localStorage.getItem('okrterm_wbs_filter') || 'month', // week | month | quarter
+    filter: localStorage.getItem('okrterm_wbs_filter') || 'year', // week | month | quarter | year(연말까지, 기본)
     selId: null,
     drag: null, // { id, mode: 'start'|'end'|'move', x0, start0, end0 }
 
@@ -24,8 +24,12 @@
         const s = D().str(new Date(d.getFullYear(), d.getMonth(), 1));
         return { start: s, end: D().str(new Date(d.getFullYear(), d.getMonth() + 1, 0)) };
       }
-      const q = D().quarterOf(today);
-      return { start: q.start, end: q.end };
+      if (this.filter === 'quarter') {
+        const q = D().quarterOf(today);
+        return { start: q.start, end: q.end };
+      }
+      // year — 현재 분기 시작 ~ 연말 (기본)
+      return { start: D().quarterOf(today).start, end: D().str(new Date(d.getFullYear(), 11, 31)) };
     },
 
     rows() {
@@ -53,7 +57,7 @@
       const rows = this.rows();
       const today = window.OKRT.TODAY;
 
-      const LABEL_W = 360;
+      const LABEL_W = 480; // O/KR 등 긴 제목이 잘리지 않게 넉넉히 (줄바꿈은 CSS에서 허용)
       const avail = Math.max(500, (this.el.clientWidth || 1000) - LABEL_W - 40);
       const dayW = Math.max(4, Math.floor(avail / days));
       const chartW = days * dayW;
@@ -109,7 +113,7 @@
 
       this.el.innerHTML =
         '<div class="wbs-head">'
-        + '<span class="dim">기간:</span> ' + fbtn('week', 'w 이번 주') + ' ' + fbtn('month', 'm 이번 달') + ' ' + fbtn('quarter', 'q 분기 전체')
+        + '<span class="dim">기간:</span> ' + fbtn('week', 'w 이번 주') + ' ' + fbtn('month', 'm 이번 달') + ' ' + fbtn('quarter', 'q 분기 전체') + ' ' + fbtn('year', 'y 연말까지')
         + ' <span class="dim">· ' + D().fmt(r.start) + ' ~ ' + D().fmt(r.end) + '</span>'
         + ' <button class="lnk" data-hd>[x 완료 숨기기 ' + (window.ViewTree.hideDone() ? '●' : '○') + ']</button>'
         + '</div>'
@@ -215,6 +219,7 @@
       if (k === 'w') { this.filter = 'week'; localStorage.setItem('okrterm_wbs_filter', 'week'); this.render(); return true; }
       if (k === 'm') { this.filter = 'month'; localStorage.setItem('okrterm_wbs_filter', 'month'); this.render(); return true; }
       if (k === 'q') { this.filter = 'quarter'; localStorage.setItem('okrterm_wbs_filter', 'quarter'); this.render(); return true; }
+      if (k === 'y') { this.filter = 'year'; localStorage.setItem('okrterm_wbs_filter', 'year'); this.render(); return true; }
       if (k === 'x') { window.ViewTree.toggleHideDone(); this.render(); return true; }
       const rows = this.rows();
       const idx = rows.findIndex(r => r.node.id === this.selId);
