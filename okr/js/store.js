@@ -354,9 +354,17 @@
 
     // ── 오늘/최근 ──
     todayTasks() {
+      // 마감 도래·이월 + 기간 진행 중(시작일 도래). 날짜 미입력 할일은 '최근 할일' 쪽에 노출.
       return Object.values(this.data.nodes)
-        .filter(n => n.type === 'task' && n.status !== 'done' && n.due && n.due <= TODAY)
-        .sort((a, b) => (a.due < b.due ? -1 : a.due > b.due ? 1 : a.sort - b.sort));
+        .filter(n => {
+          if (n.type !== 'task' || n.status === 'done') return false;
+          if (n.due) return n.due <= TODAY || (n.start && n.start <= TODAY);
+          return !!(n.start && n.start <= TODAY);
+        })
+        .sort((a, b) => {
+          const ad = a.due || '9999-12-31', bd = b.due || '9999-12-31';
+          return ad < bd ? -1 : ad > bd ? 1 : a.sort - b.sort;
+        });
     },
     recentDone(days) {
       const cut = D.add(TODAY, -(days || 7));
