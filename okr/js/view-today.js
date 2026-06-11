@@ -53,11 +53,11 @@
 
       this.el.innerHTML =
         '<div class="today-grid">'
+        + '<section class="panel"><div class="panel-title">┌─ 최근 할일 (7일, ' + recentAll.length + ') ' + '─'.repeat(4) + '</div>'
+        + right + '</section>'
         + '<section class="panel"><div class="panel-title">┌─ 오늘의 할일 (' + tasks.length + ') ' + '─'.repeat(8) + '</div>'
         + left
         + '<div class="hint dim">Space 완료 토글 · j/k 이동 · Enter 트리에서 열기</div></section>'
-        + '<section class="panel"><div class="panel-title">┌─ 최근 할일 (7일, ' + recentAll.length + ') ' + '─'.repeat(4) + '</div>'
-        + right + '</section>'
         + '</div>';
 
       // 마우스 보조

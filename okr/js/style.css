@@ -135,8 +135,8 @@ input[type="date"]::-webkit-calendar-picker-indicator { display: none; -webkit-a
 .wbs-row { display: flex; align-items: stretch; }
 .wbs-row.selected { background: var(--faint); color: var(--fg); }
 .wbs-label {
-  flex: none; width: var(--labelw, 360px); padding: 2px 8px 2px calc(8px + var(--depth) * 18px);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-right: 1px solid var(--faint);
+  flex: none; width: var(--labelw, 480px); padding: 2px 8px 2px calc(8px + var(--depth) * 18px);
+  white-space: normal; overflow-wrap: anywhere; border-right: 1px solid var(--faint);
 }
 .wbs-row.is-done .wbs-label .title { color: var(--done); text-decoration: line-through; }
 .wbs-days { color: var(--dim); }

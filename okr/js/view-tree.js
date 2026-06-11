@@ -90,7 +90,7 @@
         const acts = '<span class="row-actions">'
           + '<button data-ra="edit">[수정]</button>'
           + '<button data-ra="sib">[+형제]</button>'
-          + (n.type !== 'task' ? '<button data-ra="child">[+자식]</button>' : '')
+          + (n.type !== 'task' ? '<button data-ra="child">[+추가]</button>' : '')
           + '<button data-ra="del">[삭제]</button>'
           + '</span>';
 
@@ -154,7 +154,7 @@
         + ' <span class="owner">@<select class="edit-owner seamless">' + members + '</select></span> '
         + '<span class="dim edit-dates">' + dateFields + '</span>'
         + (n.status !== 'done' ? ' <select class="edit-status seamless dim">' + statuses + '</select>' : '')
-        + ' <span class="dim">⏎ 저장 · Esc 취소</span>'
+        + ' <span class="dim">⏎ 저장 · <button class="lnk edit-esc" title="취소 — 새 항목은 삭제됩니다">Esc 취소</button></span>'
         + '</div>';
     },
 
@@ -357,6 +357,9 @@
           if (e.key === 'Escape') { e.preventDefault(); this.cancelEdit(); }
           e.stopPropagation();
         });
+        // 'Esc 취소' 클릭으로도 취소 — 제목이 빈 새 항목은 즉시 삭제됨
+        const escBtn = editRow.querySelector('.edit-esc');
+        if (escBtn) escBtn.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); this.cancelEdit(); });
       }
     },
   };
