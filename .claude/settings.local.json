@@ -8,7 +8,11 @@
       "PowerShell(\\(Get-Content C:\\\\Users\\\\cvic1\\\\projects\\\\team-okr\\\\app.js | Measure-Object -Line\\).Lines)",
       "Bash(node -c app.js)",
       "mcp__Vercel__list_teams",
-      "mcp__Vercel__list_projects"
+      "mcp__Vercel__list_projects",
+      "mcp__Supabase__list_projects",
+      "mcp__Supabase__list_tables",
+      "mcp__Supabase__apply_migration",
+      "mcp__Supabase__execute_sql"
     ]
   }
 }

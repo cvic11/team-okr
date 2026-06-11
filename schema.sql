@@ -54,6 +54,39 @@ begin
 exception when undefined_object then null;
 end$$;
 
+-- v24: 팀원 간 1:1 메시지 테이블 (우측 하단 플로팅 채팅)
+create table if not exists public.messages (
+  id         text primary key,
+  team_id    text not null,
+  from_id    text not null,
+  to_id      text not null,
+  body       text not null default '',
+  read_at    timestamptz,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists messages_team_id_idx on public.messages (team_id);
+create index if not exists messages_to_id_idx   on public.messages (to_id);
+
+-- RLS — 익명(anon) 키로도 읽기/쓰기 가능하게 (앱의 다른 테이블과 동일 패턴)
+alter table public.messages enable row level security;
+
+drop policy if exists "messages_all" on public.messages;
+create policy "messages_all" on public.messages
+  for all using (true) with check (true);
+
+-- realtime 채널 발행 — 다른 브라우저에 즉시 반영
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname='supabase_realtime' and schemaname='public' and tablename='messages'
+  ) then
+    alter publication supabase_realtime add table public.messages;
+  end if;
+exception when undefined_object then null;
+end$$;
+
 -- ============================================================================
 -- 끝. SQL Editor 우측 상단 'RUN' 클릭. 콘솔에 success 떴으면 페이지 새로고침.
 -- ============================================================================

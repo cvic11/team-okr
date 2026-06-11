@@ -1,0 +1,207 @@
+/* ── 팀 OKR 터미널 · MS-DOS 미학 ──
+   단색 배경, 시스템 모노스페이스, 텍스트·기호 중심.
+   색 3계열: 인광(phosphor) / 경고 황색 / 완료 회색. 그림자·그라데이션·애니메이션 없음. */
+:root {
+  --bg: #0a0a0a;
+  --fg: #33ff33;
+  --warn: #ffb000;
+  --done: #7a7a7a;
+  --dim: color-mix(in srgb, var(--fg) 52%, var(--bg));
+  --faint: color-mix(in srgb, var(--fg) 22%, var(--bg));
+  --fs: 15px;
+  color-scheme: dark;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: ui-monospace, "Cascadia Mono", Consolas, "D2Coding", "Nanum Gothic Coding", monospace;
+  font-size: var(--fs);
+  line-height: 1.55;
+  overflow: hidden;
+  word-break: keep-all;
+}
+button, input, textarea, select {
+  font: inherit; color: inherit; background: var(--bg);
+  border: 1px solid var(--dim);
+}
+button { cursor: pointer; }
+.dim { color: var(--dim); }
+.warn { color: var(--warn); }
+.done-text { color: var(--done); }
+.owner { color: var(--dim); }
+.lnk { border: none; background: none; color: var(--fg); padding: 0 2px; white-space: nowrap; }
+.lnk:hover, .tab:hover { background: var(--fg); color: var(--bg); }
+.lnk:hover .dim { color: var(--bg); }
+.active-filter { background: var(--fg); color: var(--bg); }
+
+/* ── 레이아웃 ── */
+#app-screen { display: flex; flex-direction: column; height: 100vh; }
+#topbar {
+  display: flex; justify-content: space-between; align-items: center; gap: 16px;
+  padding: 6px 14px; border-bottom: 1px solid var(--dim); flex: none;
+}
+.tabs { display: flex; gap: 4px; }
+.tab { border: none; background: none; color: var(--dim); padding: 1px 6px; white-space: nowrap; }
+.tab-on { color: var(--bg); background: var(--fg); }
+.top-right { display: flex; gap: 10px; align-items: center; white-space: nowrap; }
+.offline-badge { background: var(--warn); color: var(--bg); padding: 0 8px; font-weight: bold; }
+
+#main { flex: 1; overflow: auto; padding: 14px; }
+
+#bottombar { flex: none; border-top: 1px solid var(--dim); }
+#notice-line { padding: 2px 14px; min-height: 26px; }
+#cmd-line { display: flex; gap: 6px; padding: 2px 14px; align-items: center; cursor: text; }
+#cmd-line .prompt { color: var(--fg); }
+#cmd-input { flex: 1; border: none; outline: none; background: none; caret-color: var(--fg); }
+#footer-line { padding: 2px 14px 6px; }
+
+/* ── 공통 행 ── */
+.row { padding: 2px 6px; }
+.selected { background: var(--fg); color: var(--bg); }
+.selected .dim, .selected .owner, .selected .path span, .selected .gauge, .selected .tlabel { color: var(--bg); }
+.selected .warn { color: var(--bg); font-weight: bold; }
+.flash { background: var(--fg) !important; color: var(--bg) !important; }
+.flash .dim, .flash .owner, .flash .path span, .flash .gauge { color: var(--bg) !important; }
+.is-done .title, .is-done .gauge { color: var(--done); text-decoration: line-through; }
+.is-done .cb { color: var(--done); }
+.cb { cursor: pointer; }
+.editing { color: var(--warn); }
+.find-match .title { background: var(--faint); }
+.empty { color: var(--dim); padding: 12px 6px; }
+.big-empty { font-size: 1.2em; padding: 40px; }
+.hint { margin-top: 12px; padding: 0 6px; }
+.tlabel { color: var(--fg); font-weight: bold; }
+.path { padding-left: 26px; font-size: 0.86em; }
+.gauge { white-space: pre; }
+
+/* ── [1] 오늘 ── */
+.today-grid { display: grid; grid-template-columns: 1.2fr 1fr; gap: 22px; max-width: 1440px; }
+.panel-title { color: var(--dim); margin-bottom: 6px; white-space: pre; }
+.done-row .done-title { color: var(--done); text-decoration: line-through; }
+
+/* ── [2] 트리 ── */
+.tree-list { max-width: 1440px; }
+.tree-row { padding-left: calc(8px + var(--depth) * 28px); cursor: default; }
+.tree-row .caret { display: inline-block; width: 18px; color: var(--dim); cursor: pointer; }
+/* 마우스 보조 액션 — 호버 시에만 노출 (F3) */
+.row-actions { visibility: hidden; margin-left: 14px; }
+.row-actions button { border: none; background: none; color: var(--dim); padding: 0 2px; white-space: nowrap; cursor: pointer; }
+.row-actions button:hover { background: var(--fg); color: var(--bg); }
+.tree-row:hover .row-actions, .tree-row.selected .row-actions { visibility: visible; }
+.selected .row-actions button { color: var(--bg); }
+.selected .row-actions button:hover { background: var(--bg); color: var(--fg); }
+/* 삭제 대기 행 — 황색 반전 (F8 일부 선반영) */
+.tree-row.pending-del { background: var(--warn); color: var(--bg); }
+.tree-row.pending-del .dim, .tree-row.pending-del .owner, .tree-row.pending-del .gauge,
+.tree-row.pending-del .tlabel, .tree-row.pending-del .caret, .tree-row.pending-del .warn { color: var(--bg); }
+.tree-row.pending-del .row-actions button { color: var(--bg); visibility: visible; }
+.tree-row.drop-before { box-shadow: none; border-top: 2px solid var(--fg); }
+.tree-row.drop-after { border-bottom: 2px solid var(--fg); }
+.tree-row.drop-into { outline: 1px dashed var(--fg); outline-offset: -1px; }
+/* 인라인 편집 — 보이는 행 모습 그대로 */
+.edit-row { background: transparent; }
+.seamless {
+  background: transparent; border: none; outline: none; padding: 0;
+  font: inherit; color: inherit;
+}
+.edit-title { color: var(--fg); border-bottom: 1px solid var(--dim); vertical-align: baseline; }
+.edit-row select.seamless { color: var(--dim); }
+.edit-row .edit-owner { color: inherit; }
+.edit-dates { white-space: nowrap; }
+.edit-row input[type="date"].seamless { color: var(--dim); width: 13ch; }
+input[type="date"]::-webkit-calendar-picker-indicator { display: none; -webkit-appearance: none; }
+
+/* 타자 "쿵쿵" 스탬프 효과 */
+@keyframes stamp-in {
+  0% { transform: scale(2.2); }
+  60% { transform: scale(0.9); }
+  100% { transform: scale(1); }
+}
+.type-stamp {
+  position: fixed; z-index: 99; pointer-events: none;
+  display: inline-flex; align-items: center;
+  background: var(--fg); color: var(--bg);
+  animation: stamp-in 130ms steps(3) both;
+}
+.type-jolt { transform: translateY(2px); }
+
+/* ── [3] WBS ── */
+.wbs-head { margin-bottom: 4px; display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.wbs-head > span:first-child { white-space: nowrap; }
+.wbs-subhead { margin-bottom: 10px; font-size: 0.9em; }
+.wbs-scroll { overflow: auto; }
+.wbs-row { display: flex; align-items: stretch; }
+.wbs-row.selected { background: var(--faint); color: var(--fg); }
+.wbs-label {
+  flex: none; width: var(--labelw, 360px); padding: 2px 8px 2px calc(8px + var(--depth) * 18px);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-right: 1px solid var(--faint);
+}
+.wbs-row.is-done .wbs-label .title { color: var(--done); text-decoration: line-through; }
+.wbs-days { color: var(--dim); }
+.wbs-row.selected .wbs-days { color: var(--fg); }
+.wbs-lane { position: relative; flex: none; border-bottom: 1px solid var(--faint); min-height: 26px; }
+.wbs-gridhead { display: flex; }
+.wbs-gridhead .wbs-label { border-right: 1px solid var(--faint); }
+.wbs-tick { position: absolute; top: 0; bottom: 0; border-left: 1px solid var(--faint); padding-left: 3px; color: var(--dim); font-size: 0.85em; }
+.wbs-body .wbs-lane::before { content: ""; }
+.wbs-bar {
+  position: absolute; top: 4px; height: 17px; background: var(--fg);
+  cursor: grab; min-width: 6px; user-select: none; touch-action: none;
+}
+.wbs-bar.dragging { opacity: 0.85; cursor: grabbing; }
+.wbs-bar.bar-warn { background: var(--warn); }
+.wbs-bar.bar-done { background: var(--done); }
+/* O·KR 구간 막대 — 외곽선만 (시각 위계, F6) */
+.wbs-bar.bar-frame { background: transparent; border: 1px solid var(--dim); height: 15px; }
+.wbs-bar.bar-frame.bar-warn { border-color: var(--warn); background: transparent; }
+.wbs-bar.bar-frame.bar-done { border-color: var(--done); background: transparent; }
+.bar-grip { position: absolute; top: 0; bottom: 0; width: 10px; cursor: ew-resize; }
+.grip-l { left: 0; } .grip-r { right: 0; }
+.wbs-overlay { position: absolute; top: 0; bottom: 0; pointer-events: none; }
+.wbs-today { position: absolute; top: 0; bottom: 0; border-left: 2px solid var(--fg); }
+
+/* ── [4] 스탠드업 ── */
+.su-head { margin-bottom: 18px; }
+.su-meta { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.su-dots { display: flex; gap: 0; flex-wrap: wrap; margin-top: 4px; }
+.su-dot-on { background: var(--fg); color: var(--bg); padding: 0 6px; white-space: nowrap; }
+.su-dots > span { white-space: nowrap; }
+.su-stage { max-width: 1200px; margin: 0 auto; padding: 12px 20px; }
+.su-name { font-size: 2.4em; font-weight: bold; margin-bottom: 18px; }
+.su-sec { margin-bottom: 22px; }
+.su-sec-title { color: var(--dim); font-size: 1.15em; margin-bottom: 6px; }
+.su-item { font-size: 1.35em; padding: 3px 0; }
+.su-item .su-path { font-size: 0.6em; }
+.su-gauge { white-space: pre; font-size: 1.1em; margin: 2px 0 10px; }
+.su-blocked { width: 100%; font-size: 1.3em; padding: 6px 10px; resize: vertical; }
+.su-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 36px; }
+.su-summary .su-item { font-size: 1.15em; }
+
+/* ── [5] 관리 ── */
+.adm-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; max-width: 1440px; }
+.adm-add { display: flex; gap: 10px; margin: 10px 0 6px; flex-wrap: wrap; align-items: center; }
+.adm-add input { padding: 1px 6px; width: 140px; }
+.log-scroll { max-height: 320px; overflow: auto; }
+
+/* ── 로그인 ── */
+#login-screen { display: flex; align-items: center; justify-content: center; height: 100vh; }
+.login-box { text-align: left; }
+.login-title { margin-bottom: 18px; white-space: pre; }
+.login-item { font-size: 1.25em; padding: 2px 8px; cursor: pointer; }
+.login-item.selected { background: var(--fg); color: var(--bg); }
+.login-pin { font-size: 1.8em; letter-spacing: 4px; margin: 10px 8px; }
+.login-hint { margin-top: 16px; }
+.login-foot { margin-top: 34px; font-size: 0.85em; }
+
+/* ── 도움말 ── */
+#help-overlay {
+  position: fixed; inset: 0; background: color-mix(in srgb, var(--bg) 88%, transparent);
+  display: flex; align-items: center; justify-content: center; z-index: 50;
+}
+#help-overlay pre { background: var(--bg); border: 1px solid var(--fg); padding: 18px 28px; font-size: 1.05em; }
+
+/* ── 버전 전환 링크 (기존 플래너 ↔ 터미널) ── */
+a.switch-link { color: inherit; text-decoration: none; cursor: pointer; }
+a.switch-link:hover { background: var(--fg); color: var(--bg); }
