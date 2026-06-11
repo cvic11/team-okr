@@ -58,6 +58,7 @@
         + '<section class="panel"><div class="panel-title">┌─ 내보내기 / 데이터 ────────</div>'
         + '<div class="adm-add">'
         + '<button class="lnk" id="adm-csv">[CSV 내보내기 (트리+WBS)]</button>'
+        + '<button class="lnk" id="adm-typefx">[타자 효과 ' + (window.R.typeFX && window.R.typeFX.enabled ? '●' : '○') + ']</button>'
         + (synced ? '' : '<button class="lnk" id="adm-cleansim">[데모 활동 청소]</button>'
           + '<button class="lnk" id="adm-reset">[데모 데이터 초기화]</button>')
         + '<button class="lnk" id="adm-logout">[로그아웃]</button>'
@@ -142,6 +143,12 @@
         a.click();
         URL.revokeObjectURL(a.href);
         window.R.notice('CSV 다운로드 시작');
+      });
+      const fxBtn = this.el.querySelector('#adm-typefx');
+      if (fxBtn) fxBtn.addEventListener('click', () => {
+        const on = window.R.typeFX.toggle();
+        window.R.notice('타자 효과 ' + (on ? '켬' : '끔'));
+        self.render();
       });
       const cleanBtn = this.el.querySelector('#adm-cleansim');
       if (cleanBtn) cleanBtn.addEventListener('click', () => {

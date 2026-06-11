@@ -75,7 +75,12 @@
 
   // ── 타자 "쾅쾅" 효과: 글자가 도장처럼 박히는 스탬프 + 짧은 타건음 ──
   const typeFX = {
-    enabled: true,
+    enabled: localStorage.getItem('okrterm_typefx') !== '0', // [5]관리에서 끄기 가능
+    toggle() {
+      this.enabled = !this.enabled;
+      try { localStorage.setItem('okrterm_typefx', this.enabled ? '1' : '0'); } catch (e) { }
+      return this.enabled;
+    },
     _ctx: null,
     _canvas: document.createElement('canvas'),
     textWidth(text, el) {
@@ -127,7 +132,8 @@
   document.addEventListener('input', (e) => {
     const el = e.target;
     if (el.tagName !== 'TEXTAREA' && !(el.tagName === 'INPUT' && (!el.type || el.type === 'text'))) return;
-    if (e.inputType && e.inputType !== 'insertText' && e.inputType !== 'insertCompositionText') return;
+    // 한글 조합(insertCompositionText)은 자모마다 발화 → 흔들림·타건음이 과도해 제외
+    if (e.inputType !== 'insertText') return;
     const ch = e.data ? e.data.slice(-1) : '';
     typeFX.stamp(el, ch);
   }, true);

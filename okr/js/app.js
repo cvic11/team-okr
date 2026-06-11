@@ -148,7 +148,7 @@
         const on = m.name === S().me() ? true : !!window.Sim.presence[m.name];
         return '<span class="' + (on ? '' : 'dim') + '">' + window.R.esc(m.name) + (on ? '●' : '○') + '</span>';
       }).join(' ');
-      document.getElementById('topbar').innerHTML =
+      const html =
         '<div class="tabs">' + tabs + '</div>'
         + '<div class="top-right">'
         + (S().offline ? '<span class="offline-badge">OFFLINE</span> ' : '')
@@ -157,6 +157,9 @@
         + ' <span class="dim">│ 나: </span><span>' + window.R.esc(S().me()) + '</span>'
         + ' <a class="switch-link dim" href="../" title="기존 플래너 버전으로 전환">[플래너↗]</a>'
         + '</div>';
+      if (this._topbarHtml === html) return; // 내용 동일하면 재렌더 생략 — 4초 주기 깜빡임 방지
+      this._topbarHtml = html;
+      document.getElementById('topbar').innerHTML = html;
       document.querySelectorAll('#topbar .tab').forEach(t =>
         t.addEventListener('click', () => this.setMode(t.dataset.mode)));
     },

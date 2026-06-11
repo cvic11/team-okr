@@ -201,8 +201,13 @@
       ins.sort((a, b) => TYPE_ORDER[a.type] - TYPE_ORDER[b.type]);
       del.sort((a, b) => TYPE_ORDER[b.type] - TYPE_ORDER[a.type]);
       const ops = [];
-      ins.forEach(n => ops.push({ t: 'upsert', table: TBL[n.type], row: this.insertRow(n) }));
-      upd.forEach(u => ops.push({ t: 'update', table: TBL[u.type], id: u.id, cols: u.cols }));
+      // 플래너의 '최근 한 일'은 updated_at 날짜로 완료일을 판정 — 쓰기마다 갱신
+      const touch = (type, cols) => {
+        if (type === 'init' || type === 'task') cols.updated_at = new Date().toISOString();
+        return cols;
+      };
+      ins.forEach(n => ops.push({ t: 'upsert', table: TBL[n.type], row: touch(n.type, this.insertRow(n)) }));
+      upd.forEach(u => ops.push({ t: 'update', table: TBL[u.type], id: u.id, cols: touch(u.type, u.cols) }));
       del.forEach(d => ops.push({ t: 'delete', table: TBL[d.type], id: d.id }));
       this.queue.push.apply(this.queue, ops);
       this.flush();
@@ -282,11 +287,16 @@
       if (!r || (this.teamId && r.team_id && r.team_id !== this.teamId)) return;
       const nm = this.nameOf(r.member_id);
       if (!nm) return;
+      const cur = (S().data.standup[r.date] || {})[nm];
+      if (cur && (cur.blocked || '') === (r.blockers || '')) return; // 자기 echo — 재렌더 불필요
       this.applyingRemote = true;
       (S().data.standup[r.date] = S().data.standup[r.date] || {})[nm] = { blocked: r.blockers || '' };
       S().persist();
       this.applyingRemote = false;
-      if (window.App && window.App.mode === 'standup') window.App.refresh({ soft: true });
+      // 막힘 textarea에 입력 중이면 재렌더 보류 — 포커스·커서 끊김 방지
+      const ae = document.activeElement;
+      const typing = ae && ae.classList && ae.classList.contains('su-blocked');
+      if (!typing && window.App && window.App.mode === 'standup') window.App.refresh({ soft: true });
     },
 
     // ── 접속 표시 (presence) ──
