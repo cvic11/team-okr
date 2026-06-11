@@ -89,7 +89,9 @@ button { cursor: pointer; }
 .row-actions { visibility: hidden; margin-left: 14px; }
 .row-actions button { border: none; background: none; color: var(--dim); padding: 0 2px; white-space: nowrap; cursor: pointer; }
 .row-actions button:hover { background: var(--fg); color: var(--bg); }
-.tree-row:hover .row-actions, .tree-row.selected .row-actions { visibility: visible; }
+.tree-row:hover .row-actions, .tree-row.selected .row-actions,
+.sel-row:hover .row-actions, .sel-row.selected .row-actions,
+.done-row:hover .row-actions { visibility: visible; }
 .selected .row-actions button { color: var(--bg); }
 .selected .row-actions button:hover { background: var(--bg); color: var(--fg); }
 /* 삭제 대기 행 — 황색 반전 (F8 일부 선반영) */

@@ -4302,7 +4302,9 @@ async function init(){
       render();
     }
     // 첫 진입 시 본인 식별 모달 (로그인 가드가 보여줌)
-    if(!state.selfId && state.members.length>0){setTimeout(()=>openSelfPicker(),300);}
+    // v119 — 인증 만료 재인증(PIN 모달) 경로에서는 열지 않음: getSelfId()가 남아있으면
+    // 위에서 openPinVerify 가 예약돼 있는데, 이 모달이 300ms 뒤 PIN 모달을 덮어쓰는 버그가 있었음
+    if(!state.selfId && !getSelfId() && state.members.length>0){setTimeout(()=>openSelfPicker(),300);}
     // 저장 인디케이터 초기 표시
     updateSaveIndicator();
   }catch(e){console.error(e);renderSetup('초기 로드 실패: '+(e.message||e));}
