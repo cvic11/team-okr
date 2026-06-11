@@ -77,8 +77,17 @@
           this.loginPin += k;
           if (this.loginPin.length >= 4) {
             const m = members[this.loginSel];
-            if (this.loginPin === m.pin) { S().login(m.name); this.boot(); return; }
-            this.loginErr = '! 핀이 일치하지 않습니다'; this.loginPin = '';
+            const pin = this.loginPin;
+            // DB 연동 모드에서는 플래너와 같은 pin_hash 검증 (비동기)
+            const check = (window.OKR_SYNC && window.OKR_SYNC.enabled)
+              ? window.OKR_SYNC.verifyPin(m, pin)
+              : Promise.resolve(pin === m.pin);
+            check.then(ok => {
+              if (ok) { S().login(m.name); this.boot(); return; }
+              this.loginErr = '! 핀이 일치하지 않습니다'; this.loginPin = '';
+              this.renderLogin();
+            });
+            return;
           }
           this.renderLogin();
         }
