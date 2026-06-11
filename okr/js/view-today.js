@@ -13,7 +13,7 @@
 
     render() {
       const tasks = this.list();
-      const recentAll = S().recentDone(7);
+      const recentAll = S().recentTasks(7); // 완료 여부 무관
       const recent = recentAll.slice(0, 15);
       if (this.sel >= tasks.length) this.sel = Math.max(0, tasks.length - 1);
 
@@ -36,16 +36,18 @@
 
       let right = '';
       if (!recent.length) {
-        right = '<div class="empty">최근 7일 내 완료된 할일이 없습니다.</div>';
+        right = '<div class="empty">최근 7일 내 할일 활동이 없습니다.</div>';
       } else {
-        right = recent.map(t =>
-          '<div class="row done-row" data-node-id="' + t.id + '">'
-          + '<span class="cb">[x]</span> '
-          + '<span class="done-title">' + window.R.esc(t.title) + '</span>'
-          + ' <span class="dim">— ' + window.R.esc(t.updatedBy || t.owner) + ' · ' + window.R.fmtTs(t.completedAt) + '</span>'
-          + '<div class="path">' + window.R.pathLine(t.id) + '</div>'
-          + '</div>'
-        ).join('');
+        right = recent.map(t => {
+          const done = t.status === 'done';
+          const ts = t.completedAt || t.updatedAt || t.createdAt;
+          return '<div class="row done-row" data-node-id="' + t.id + '">'
+            + '<span class="cb">' + (done ? '[x]' : '[ ]') + '</span> '
+            + '<span class="' + (done ? 'done-title' : 'title') + '">' + window.R.esc(t.title) + '</span>'
+            + ' <span class="dim">— ' + window.R.esc(t.updatedBy || t.owner) + ' · ' + window.R.fmtTs(ts) + '</span>'
+            + '<div class="path">' + window.R.pathLine(t.id) + '</div>'
+            + '</div>';
+        }).join('');
         if (recentAll.length > recent.length) {
           right += '<div class="row dim">… 외 ' + (recentAll.length - recent.length) + '건 (전체는 [5]관리 → 활동 로그)</div>';
         }

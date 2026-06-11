@@ -364,6 +364,13 @@
         .filter(n => n.type === 'task' && n.status === 'done' && n.completedAt && n.completedAt.slice(0, 10) >= cut)
         .sort((a, b) => (a.completedAt < b.completedAt ? 1 : -1));
     },
+    recentTasks(days) { // 완료 여부 무관 — 최근 N일 내 생성·변경·완료된 할일
+      const cut = D.add(TODAY, -(days || 7));
+      const ts = n => (n.completedAt || n.updatedAt || n.createdAt || '');
+      return Object.values(this.data.nodes)
+        .filter(n => n.type === 'task' && ts(n).slice(0, 10) >= cut)
+        .sort((a, b) => ts(b).localeCompare(ts(a)));
+    },
     dueSoon(days) {
       const lim = D.add(TODAY, days || 7);
       return Object.values(this.data.nodes)
