@@ -8,6 +8,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <style>
+html{scrollbar-gutter:stable}
 :root{--primary:#6241F5;--primary-soft:#EEEAFE;--growth:#30AB62;--growth-soft:#E6F6EE;--warning:#E5484D;--warning-soft:#FCE8E9;--amber:#F59E0B;--amber-soft:#FFF4E5;--text:#262626;--text-soft:#737373;--line:#EAEAEA;--bg:#FAFAFA;--card:#FFFFFF;}
 *{box-sizing:border-box}html,body{margin:0;padding:0}
 body{font-family:'Pretendard Variable',Pretendard,-apple-system,BlinkMacSystemFont,system-ui,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;background:var(--bg);color:var(--text);font-size:14.5px;line-height:1.5;-webkit-font-smoothing:antialiased}
@@ -42,7 +43,7 @@ footer.app-footer{max-width:1200px;margin:0 auto;padding:8px 24px 24px;font-size
 .tab-divider{width:1px;height:18px;background:var(--line);margin:0 4px}
 .btn-mode{display:inline-flex;align-items:center;gap:5px;padding:6px 11px;border-radius:8px;color:var(--text-soft);font-size:12px;font-weight:500;transition:all .15s}
 .btn-mode:hover{background:#F4F4F5}
-.conn-dot{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;font-size:11px;font-weight:600}
+.conn-dot{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:4px 10px;border-radius:999px;font-size:11px;font-weight:600;min-width:104px;white-space:nowrap}
 .conn-dot.online{background:var(--growth-soft);color:var(--growth)}
 .conn-dot.offline{background:var(--warning-soft);color:var(--warning)}
 .conn-dot.connecting{background:var(--amber-soft);color:var(--amber)}
