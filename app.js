@@ -6140,8 +6140,7 @@ init();
     },
     stamp(el,ch){
       if(!this.enabled)return;
-      el.classList.remove('tk-jolt');void el.offsetWidth;el.classList.add('tk-jolt');
-      setTimeout(()=>el.classList.remove('tk-jolt'),90);
+      // v129 — 입력칸을 위아래로 흔들던 jolt 제거: 스탬프·타건음만 유지
       this.click();
       if(!ch||el.tagName==='TEXTAREA')return;
       const cs=getComputedStyle(el);
