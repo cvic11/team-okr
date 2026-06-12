@@ -132,10 +132,18 @@
   document.addEventListener('input', (e) => {
     const el = e.target;
     if (el.tagName !== 'TEXTAREA' && !(el.tagName === 'INPUT' && (!el.type || el.type === 'text'))) return;
-    // 한글 조합(insertCompositionText)은 자모마다 발화 → 흔들림·타건음이 과도해 제외
-    if (e.inputType !== 'insertText') return;
+    // v123 — 한글 조합 입력에도 스탬프·타건음 복원 (게임 같은 타격감, [5]관리에서 끄기 가능)
+    if (e.inputType && e.inputType !== 'insertText' && e.inputType !== 'insertCompositionText') return;
     const ch = e.data ? e.data.slice(-1) : '';
     typeFX.stamp(el, ch);
+  }, true);
+
+  // v123 — 날짜 입력 클릭 시 달력(요일 확인) 즉시 열기
+  document.addEventListener('click', (e) => {
+    const el = e.target;
+    if (el && el.tagName === 'INPUT' && el.type === 'date' && el.showPicker) {
+      try { el.showPicker(); } catch (err) { }
+    }
   }, true);
 
   // ── IME-안전 키 판별: 한글 입력 상태에서도 물리 키 기준으로 단축키 동작 (F2) ──

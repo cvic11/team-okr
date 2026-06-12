@@ -90,3 +90,39 @@ end$$;
 -- ============================================================================
 -- 끝. SQL Editor 우측 상단 'RUN' 클릭. 콘솔에 success 떴으면 페이지 새로고침.
 -- ============================================================================
+
+-- v123: 그룹 채팅 — 방/멤버십, messages.room_id (적용 완료된 마이그레이션의 기록)
+create table if not exists public.chat_rooms (
+  id         text primary key,
+  team_id    text not null,
+  name       text not null default '',
+  created_by text,
+  created_at timestamptz not null default now()
+);
+create table if not exists public.chat_room_members (
+  room_id      text not null,
+  member_id    text not null,
+  joined_at    timestamptz not null default now(),
+  last_read_at timestamptz,
+  primary key (room_id, member_id)
+);
+alter table public.messages add column if not exists room_id text;
+alter table public.messages alter column to_id drop not null;
+create index if not exists messages_room_id_idx on public.messages (room_id);
+create index if not exists chat_room_members_member_idx on public.chat_room_members (member_id);
+alter table public.chat_rooms enable row level security;
+alter table public.chat_room_members enable row level security;
+drop policy if exists "chat_rooms_all" on public.chat_rooms;
+create policy "chat_rooms_all" on public.chat_rooms for all using (true) with check (true);
+drop policy if exists "chat_room_members_all" on public.chat_room_members;
+create policy "chat_room_members_all" on public.chat_room_members for all using (true) with check (true);
+do $$
+begin
+  if not exists (select 1 from pg_publication_tables where pubname='supabase_realtime' and schemaname='public' and tablename='chat_rooms') then
+    alter publication supabase_realtime add table public.chat_rooms;
+  end if;
+  if not exists (select 1 from pg_publication_tables where pubname='supabase_realtime' and schemaname='public' and tablename='chat_room_members') then
+    alter publication supabase_realtime add table public.chat_room_members;
+  end if;
+exception when undefined_object then null;
+end$$;
