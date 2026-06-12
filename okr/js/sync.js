@@ -387,6 +387,7 @@
           this.trackPresence();
         }
         this.subscribe();
+        if (S().me() && window.ViewChat) window.ViewChat.boot(); // [6]메시지 미읽음 배지 준비
         window.R && window.R.notice('플래너 DB 연동됨 — ' + (team.name || '') + ' · ' + (team.quarter || ''));
       } catch (e) {
         console.warn('[sync] load fail', e);
@@ -411,7 +412,7 @@
   };
 
   const origLogin = Store.login.bind(Store);
-  Store.login = function (name) { origLogin(name); Sync.shareSessionToPlanner(name); Sync.trackPresence(); };
+  Store.login = function (name) { origLogin(name); Sync.shareSessionToPlanner(name); Sync.trackPresence(); if (Sync.loaded && window.ViewChat) window.ViewChat.boot(); };
 
   const origLogout = Store.logout.bind(Store);
   Store.logout = function () { const name = this.me(); origLogout(); if (name) Sync.clearPlannerSession(name); };

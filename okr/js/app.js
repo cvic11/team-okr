@@ -9,6 +9,7 @@
     { key: '3', id: 'wbs', label: 'WBS', view: () => window.ViewWBS },
     { key: '4', id: 'standup', label: '스탠드업', view: () => window.ViewStandup },
     { key: '5', id: 'admin', label: '관리', view: () => window.ViewAdmin },
+    { key: '6', id: 'chat', label: '메시지', view: () => window.ViewChat },
   ];
 
   const App = {
@@ -142,9 +143,15 @@
     // ── 상단 바 ──
     renderTopbar() {
       if (!S().me()) return;
-      const tabs = MODES.map(m =>
-        '<button class="tab' + (m.id === this.mode ? ' tab-on' : '') + '" data-mode="' + m.id + '">'
-        + '[' + m.key + ']' + m.label + '</button>').join('');
+      const tabs = MODES.map(m => {
+        let lbl = m.label;
+        if (m.id === 'chat' && window.ViewChat) { // 미읽음 배지
+          const n = window.ViewChat.unread();
+          if (n > 0) lbl += '<span class="warn">(' + (n > 99 ? '99+' : n) + ')</span>';
+        }
+        return '<button class="tab' + (m.id === this.mode ? ' tab-on' : '') + '" data-mode="' + m.id + '">'
+          + '[' + m.key + ']' + lbl + '</button>';
+      }).join('');
       const presence = S().data.members.map(m => {
         const on = m.name === S().me() ? true : !!window.Sim.presence[m.name];
         return '<span class="' + (on ? '' : 'dim') + '">' + window.R.esc(m.name) + (on ? '●' : '○') + '</span>';
@@ -185,7 +192,7 @@
           return;
         }
 
-        if (k >= '1' && k <= '5' && !e.altKey && !e.ctrlKey && !e.metaKey) {
+        if (k >= '1' && k <= '6' && !e.altKey && !e.ctrlKey && !e.metaKey) {
           this.setMode(MODES[+k - 1].id); e.preventDefault(); return;
         }
         if (k === '?') { this.toggleHelp(true); e.preventDefault(); return; }

@@ -83,16 +83,30 @@
         }
       }
 
+      // 새 할일 즉시 추가 행 — 이니셔티브 선택 + 제목 입력 후 ⏎
+      const inits = [];
+      S().walk((n, depth, anc) => { if (n.type === 'init') inits.push({ id: n.id, label: ((anc[1] || {}).title ? (anc[1].title + ' > ') : '') + (n.title || '(제목 없음)') }); });
+      const savedParent = localStorage.getItem('okrterm_add_parent');
+      const addRow = inits.length
+        ? '<div class="row trow add-task-row"><span class="tlabel">[+]</span>'
+        + '<input type="text" class="add-title seamless live-title" placeholder="새 할일 — 제목 입력 후 ⏎ (오늘 마감 · 나에게 할당)">'
+        + '<select class="add-parent seamless dim">' + inits.map(i => '<option value="' + i.id + '"' + (i.id === savedParent ? ' selected' : '') + '>' + window.R.esc(i.label.slice(0, 30)) + '</option>').join('') + '</select>'
+        + '</div>'
+        : '<div class="row dim add-task-row">[+] 할일을 추가하려면 [2]트리에서 이니셔티브를 먼저 만드세요.</div>';
+
       this.el.innerHTML =
         '<div class="today-grid">'
         + '<section class="panel"><div class="panel-title">┌─ 최근 할일 (오늘 이전 7일, ' + recentAll.length + ') ' + '─'.repeat(4) + '</div>'
         + right + '</section>'
         + '<section class="panel"><div class="panel-title">┌─ 오늘의 할일 (' + tasks.length + ') ' + '─'.repeat(8) + '</div>'
         + left
-        + '<div class="hint dim">제목·날짜 칸을 클릭해 바로 입력(본인 할일) · Space 완료 · j/k 이동 · ⏎ 저장</div></section>'
+        + addRow
+        + '<div class="hint dim">[+]행에서 새 할일 바로 추가 · 제목·날짜 클릭 즉시 입력(본인) · Space 완료 · j/k 이동</div></section>'
         + '</div>';
 
       this.bind();
+      this.bindAdd();
+      if (this._refocusAdd) { this._refocusAdd = false; const a = this.el.querySelector('.add-title'); if (a) a.focus(); }
     },
 
     bind() {
@@ -149,6 +163,33 @@
         };
         if (ds) ds.addEventListener('change', dateCommit);
         if (dd) dd.addEventListener('change', dateCommit);
+      });
+    },
+
+    bindAdd() {
+      const inp = this.el.querySelector('.add-title');
+      const sel = this.el.querySelector('.add-parent');
+      if (!inp || !sel) return;
+      sel.addEventListener('change', () => { try { localStorage.setItem('okrterm_add_parent', sel.value); } catch (e) { } });
+      sel.addEventListener('keydown', e => e.stopPropagation());
+      inp.addEventListener('keydown', (e) => {
+        if (e.isComposing || e.keyCode === 229) { e.stopPropagation(); return; } // 한글 조합 보호
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          const title = inp.value.trim();
+          if (!title) return;
+          const pid = sel.value;
+          if (!pid) { window.R.notice('! 이니셔티브를 선택하세요', 'warn'); return; }
+          try { localStorage.setItem('okrterm_add_parent', pid); } catch (err) { }
+          const TODAY = window.OKRT.TODAY;
+          this._refocusAdd = true; // 생성 후 재렌더 시 입력칸으로 복귀 — 연속 입력
+          S().create('task', pid, { title, owner: S().me(), start: TODAY, due: TODAY, end: TODAY });
+          // 입력칸 포커스 중에는 재렌더가 보류되므로 즉시 갱신
+          if (window.App && window.App.flushPending) window.App.flushPending(); else this.render();
+          window.R.notice('할일 추가됨: "' + window.R.esc(title) + '"');
+        }
+        if (e.key === 'Escape') { inp.value = ''; inp.blur(); }
+        e.stopPropagation();
       });
     },
 
