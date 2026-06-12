@@ -6179,6 +6179,7 @@ init();
         y=r.top;h=r.height;
         if(x>r.right||x<r.left-chW)return;
       }
+      document.querySelectorAll('.tk-stamp').forEach(e=>e.remove()); // v136 — 다음 타이핑 즉시 이전 도장 제거 (속도감)
       const s=document.createElement('span');
       s.className='tk-stamp';s.textContent=ch;
       s.style.left=x+'px';s.style.top=y+'px';s.style.height=h+'px';s.style.font=c.font;
