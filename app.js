@@ -383,6 +383,14 @@ html.dark .date-bar{background:rgba(15,17,23,0.94);border-bottom-color:#22252F}
 .chat-input:focus{border-color:var(--primary);background:white;box-shadow:0 0 0 2px var(--primary-soft)}
 .chat-send{background:var(--primary);color:white;border:none;border-radius:16px;padding:8px 14px;font-weight:700;font-size:12px;cursor:pointer;font-family:inherit;flex-shrink:0;line-height:1.3}
 .chat-send:hover{filter:brightness(1.08)}
+.chat-msg-sender{font-size:10px;font-weight:700;color:var(--text-soft);margin:0 0 1px 2px}
+.chat-mini{background:#EEEAFE;color:var(--primary);border:none;border-radius:999px;padding:3px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;flex-shrink:0}
+.chat-form{padding:14px;display:flex;flex-direction:column;gap:8px;overflow-y:auto}
+.chat-form input[type=text]{border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:13px;font-family:inherit;outline:none}
+.chat-check-row{display:flex;align-items:center;gap:8px;padding:7px 8px;border:1px solid var(--line);border-radius:8px;cursor:pointer;font-size:13px;font-family:inherit;background:white}
+.chat-check-row input{accent-color:#6241F5}
+.chat-form-btn{background:var(--primary);color:white;border:none;border-radius:8px;padding:9px;font-weight:700;font-size:13px;cursor:pointer;font-family:inherit}
+.chat-room-avatar{background:#30AB62}
 @media(max-width:480px){
   .chat-panel{right:10px;left:10px;width:auto;bottom:80px;height:70vh}
 }
@@ -5646,47 +5654,74 @@ init();
     }
   });
 })();
-// v24 — 팀원 간 1:1 메시지 + 우측 하단 플로팅 채팅 (messages 테이블 사용)
+// v24/v123 — 팀원 메시지: 1:1 + 그룹 채팅 (messages / chat_rooms / chat_room_members)
 (function(){
-  let messages=[],chatOpen=false,chatView='list',chatPeer=null;
+  let messages=[],rooms=[],roomMems={},myRead={},chatOpen=false,chatView='list',chatPeer=null,chatRoom=null;
   let lastBootTeamId=null,realtimeReady=false;
+  const drafts={}; // 대화별 입력 초안 — 재렌더링에도 내가 쓰던 내용 유지 (v123)
+  function curKey(){return chatRoom?('r:'+chatRoom):(chatPeer?('p:'+chatPeer):'');}
   function me(){return(typeof selfMember==='function')?selfMember():null;}
   function tid(){return state&&state.currentTeamId;}
   function nowIso(){return new Date().toISOString();}
   function newMsgId(){return'm_'+Math.random().toString(36).slice(2,9)+Date.now().toString(36).slice(-4);}
+  function newRoomId(){return'r_'+Math.random().toString(36).slice(2,9)+Date.now().toString(36).slice(-4);}
   function _esc(s){return(typeof escapeHtml==='function')?escapeHtml(s):String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
   function fmtTime(ts){if(!ts)return'';const d=new Date(ts);const tod=new Date();if(d.toDateString()===tod.toDateString())return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');return(d.getMonth()+1)+'/'+d.getDate()+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');}
-  async function loadMessages(){
+  function memberOf(id){return state.members.find(x=>x.id===id);}
+  function roomName(r){if(r.name)return r.name;const m=me();const names=(roomMems[r.id]||[]).filter(x=>!m||x!==m.id).map(x=>(memberOf(x)||{}).name||'?');return names.join(', ')||'그룹';}
+  async function loadAll(){
     const m=me();if(!m||!tid())return;
     try{
-      const{data,error}=await sb.from('messages').select('*').eq('team_id',tid()).or('from_id.eq.'+m.id+',to_id.eq.'+m.id).order('created_at',{ascending:true});
-      if(error){console.warn('[chat] load error',error.message);messages=[];return;}
+      const rm=await sb.from('chat_room_members').select('*');
+      const allRm=rm.data||[];
+      roomMems={};allRm.forEach(x=>{(roomMems[x.room_id]=roomMems[x.room_id]||[]).push(x.member_id);});
+      const myRows=allRm.filter(x=>x.member_id===m.id);
+      myRead={};myRows.forEach(x=>{myRead[x.room_id]=x.last_read_at;});
+      const ids=myRows.map(x=>x.room_id);
+      if(ids.length){const rr=await sb.from('chat_rooms').select('*').in('id',ids);rooms=(rr.data||[]).filter(r=>r.team_id===tid());}
+      else rooms=[];
+      let orExpr='from_id.eq.'+m.id+',to_id.eq.'+m.id;
+      const rids=rooms.map(r=>r.id);
+      if(rids.length)orExpr+=',room_id.in.('+rids.join(',')+')';
+      const{data,error}=await sb.from('messages').select('*').eq('team_id',tid()).or(orExpr).order('created_at',{ascending:true});
+      if(error){console.warn('[chat] load error',error.message);return;}
       messages=data||[];
-    }catch(e){console.warn('[chat] load fail',e);messages=[];}
+    }catch(e){console.warn('[chat] load fail',e);}
   }
-  async function sendMessage(toId,body){
-    const m=me();if(!m||!toId||!body)return;
-    const row={id:newMsgId(),team_id:tid(),from_id:m.id,to_id:toId,body:body,created_at:nowIso()};
+  async function sendMessage(toId,roomId,body){
+    const m=me();if(!m||(!toId&&!roomId)||!body)return;
+    const row={id:newMsgId(),team_id:tid(),from_id:m.id,to_id:toId||null,room_id:roomId||null,body:body,created_at:nowIso()};
     messages.push(row);renderChatPanel();
-    try{const{error}=await sb.from('messages').insert(row);if(error){console.warn('[chat] send error',error.message);if(typeof showToast==='function')showToast('메시지 전송 실패: messages 테이블이 없거나 권한 문제일 수 있습니다',true);}}
+    try{const{error}=await sb.from('messages').insert(row);if(error){console.warn('[chat] send error',error.message);if(typeof showToast==='function')showToast('메시지 전송 실패',true);}}
     catch(e){console.warn('[chat] send fail',e);}
   }
   async function markRead(peerId){
     const m=me();if(!m)return;
-    const unread=messages.filter(x=>x.from_id===peerId&&x.to_id===m.id&&!x.read_at);
+    const unread=messages.filter(x=>!x.room_id&&x.from_id===peerId&&x.to_id===m.id&&!x.read_at);
     if(unread.length===0)return;
     const now=nowIso();unread.forEach(x=>x.read_at=now);
     updateBadge();
     try{await sb.from('messages').update({read_at:now}).eq('to_id',m.id).eq('from_id',peerId).is('read_at',null);}catch(e){}
   }
-  function getMessagesWith(peerId){const m=me();if(!m)return[];return messages.filter(x=>(x.from_id===m.id&&x.to_id===peerId)||(x.from_id===peerId&&x.to_id===m.id));}
-  function getTotalUnread(){const m=me();if(!m)return 0;return messages.filter(x=>x.to_id===m.id&&!x.read_at).length;}
+  async function markRoomRead(roomId){
+    const m=me();if(!m)return;
+    myRead[roomId]=nowIso();updateBadge();
+    try{await sb.from('chat_room_members').update({last_read_at:myRead[roomId]}).eq('room_id',roomId).eq('member_id',m.id);}catch(e){}
+  }
+  function getMessagesWith(peerId){const m=me();if(!m)return[];return messages.filter(x=>!x.room_id&&((x.from_id===m.id&&x.to_id===peerId)||(x.from_id===peerId&&x.to_id===m.id)));}
+  function roomMessages(roomId){return messages.filter(x=>x.room_id===roomId);}
+  function roomUnread(roomId){const m=me();if(!m)return 0;const lr=myRead[roomId];return messages.filter(x=>x.room_id===roomId&&x.from_id!==m.id&&(!lr||x.created_at>lr)).length;}
+  function getTotalUnread(){
+    const m=me();if(!m)return 0;
+    const dm=messages.filter(x=>!x.room_id&&x.to_id===m.id&&!x.read_at).length;
+    return dm+rooms.reduce((s,r)=>s+roomUnread(r.id),0);
+  }
   function ensureUI(){
     if(document.getElementById('chat-launcher'))return;
     const b=document.createElement('button');
     b.id='chat-launcher';b.className='chat-launcher';b.title='메시지';
     b.innerHTML='💬<span class="chat-launcher-badge" id="chat-launcher-badge" hidden>0</span>';
-    b.addEventListener('click',()=>{if(!me()){if(typeof showToast==='function')showToast('로그인 후 이용 가능합니다.',false);return;}chatOpen=!chatOpen;if(chatOpen)chatView='list';renderChatPanel();});
+    b.addEventListener('click',()=>{if(!me()){if(typeof showToast==='function')showToast('로그인 후 이용 가능합니다.',false);return;}chatOpen=!chatOpen;if(chatOpen){chatView='list';chatPeer=null;chatRoom=null;}renderChatPanel();});
     document.body.appendChild(b);
     const p=document.createElement('div');p.id='chat-panel';p.className='chat-panel';p.hidden=true;
     document.body.appendChild(p);
@@ -5701,36 +5736,62 @@ init();
     if(n>0){bd.hidden=false;bd.textContent=n>99?'99+':String(n);lc.classList.add('has-unread');}
     else{bd.hidden=true;lc.classList.remove('has-unread');}
   }
+  // v123 — 입력칸 초안 보존: 재렌더링 전에 현재 입력값을 저장
+  function captureDraft(){
+    const inp=document.getElementById('chat-input');
+    if(inp){const k=inp.dataset.draftKey||curKey();if(k)drafts[k]=inp.value;return document.activeElement===inp;}
+    return false;
+  }
+  function inputHtml(){
+    return '<div class="chat-input-wrap"><textarea class="chat-input" id="chat-input" data-draft-key="'+curKey()+'" rows="1" placeholder="메시지... (Enter 보내기 · Shift+Enter 줄바꿈)"></textarea><button class="chat-send" data-chat-act="send">보내기</button></div>';
+  }
+  function restoreDraft(hadFocus){
+    const inp=document.getElementById('chat-input');if(!inp)return;
+    inp.value=drafts[curKey()]||'';
+    if(hadFocus||!inp.value){setTimeout(()=>{inp.focus();try{inp.selectionStart=inp.selectionEnd=inp.value.length;}catch(e){}},40);}
+  }
   function renderChatPanel(){
     ensureUI();
     const panel=document.getElementById('chat-panel');if(!panel)return;
+    const hadFocus=captureDraft(); // 어떤 재렌더링에도 입력 중인 내용은 사라지지 않는다
     panel.hidden=!chatOpen;updateBadge();
     if(!chatOpen)return;
     const m=me();if(!m){panel.innerHTML='<div class="chat-panel-head"><span>메시지</span><button class="chat-close" data-chat-act="close">✕</button></div><div class="chat-panel-body"><div class="chat-empty">로그인 후 이용 가능합니다.</div></div>';return;}
     if(chatView==='list'){
+      const entries=[];
+      // 그룹방
+      rooms.forEach(r=>{
+        const msgs=roomMessages(r.id);
+        const last=msgs.length?msgs[msgs.length-1]:null;
+        entries.push({kind:'room',id:r.id,name:roomName(r),last,unread:roomUnread(r.id),count:(roomMems[r.id]||[]).length});
+      });
+      // 1:1
       const peers=new Map();
       messages.forEach(x=>{
+        if(x.room_id)return;
         const peer=x.from_id===m.id?x.to_id:x.from_id;
         if(!peers.has(peer))peers.set(peer,{last:x,unread:0,peerId:peer});
         else{const e=peers.get(peer);if(new Date(x.created_at)>new Date(e.last.created_at))e.last=x;}
         if(x.from_id!==m.id&&!x.read_at)peers.get(peer).unread++;
       });
       state.members.filter(mm=>!mm.isObserver&&mm.id!==m.id).forEach(mm=>{if(!peers.has(mm.id))peers.set(mm.id,{last:null,unread:0,peerId:mm.id});});
-      const list=Array.from(peers.values()).sort((a,b)=>{if(a.unread&&!b.unread)return-1;if(!a.unread&&b.unread)return 1;const at=a.last?new Date(a.last.created_at).getTime():0;const bt=b.last?new Date(b.last.created_at).getTime():0;return bt-at;});
+      peers.forEach(p=>{const mem=memberOf(p.peerId);if(mem)entries.push({kind:'dm',id:mem.id,name:mem.name,color:mem.color,last:p.last,unread:p.unread});});
+      entries.sort((a,b)=>{if(a.unread&&!b.unread)return-1;if(!a.unread&&b.unread)return 1;const at=a.last?new Date(a.last.created_at).getTime():0;const bt=b.last?new Date(b.last.created_at).getTime():0;return bt-at;});
       const totU=getTotalUnread();
-      panel.innerHTML='<div class="chat-panel-head"><span>메시지'+(totU>0?' <span class="chat-head-badge">'+totU+'</span>':'')+'</span><button class="chat-close" data-chat-act="close">✕</button></div><div class="chat-panel-body chat-list-body">'+(list.length===0?'<div class="chat-empty">대화 가능한 팀원이 없습니다.</div>':list.map(p=>{
-        const mem=state.members.find(x=>x.id===p.peerId);if(!mem)return'';
-        const last=p.last;
-        const preview=last?(last.from_id===m.id?'나: ':'')+_esc(String(last.body||'').slice(0,42))+(String(last.body||'').length>42?'…':''):'<span style="opacity:.55;">대화 없음</span>';
-        const time=last?fmtTime(last.created_at):'';
-        return'<button class="chat-list-item'+(p.unread>0?' has-unread':'')+'" data-chat-act="open-conv" data-peer="'+mem.id+'">'+
-          '<span class="chat-avatar" style="background:'+(mem.color||'#6241F5')+';">'+_esc((mem.name||'?').slice(0,1).toUpperCase())+'</span>'+
-          '<span class="chat-list-meta"><span class="chat-list-name">'+_esc(mem.name||'')+(p.unread>0?' <span class="chat-list-unread">'+p.unread+'</span>':'')+'</span><span class="chat-list-preview">'+preview+'</span></span>'+
+      panel.innerHTML='<div class="chat-panel-head"><span>메시지'+(totU>0?' <span class="chat-head-badge">'+totU+'</span>':'')+'</span><button class="chat-mini" data-chat-act="new-room" title="여러 명을 초대해 그룹 대화를 시작합니다">+ 그룹</button><button class="chat-close" data-chat-act="close">✕</button></div><div class="chat-panel-body chat-list-body">'+(entries.length===0?'<div class="chat-empty">대화 가능한 팀원이 없습니다.</div>':entries.map(p=>{
+        const preview=p.last?((p.last.from_id===m.id?'나: ':'')+_esc(String(p.last.body||'').slice(0,42))+(String(p.last.body||'').length>42?'…':'')):'<span style="opacity:.55;">대화 없음</span>';
+        const time=p.last?fmtTime(p.last.created_at):'';
+        const avatar=p.kind==='room'
+          ?'<span class="chat-avatar chat-room-avatar">👥</span>'
+          :'<span class="chat-avatar" style="background:'+(p.color||'#6241F5')+';">'+_esc((p.name||'?').slice(0,1).toUpperCase())+'</span>';
+        return'<button class="chat-list-item'+(p.unread>0?' has-unread':'')+'" data-chat-act="'+(p.kind==='room'?'open-room':'open-conv')+'" data-id="'+p.id+'">'+
+          avatar+
+          '<span class="chat-list-meta"><span class="chat-list-name">'+_esc(p.name||'')+(p.kind==='room'?' <span style="font-weight:500;color:var(--text-soft);font-size:10.5px;">'+p.count+'명</span>':'')+(p.unread>0?' <span class="chat-list-unread">'+p.unread+'</span>':'')+'</span><span class="chat-list-preview">'+preview+'</span></span>'+
           (time?'<span class="chat-list-time">'+time+'</span>':'')+
         '</button>';
       }).join(''))+'</div>';
     }else if(chatView==='conv'&&chatPeer){
-      const peer=state.members.find(x=>x.id===chatPeer);
+      const peer=memberOf(chatPeer);
       if(!peer){chatView='list';renderChatPanel();return;}
       const msgs=getMessagesWith(chatPeer);
       const bodyHtml=msgs.length===0?'<div class="chat-empty">아직 메시지가 없습니다.<br>첫 메시지를 보내보세요.</div>':msgs.map((x,i)=>{
@@ -5739,31 +5800,119 @@ init();
         const dateSep=showDate?'<div class="chat-date-sep">'+new Date(x.created_at).toLocaleDateString('ko-KR')+'</div>':'';
         return dateSep+'<div class="chat-msg '+(mine?'mine':'theirs')+'"><span class="chat-msg-body">'+_esc(x.body||'')+'</span><span class="chat-msg-time">'+fmtTime(x.created_at)+(mine&&x.read_at?' · 읽음':'')+'</span></div>';
       }).join('');
-      panel.innerHTML='<div class="chat-panel-head"><button class="chat-back" data-chat-act="back" title="목록">←</button><span class="chat-avatar chat-head-avatar" style="background:'+(peer.color||'#6241F5')+';">'+_esc((peer.name||'?').slice(0,1).toUpperCase())+'</span><span class="chat-head-name">'+_esc(peer.name||'')+'</span><button class="chat-close" data-chat-act="close">✕</button></div>'+
-        '<div class="chat-panel-body chat-conv-body" id="chat-conv-body">'+bodyHtml+'</div>'+
-        '<div class="chat-input-wrap"><textarea class="chat-input" id="chat-input" rows="1" placeholder="메시지... (Enter 보내기 · Shift+Enter 줄바꿈)"></textarea><button class="chat-send" data-chat-act="send">보내기</button></div>';
+      panel.innerHTML='<div class="chat-panel-head"><button class="chat-back" data-chat-act="back" title="목록">←</button><span class="chat-avatar chat-head-avatar" style="background:'+(peer.color||'#6241F5')+';">'+_esc((peer.name||'?').slice(0,1).toUpperCase())+'</span><span class="chat-head-name">'+_esc(peer.name||'')+'</span><button class="chat-mini" data-chat-act="dm-to-room" title="다른 팀원을 초대해 그룹 대화로 전환">+ 초대</button><button class="chat-close" data-chat-act="close">✕</button></div>'+
+        '<div class="chat-panel-body chat-conv-body" id="chat-conv-body">'+bodyHtml+'</div>'+inputHtml();
       const cb=document.getElementById('chat-conv-body');if(cb)cb.scrollTop=cb.scrollHeight;
-      const inp=document.getElementById('chat-input');if(inp)setTimeout(()=>inp.focus(),40);
+      restoreDraft(hadFocus);
       markRead(chatPeer);
+    }else if(chatView==='room'&&chatRoom){
+      const room=rooms.find(r=>r.id===chatRoom);
+      if(!room){chatView='list';renderChatPanel();return;}
+      const msgs=roomMessages(chatRoom);
+      const memNames=(roomMems[chatRoom]||[]).map(x=>(memberOf(x)||{}).name||'?').join(', ');
+      const bodyHtml=msgs.length===0?'<div class="chat-empty">아직 메시지가 없습니다.<br>첫 메시지를 보내보세요.</div>':msgs.map((x,i)=>{
+        const mine=x.from_id===m.id;
+        const showDate=i===0||(new Date(x.created_at).toDateString()!==new Date(msgs[i-1].created_at).toDateString());
+        const dateSep=showDate?'<div class="chat-date-sep">'+new Date(x.created_at).toLocaleDateString('ko-KR')+'</div>':'';
+        const showSender=!mine&&(i===0||msgs[i-1].from_id!==x.from_id);
+        const sender=showSender?'<div class="chat-msg-sender">'+_esc((memberOf(x.from_id)||{}).name||'?')+'</div>':'';
+        return dateSep+sender+'<div class="chat-msg '+(mine?'mine':'theirs')+'"><span class="chat-msg-body">'+_esc(x.body||'')+'</span><span class="chat-msg-time">'+fmtTime(x.created_at)+'</span></div>';
+      }).join('');
+      panel.innerHTML='<div class="chat-panel-head"><button class="chat-back" data-chat-act="back" title="목록">←</button><span class="chat-avatar chat-head-avatar chat-room-avatar">👥</span><span class="chat-head-name" title="'+_esc(memNames)+'">'+_esc(roomName(room))+' <span style="font-weight:500;font-size:10.5px;color:var(--text-soft);">'+(roomMems[chatRoom]||[]).length+'명</span></span><button class="chat-mini" data-chat-act="open-invite">+ 초대</button><button class="chat-close" data-chat-act="close">✕</button></div>'+
+        '<div class="chat-panel-body chat-conv-body" id="chat-conv-body">'+bodyHtml+'</div>'+inputHtml();
+      const cb=document.getElementById('chat-conv-body');if(cb)cb.scrollTop=cb.scrollHeight;
+      restoreDraft(hadFocus);
+      markRoomRead(chatRoom);
+    }else if(chatView==='new-room'){
+      const cands=state.members.filter(mm=>!mm.isObserver&&mm.id!==m.id);
+      panel.innerHTML='<div class="chat-panel-head"><button class="chat-back" data-chat-act="back" title="목록">←</button><span class="chat-head-name">새 그룹 대화</span><button class="chat-close" data-chat-act="close">✕</button></div>'+
+        '<div class="chat-panel-body chat-form">'+
+        '<input type="text" id="nr-name" maxlength="30" placeholder="그룹 이름 (비우면 멤버 이름으로 표시)">'+
+        '<div style="font-size:11px;color:var(--text-soft);font-weight:700;">초대할 팀원</div>'+
+        cands.map(mm=>'<label class="chat-check-row"><input type="checkbox" class="nr-mem" value="'+mm.id+'"><span class="chat-avatar" style="background:'+(mm.color||'#6241F5')+';width:22px;height:22px;font-size:10px;">'+_esc((mm.name||'?').slice(0,1).toUpperCase())+'</span>'+_esc(mm.name)+'</label>').join('')+
+        '<button class="chat-form-btn" data-chat-act="create-room">그룹 만들기</button>'+
+        '</div>';
+      setTimeout(()=>{const el=document.getElementById('nr-name');if(el)el.focus();},40);
+    }else if(chatView==='invite'&&chatRoom){
+      const inRoom=new Set(roomMems[chatRoom]||[]);
+      const cands=state.members.filter(mm=>!mm.isObserver&&!inRoom.has(mm.id));
+      panel.innerHTML='<div class="chat-panel-head"><button class="chat-back" data-chat-act="back-room" title="대화로">←</button><span class="chat-head-name">멤버 초대</span><button class="chat-close" data-chat-act="close">✕</button></div>'+
+        '<div class="chat-panel-body chat-form">'+
+        (cands.length===0?'<div class="chat-empty">초대할 수 있는 팀원이 없습니다.<br>(모두 참여 중)</div>':
+        cands.map(mm=>'<label class="chat-check-row"><input type="checkbox" class="nr-mem" value="'+mm.id+'"><span class="chat-avatar" style="background:'+(mm.color||'#6241F5')+';width:22px;height:22px;font-size:10px;">'+_esc((mm.name||'?').slice(0,1).toUpperCase())+'</span>'+_esc(mm.name)+'</label>').join('')+
+        '<button class="chat-form-btn" data-chat-act="do-invite">초대하기</button>')+
+        '</div>';
     }
   }
-  function openChatWith(peerId){chatOpen=true;chatView='conv';chatPeer=peerId;renderChatPanel();}
+  async function createRoom(name,memberIds){
+    const m=me();if(!m)return;
+    const id=newRoomId();const now=nowIso();
+    const room={id,team_id:tid(),name:name||'',created_by:m.id,created_at:now};
+    rooms.push(room);
+    roomMems[id]=[m.id].concat(memberIds);
+    myRead[id]=now;
+    try{
+      const r1=await sb.from('chat_rooms').insert(room);
+      if(r1.error)throw r1.error;
+      const rows=[{room_id:id,member_id:m.id,last_read_at:now}].concat(memberIds.map(x=>({room_id:id,member_id:x})));
+      const r2=await sb.from('chat_room_members').insert(rows);
+      if(r2.error)throw r2.error;
+    }catch(e){console.warn('[chat] room create fail',e);if(typeof showToast==='function')showToast('그룹 생성 실패: '+(e.message||e),true);}
+    chatView='room';chatRoom=id;chatPeer=null;renderChatPanel();
+  }
+  async function inviteMembers(roomId,memberIds){
+    if(!memberIds.length)return;
+    roomMems[roomId]=(roomMems[roomId]||[]).concat(memberIds);
+    try{
+      const{error}=await sb.from('chat_room_members').insert(memberIds.map(x=>({room_id:roomId,member_id:x})));
+      if(error)throw error;
+      if(typeof showToast==='function')showToast(memberIds.length+'명 초대 완료');
+    }catch(e){console.warn('[chat] invite fail',e);if(typeof showToast==='function')showToast('초대 실패: '+(e.message||e),true);}
+    chatView='room';renderChatPanel();
+  }
+  function openChatWith(peerId){chatOpen=true;chatView='conv';chatPeer=peerId;chatRoom=null;renderChatPanel();}
+  document.addEventListener('input',function(e){
+    if(e.target&&e.target.id==='chat-input'){const k=e.target.dataset.draftKey;if(k)drafts[k]=e.target.value;}
+  },true);
   document.addEventListener('click',function(e){
     const t=e.target.closest('[data-chat-act]');if(!t)return;
     const act=t.dataset.chatAct;
-    if(act==='close'){chatOpen=false;renderChatPanel();}
-    else if(act==='back'){chatView='list';chatPeer=null;renderChatPanel();}
-    else if(act==='open-conv'){chatView='conv';chatPeer=t.dataset.peer;renderChatPanel();}
+    if(act==='close'){captureDraft();chatOpen=false;renderChatPanel();}
+    else if(act==='back'){captureDraft();chatView='list';chatPeer=null;chatRoom=null;renderChatPanel();}
+    else if(act==='back-room'){chatView='room';renderChatPanel();}
+    else if(act==='open-conv'){chatView='conv';chatPeer=t.dataset.id||t.dataset.peer;chatRoom=null;renderChatPanel();}
+    else if(act==='open-room'){chatView='room';chatRoom=t.dataset.id;chatPeer=null;renderChatPanel();}
+    else if(act==='new-room'){chatView='new-room';renderChatPanel();}
+    else if(act==='open-invite'){chatView='invite';renderChatPanel();}
+    else if(act==='dm-to-room'){ // 1:1 대화에서 초대 → 현재 상대를 포함한 새 그룹 생성 화면
+      chatView='new-room';renderChatPanel();
+      const pid=chatPeer;
+      setTimeout(()=>{const cb=document.querySelector('.nr-mem[value="'+pid+'"]');if(cb)cb.checked=true;},60);
+    }
+    else if(act==='create-room'){
+      const name=(document.getElementById('nr-name')||{}).value||'';
+      const ids=Array.from(document.querySelectorAll('.nr-mem:checked')).map(x=>x.value);
+      if(ids.length===0){if(typeof showToast==='function')showToast('초대할 팀원을 선택하세요',true);return;}
+      createRoom(name.trim(),ids);
+    }
+    else if(act==='do-invite'){
+      const ids=Array.from(document.querySelectorAll('.nr-mem:checked')).map(x=>x.value);
+      if(ids.length===0){if(typeof showToast==='function')showToast('초대할 팀원을 선택하세요',true);return;}
+      inviteMembers(chatRoom,ids);
+    }
     else if(act==='send'){
-      const inp=document.getElementById('chat-input');if(!inp||!chatPeer)return;
+      const inp=document.getElementById('chat-input');if(!inp)return;
       const body=inp.value.trim();if(!body)return;
-      sendMessage(chatPeer,body);inp.value='';
+      delete drafts[curKey()];inp.value='';
+      if(chatRoom)sendMessage(null,chatRoom,body);else if(chatPeer)sendMessage(chatPeer,null,body);
     }
   });
   document.addEventListener('keydown',function(e){
     if(e.target&&e.target.id==='chat-input'&&e.key==='Enter'&&!e.shiftKey){
-      e.preventDefault();const inp=e.target;const body=inp.value.trim();if(!body||!chatPeer)return;
-      sendMessage(chatPeer,body);inp.value='';
+      if(e.isComposing||e.keyCode===229)return; // 한글 조합 중 전송 방지
+      e.preventDefault();const inp=e.target;const body=inp.value.trim();if(!body)return;
+      delete drafts[curKey()];inp.value='';
+      if(chatRoom)sendMessage(null,chatRoom,body);else if(chatPeer)sendMessage(chatPeer,null,body);
     }
   });
   // 우클릭 (담당자 아이콘) → 그 멤버와 채팅 열기
@@ -5775,29 +5924,97 @@ init();
     if(mid===m.id){if(typeof showToast==='function')showToast('본인에게는 메시지를 보낼 수 없습니다.',false);return;}
     openChatWith(mid);
   });
+  let refreshTimer=null;
+  function scheduleRefresh(){ // 방/멤버십 변경 → 디바운스 후 재로드
+    if(refreshTimer)clearTimeout(refreshTimer);
+    refreshTimer=setTimeout(async()=>{refreshTimer=null;await loadAll();if(chatOpen)renderChatPanel();else updateBadge();},700);
+  }
   function setupChatRealtime(){
     if(realtimeReady)return;realtimeReady=true;
     try{
-      sb.channel('messages-rt').on('postgres_changes',{event:'*',schema:'public',table:'messages'},function(p){
+      sb.channel('messages-rt')
+      .on('postgres_changes',{event:'*',schema:'public',table:'messages'},function(p){
         const r=p.new||p.old;if(!r||r.team_id!==tid())return;
         const m=me();if(!m)return;
-        if(r.from_id!==m.id&&r.to_id!==m.id)return;
+        const isMyRoom=r.room_id&&rooms.some(x=>x.id===r.room_id);
+        if(!isMyRoom&&r.from_id!==m.id&&r.to_id!==m.id)return;
         if(p.eventType==='DELETE'){messages=messages.filter(x=>x.id!==r.id);}
         else if(p.eventType==='UPDATE'){const i=messages.findIndex(x=>x.id===r.id);if(i>=0)messages[i]=r;else messages.push(r);}
         else{if(!messages.find(x=>x.id===r.id))messages.push(r);}
         messages.sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
         if(chatOpen)renderChatPanel();else updateBadge();
-      }).subscribe();
+      })
+      .on('postgres_changes',{event:'*',schema:'public',table:'chat_rooms'},function(){scheduleRefresh();})
+      .on('postgres_changes',{event:'*',schema:'public',table:'chat_room_members'},function(p){
+        const r=p.new||p.old;const m=me();if(!m||!r)return;
+        // 내 last_read 업데이트 echo 는 무시, 그 외(초대·새 멤버)는 재로드
+        if(p.eventType==='UPDATE'&&r.member_id===m.id)return;
+        scheduleRefresh();
+      })
+      .subscribe();
     }catch(e){console.warn('[chat] realtime setup fail',e);}
   }
   async function bootChat(){
     if(!me()||!tid()){updateBadge();return;}
     if(lastBootTeamId===tid())return;
     lastBootTeamId=tid();
-    messages=[];chatOpen=false;chatView='list';chatPeer=null;
-    await loadMessages();
+    messages=[];rooms=[];roomMems={};myRead={};chatOpen=false;chatView='list';chatPeer=null;chatRoom=null;
+    await loadAll();
     renderChatPanel();updateBadge();setupChatRealtime();
   }
   // 폴링 부트스트랩 (앱 init·로그인·팀전환에 모두 대응)
   setInterval(bootChat,1500);
+})();
+
+// v123 — 타자 스탬프 효과: 터미널 모드와 같은 "게임 같은" 타격감 (플래너에도 적용)
+// 끄기: localStorage 'team-okr-typefx' = '0'
+(function(){
+  const st=document.createElement('style');
+  st.textContent='@keyframes tkStampIn{0%{transform:scale(2.2);opacity:.95}60%{transform:scale(.9)}100%{transform:scale(1)}}'
+    +'.tk-stamp{position:fixed;z-index:99999;pointer-events:none;display:inline-flex;align-items:center;background:#6241F5;color:#fff;border-radius:3px;padding:0 1px;animation:tkStampIn 130ms steps(3) both}'
+    +'.tk-jolt{transform:translateY(1.5px)}';
+  document.head.appendChild(st);
+  const fx={
+    enabled:localStorage.getItem('team-okr-typefx')!=='0',
+    _ctx:null,_canvas:document.createElement('canvas'),
+    toggle(){this.enabled=!this.enabled;try{localStorage.setItem('team-okr-typefx',this.enabled?'1':'0');}catch(e){}return this.enabled;},
+    click(){
+      try{
+        if(!this._ctx)this._ctx=new(window.AudioContext||window.webkitAudioContext)();
+        const c=this._ctx,t=c.currentTime;
+        const o=c.createOscillator(),g=c.createGain();
+        o.type='square';o.frequency.value=95+Math.random()*45;
+        g.gain.setValueAtTime(0.035,t);g.gain.exponentialRampToValueAtTime(0.0008,t+0.045);
+        o.connect(g);g.connect(c.destination);o.start(t);o.stop(t+0.05);
+      }catch(e){}
+    },
+    stamp(el,ch){
+      if(!this.enabled)return;
+      el.classList.remove('tk-jolt');void el.offsetWidth;el.classList.add('tk-jolt');
+      setTimeout(()=>el.classList.remove('tk-jolt'),90);
+      this.click();
+      if(!ch||el.tagName==='TEXTAREA')return;
+      const cs=getComputedStyle(el);
+      const c=this._canvas.getContext('2d');
+      c.font=cs.fontWeight+' '+cs.fontSize+' '+cs.fontFamily;
+      const caret=el.selectionStart!=null?el.selectionStart:el.value.length;
+      const before=c.measureText(el.value.slice(0,caret)).width;
+      const chW=c.measureText(ch).width;
+      const r=el.getBoundingClientRect();
+      const x=r.left+(parseFloat(cs.paddingLeft)||0)+before-el.scrollLeft-chW;
+      if(x>r.right||x<r.left-chW)return;
+      const s=document.createElement('span');
+      s.className='tk-stamp';s.textContent=ch;
+      s.style.left=x+'px';s.style.top=r.top+'px';s.style.height=r.height+'px';s.style.font=c.font;
+      document.body.appendChild(s);
+      setTimeout(()=>s.remove(),170);
+    },
+  };
+  document.addEventListener('input',(e)=>{
+    const el=e.target;
+    if(el.tagName!=='TEXTAREA'&&!(el.tagName==='INPUT'&&(!el.type||el.type==='text')))return;
+    if(e.inputType&&e.inputType!=='insertText'&&e.inputType!=='insertCompositionText')return;
+    fx.stamp(el,e.data?e.data.slice(-1):'');
+  },true);
+  window.typeFX=fx;
 })();
