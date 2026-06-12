@@ -104,9 +104,7 @@
     },
     stamp(el, ch) {
       if (!this.enabled) return;
-      // 행 전체가 살짝 내려앉는 타격감
-      el.classList.remove('type-jolt'); void el.offsetWidth; el.classList.add('type-jolt');
-      setTimeout(() => el.classList.remove('type-jolt'), 90);
+      // v129 — 입력칸을 위아래로 흔들던 jolt 제거: 스탬프·타건음만 유지
       this.click();
       if (!ch || el.tagName === 'TEXTAREA') return;
       const cs = getComputedStyle(el);
