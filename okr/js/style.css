@@ -135,7 +135,7 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover { opacity: 1; }
   position: fixed; z-index: 99; pointer-events: none;
   display: inline-flex; align-items: center;
   background: var(--fg); color: var(--bg);
-  animation: stamp-in 130ms steps(3) both;
+  animation: stamp-in 130ms steps(2) both; /* v130 — 2프레임 도장 */
 }
 .type-jolt { transform: translateY(2px); }
 

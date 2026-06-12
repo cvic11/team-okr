@@ -119,6 +119,7 @@
       const s = document.createElement('span');
       s.className = 'type-stamp';
       s.textContent = ch;
+      s.style.background = cs.color; // 입력칸 글자색을 따라감 — 채팅에선 내가 고른 색과 통일 (v130)
       s.style.left = x + 'px';
       s.style.top = r.top + 'px';
       s.style.height = r.height + 'px';

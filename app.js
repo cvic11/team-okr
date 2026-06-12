@@ -6121,7 +6121,7 @@ init();
 (function(){
   const st=document.createElement('style');
   st.textContent='@keyframes tkStampIn{0%{transform:scale(2.2);opacity:.95}60%{transform:scale(.9)}100%{transform:scale(1)}}'
-    +'.tk-stamp{position:fixed;z-index:99999;pointer-events:none;display:inline-flex;align-items:center;background:#6241F5;color:#fff;border-radius:3px;padding:0 1px;animation:tkStampIn 130ms steps(3) both}'
+    +'.tk-stamp{position:fixed;z-index:99999;pointer-events:none;display:inline-flex;align-items:center;background:#6241F5;color:#fff;border-radius:3px;padding:0 1px;animation:tkStampIn 130ms steps(2) both}'
     +'.tk-jolt{transform:translateY(1.5px)}';
   document.head.appendChild(st);
   const fx={
