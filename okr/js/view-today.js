@@ -9,7 +9,11 @@
 
     mount(el) { this.el = el; this.render(); },
 
-    list() { return S().todayTasks(); },
+    list() { // 내 할일 먼저, 그 아래 다른 팀원 할일 (각 그룹 내 정렬은 유지)
+      const me = S().me();
+      const t = S().todayTasks();
+      return t.filter(x => x.owner === me).concat(t.filter(x => x.owner !== me));
+    },
 
     mine(t) { return t && t.owner === S().me(); }, // 제목·날짜 직접 입력과 삭제는 본인 할일만
 
@@ -58,8 +62,12 @@
           const meta = window.R.carryTag(t) + window.R.warnTag(t.id) + dueTag
             + ' <span class="owner">@' + window.R.esc(t.owner) + '</span>'
             + (editing ? ' <span class="editing">[' + editing + ' 편집중]</span>' : '');
-          return this.rowHtml(t, { cls: 'sel-row' + (i === this.sel ? ' selected' : ''), idx: i, meta });
+          // 내 할일 그룹이 끝나는 지점에 구분선 — 다른 팀원 항목과 섞이지 않게
+          const sep = (i > 0 && !this.mine(t) && this.mine(tasks[i - 1]))
+            ? '<div class="row dim group-sep">── 다른 팀원 ──────────</div>' : '';
+          return sep + this.rowHtml(t, { cls: 'sel-row' + (i === this.sel ? ' selected' : ''), idx: i, meta });
         }).join('');
+        if (tasks.length && !this.mine(tasks[0])) left = '<div class="row dim group-sep">── 다른 팀원 ──────────</div>' + left;
       }
 
       let right = '';
