@@ -140,6 +140,7 @@
         y = r.top; h = r.height;
         if (x > r.right || x < r.left - chW) return;
       }
+      document.querySelectorAll('.type-stamp').forEach(e => e.remove()); // v136 — 다음 타이핑 즉시 이전 도장 제거 (속도감)
       const s = document.createElement('span');
       s.className = 'type-stamp';
       s.textContent = ch;
