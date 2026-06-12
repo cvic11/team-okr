@@ -3485,6 +3485,56 @@ document.addEventListener('click',async e=>{
     if(!rerenderInitRowOKR(krid,iid))render();
     return;
   }
+  // v121 — "최근 한 일" DB 할일 체크 토글 (updated_at 미변경 → 표시 날짜 유지)
+  if(a==='recent-toggle-db'){
+    const tid=btn.dataset.tid,iid=btn.dataset.iid;
+    const arr=state.initiativeTasks&&state.initiativeTasks[iid];
+    const t=arr&&arr.find(x=>x.id===tid);
+    if(!t){showToast('작업을 찾을 수 없습니다',true);return;}
+    t.status=t.status==='done'?'todo':'done';
+    markLocal('initiative_tasks',tid);
+    sb.from('initiative_tasks').update({status:t.status}).eq('id',tid).then(({error})=>{if(error)showToast('저장 실패',true);});
+    const done=t.status==='done';
+    btn.classList.toggle('checked',done);btn.textContent=done?'✓':'';
+    const row=btn.closest('.recent-task-row');
+    const txt=row&&row.querySelector('.recent-task-text');
+    if(txt){txt.style.color=done?'var(--text-soft)':'var(--text)';txt.style.textDecoration=done?'line-through':'';}
+    return;
+  }
+  // v121 — "최근 한 일" DB 할일 삭제
+  if(a==='recent-del-db'){
+    const tid=btn.dataset.tid,iid=btn.dataset.iid;
+    const arr=state.initiativeTasks&&state.initiativeTasks[iid];
+    const t=arr&&arr.find(x=>x.id===tid);
+    if(!t){showToast('작업을 찾을 수 없습니다',true);return;}
+    if(!confirm('"'+(t.title||'(제목 없음)')+'" 작업을 삭제할까요?'))return;
+    state.initiativeTasks[iid]=arr.filter(x=>x.id!==tid);
+    markLocal('initiative_tasks',tid);
+    sb.from('initiative_tasks').delete().eq('id',tid).then(({error})=>{if(error)showToast('삭제 실패',true);});
+    const c=btn.closest('.recent-task-container');if(c)c.remove();
+    return;
+  }
+  // v121 — "최근 한 일" JSON(스탠드업) 작업 삭제
+  if(a==='recent-del-task'){
+    const mid=btn.dataset.mid;const date=btn.dataset.date;const tid=btn.dataset.tid;
+    if(!canEditAs(mid)){showToast('본인 항목만 삭제 가능',true);return;}
+    const entry=state.standups[date]?.entries?.[mid];
+    if(!entry){showToast('데이터를 찾을 수 없습니다',true);return;}
+    const raw=entry.today||'';
+    let parsed={legacy:'',tasks:[]};
+    if(raw.trim().startsWith('{')&&raw.indexOf('"_krlv":1')>0){
+      try{const p=JSON.parse(raw);parsed={legacy:p.legacy||'',tasks:Array.isArray(p.tasks)?p.tasks:[]};}catch(e){}
+    }else parsed.legacy=raw;
+    const i=(parsed.tasks||[]).findIndex(x=>x.id===tid);
+    if(i<0){showToast('작업을 찾을 수 없습니다',true);return;}
+    if(!confirm('"'+(parsed.tasks[i].t||'(제목 없음)')+'" 작업을 삭제할까요?'))return;
+    parsed.tasks.splice(i,1);
+    const newText=(parsed.tasks.length>0||((parsed.legacy||'').trim()))?JSON.stringify({_krlv:1,legacy:parsed.legacy||'',tasks:parsed.tasks}):'';
+    entry.today=newText;
+    saveEntry(date,mid,'today',newText);
+    const c=btn.closest('.recent-task-container');if(c)c.remove();
+    return;
+  }
   // v14 — "최근 한 일"에서 담당자 본인이 과거 작업을 ✓ 체크 가능
   if(a==='recent-toggle-task'){
     const mid=btn.dataset.mid;const date=btn.dataset.date;const tid=btn.dataset.tid;
@@ -4989,18 +5039,25 @@ init();
                   const taskItems=gTasks.map(t=>{
                     let checkHtml;
                     if(t._isInitTask){
-                      // v112 — DB 할일은 정적 표시: 완료 ✓ / 미완료 • (JSON 전용 recent-toggle 와 분리)
-                      checkHtml='<span style="display:inline-block;width:16px;text-align:center;margin-right:4px;color:'+(t.d?'var(--growth)':'var(--text-soft)')+';">'+(t.d?'✓':'•')+'</span>';
+                      // v121 — DB 할일도 본인/관리자는 체크 토글 가능 (updated_at은 건드리지 않아 날짜 유지)
+                      checkHtml=ownerEditable
+                        ?'<button class="rt-check '+(t.d?'checked':'')+'" style="width:16px;height:16px;border-width:1.5px;border-radius:4px;flex-shrink:0;margin-top:2px;margin-right:6px;display:inline-flex;align-items:center;justify-content:center;font-size:11px;padding:0;line-height:1;" data-act="recent-toggle-db" data-tid="'+esc(t.id)+'" data-iid="'+esc(t._iid||t.i||'')+'" title="이 작업 완료 토글">'+(t.d?'✓':'')+'</button>'
+                        :'<span style="display:inline-block;width:16px;text-align:center;margin-right:4px;color:'+(t.d?'var(--growth)':'var(--text-soft)')+';">'+(t.d?'✓':'•')+'</span>';
                     }else if(ownerEditable){
                       checkHtml='<button class="rt-check '+(t.d?'checked':'')+'" style="width:16px;height:16px;border-width:1.5px;border-radius:4px;flex-shrink:0;margin-top:2px;margin-right:6px;display:inline-flex;align-items:center;justify-content:center;font-size:11px;padding:0;line-height:1;" data-act="recent-toggle-task" data-mid="'+mid+'" data-date="'+r.date+'" data-tid="'+t.id+'" title="이 작업 완료 토글">'+(t.d?'✓':'')+'</button>';
                     }else{
                       checkHtml='<span style="display:inline-block;width:16px;text-align:center;margin-right:4px;color:'+(t.d?'var(--growth)':'var(--text-soft)')+';">'+(t.d?'✓':'•')+'</span>';
                     }
+                    // v121 — 행별 삭제 버튼 (본인/관리자)
+                    const delHtml=ownerEditable
+                      ?'<button style="border:none;background:none;color:var(--text-soft);cursor:pointer;font-size:13px;padding:0 4px;flex-shrink:0;line-height:1.4;" title="이 작업 삭제" data-act="'+(t._isInitTask?'recent-del-db':'recent-del-task')+'" data-tid="'+esc(t.id)+'" data-iid="'+esc(t._iid||t.i||'')+'" data-mid="'+mid+'" data-date="'+r.date+'">✕</button>'
+                      :'';
                     // v105 — 댓글 기능 제거
                     return '<div class="recent-task-container" data-task-container="'+t.id+'" data-recent-date="'+r.date+'">'+
                       '<div class="recent-task-row" data-recent-tid="'+t.id+'" data-recent-mid="'+mid+'" data-recent-date="'+r.date+'" style="font-size:12.5px;line-height:1.55;padding:2px 0 2px 8px;display:flex;align-items:flex-start;">'+
                         checkHtml+
                         '<span class="recent-task-text" style="flex:1;color:'+(t.d?'var(--text-soft)':'var(--text)')+';'+(t.d?'text-decoration:line-through;':'')+'">'+esc((t.t||'').slice(0,300))+'</span>'+
+                        delHtml+
                       '</div>'+
                     '</div>';
                   }).join('');

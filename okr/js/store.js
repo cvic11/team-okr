@@ -372,12 +372,15 @@
         .filter(n => n.type === 'task' && n.status === 'done' && n.completedAt && n.completedAt.slice(0, 10) >= cut)
         .sort((a, b) => (a.completedAt < b.completedAt ? 1 : -1));
     },
-    recentTasks(days) { // 완료 여부 무관 — 최근 N일 내 생성·변경·완료된 할일
+    recentTasks(days) { // '오늘 이전' 날짜에 입력(생성)된 최근 N일 내 할일 — 완료 여부 무관
       const cut = D.add(TODAY, -(days || 7));
-      const ts = n => (n.completedAt || n.updatedAt || n.createdAt || '');
       return Object.values(this.data.nodes)
-        .filter(n => n.type === 'task' && ts(n).slice(0, 10) >= cut)
-        .sort((a, b) => ts(b).localeCompare(ts(a)));
+        .filter(n => {
+          if (n.type !== 'task') return false;
+          const cd = (n.createdAt || '').slice(0, 10);
+          return cd && cd < TODAY && cd >= cut;
+        })
+        .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
     },
     dueSoon(days) {
       const lim = D.add(TODAY, days || 7);
