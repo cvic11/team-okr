@@ -34,6 +34,10 @@
         ? ' <span class="dim live-dates"><input type="date" class="live-start seamless" value="' + (t.start || '') + '" title="시작일"><span>~</span><input type="date" class="live-due seamless" value="' + (t.due || '') + '" title="마감일"></span>'
         : '';
       const acts = '<span class="row-actions ta-show"><button data-ta="del" title="삭제">[삭제]</button></span>';
+      // 본인 할일은 소속(이니셔티브)도 그 자리에서 변경 가능
+      const belong = mine
+        ? '<div class="path">소속: <select class="live-parent seamless dim" title="소속 이니셔티브 변경">' + window.R.initOptions(t.parentId) + '</select></div>'
+        : '<div class="path">' + window.R.pathLine(t.id) + '</div>';
       return '<div class="row ' + opts.cls + '" data-node-id="' + t.id + '"' + (opts.idx != null ? ' data-idx="' + opts.idx + '"' : '') + '>'
         + '<div class="trow">'
         + '<span class="cb" title="완료 토글">' + (done ? '[x]' : '[ ]') + '</span>'
@@ -42,7 +46,7 @@
         + dates
         + acts
         + '</div>'
-        + '<div class="path">' + window.R.pathLine(t.id) + '</div>'
+        + belong
         + '</div>';
     },
 
@@ -83,14 +87,13 @@
         }
       }
 
-      // 새 할일 즉시 추가 행 — 이니셔티브 선택 + 제목 입력 후 ⏎
-      const inits = [];
-      S().walk((n, depth, anc) => { if (n.type === 'init') inits.push({ id: n.id, label: ((anc[1] || {}).title ? (anc[1].title + ' > ') : '') + (n.title || '(제목 없음)') }); });
+      // 새 할일 즉시 추가 행 — 소속(이니셔티브) 선택 + 제목 입력 후 ⏎
       const savedParent = localStorage.getItem('okrterm_add_parent');
-      const addRow = inits.length
+      const initOpts = window.R.initOptions(savedParent);
+      const addRow = initOpts
         ? '<div class="row trow add-task-row"><span class="tlabel">[+]</span>'
         + '<input type="text" class="add-title seamless live-title" placeholder="새 할일 — 제목 입력 후 ⏎ (오늘 마감 · 나에게 할당)">'
-        + '<select class="add-parent seamless dim">' + inits.map(i => '<option value="' + i.id + '"' + (i.id === savedParent ? ' selected' : '') + '>' + window.R.esc(i.label.slice(0, 30)) + '</option>').join('') + '</select>'
+        + '<span class="dim">소속</span> <select class="add-parent seamless dim">' + initOpts + '</select>'
         + '</div>'
         : '<div class="row dim add-task-row">[+] 할일을 추가하려면 [2]트리에서 이니셔티브를 먼저 만드세요.</div>';
 
@@ -163,6 +166,17 @@
         };
         if (ds) ds.addEventListener('change', dateCommit);
         if (dd) dd.addEventListener('change', dateCommit);
+
+        // 소속 변경 (본인 할일)
+        const lp = row.querySelector('.live-parent');
+        if (lp) {
+          lp.addEventListener('keydown', e => e.stopPropagation());
+          lp.addEventListener('change', () => {
+            const n = S().node(id); if (!n || !lp.value || lp.value === n.parentId) return;
+            S().move(id, lp.value, null);
+            window.R.notice('소속 변경됨');
+          });
+        }
       });
     },
 
