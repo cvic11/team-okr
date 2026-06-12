@@ -6124,7 +6124,7 @@ init();
 (function(){
   const st=document.createElement('style');
   st.textContent=''
-    +'.tk-stamp{position:fixed;z-index:99999;pointer-events:none;display:inline-flex;align-items:center;background:#6241F5;color:#fff;border-radius:3px;padding:0 1px;transform:scale(1.7)}'
+    +'.tk-stamp{position:fixed;z-index:99999;pointer-events:none;display:inline-flex;align-items:center;background:#6241F5;color:#fff;border-radius:3px;padding:0 1px;transform:scale(1.18)}'
     +'.tk-jolt{transform:translateY(1.5px)}';
   document.head.appendChild(st);
   const fx={
