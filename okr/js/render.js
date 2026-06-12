@@ -161,5 +161,16 @@
   }
   window.keyOf = keyOf;
 
-  window.R = { esc, gauge, pathLine, carryTag, warnTag, checkbox, flashRows, notice, conflictNotice, fmtTs, typeFX };
+  // 소속(이니셔티브) 선택 옵션 — 'KR > 이니셔티브' 라벨 (할일 생성·이동용)
+  function initOptions(selectedId) {
+    const out = [];
+    window.Store.walk((n, depth, anc) => {
+      if (n.type !== 'init') return;
+      const lbl = (((anc[1] || {}).title ? anc[1].title + ' > ' : '') + (n.title || '(제목 없음)')).slice(0, 30);
+      out.push('<option value="' + n.id + '"' + (n.id === selectedId ? ' selected' : '') + '>' + esc(lbl) + '</option>');
+    });
+    return out.join('');
+  }
+
+  window.R = { esc, gauge, pathLine, carryTag, warnTag, checkbox, flashRows, notice, conflictNotice, fmtTs, typeFX, initOptions };
 })();

@@ -154,6 +154,7 @@
         + ' <span class="owner">@<select class="edit-owner seamless">' + members + '</select></span> '
         + '<span class="dim edit-dates">' + dateFields + '</span>'
         + (n.status !== 'done' ? ' <select class="edit-status seamless dim">' + statuses + '</select>' : '')
+        + (n.type === 'task' ? ' <span class="dim">소속 <select class="edit-parent seamless dim">' + window.R.initOptions(n.parentId) + '</select></span>' : '')
         + ' <span class="dim">⏎ 저장 · <button class="lnk edit-esc" title="취소 — 새 항목은 삭제됩니다">Esc 취소</button></span>'
         + '</div>';
     },
@@ -183,6 +184,8 @@
       if (st) fields.status = st.value;
       const res = S().update(id, fields);
       if (res && res.error) { window.R.notice('! ' + res.error, 'warn'); return; }
+      const ps = row.querySelector('.edit-parent');
+      if (ps && ps.value && ps.value !== n.parentId) S().move(id, ps.value, null); // 소속 변경
       this.editingId = null;
       if (window.Sim) window.Sim.userEditing(null);
       this.render();
