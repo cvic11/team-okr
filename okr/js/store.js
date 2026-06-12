@@ -354,10 +354,12 @@
 
     // ── 오늘/최근 ──
     todayTasks() {
-      // 마감 도래·이월 + 기간 진행 중(시작일 도래). 날짜 미입력 할일은 '최근 할일' 쪽에 노출.
+      // 날짜 기준 소속: 마감 도래·이월 + 진행 중(시작일 도래).
+      // 완료해도 '오늘 완료한 것'은 오늘의 할일에 [x]로 남는다 — 다음 날부터 최근 할일로.
       return Object.values(this.data.nodes)
         .filter(n => {
-          if (n.type !== 'task' || n.status === 'done') return false;
+          if (n.type !== 'task') return false;
+          if (n.status === 'done') return !!(n.completedAt && String(n.completedAt).slice(0, 10) === TODAY);
           if (n.due) return n.due <= TODAY || (n.start && n.start <= TODAY);
           return !!(n.start && n.start <= TODAY);
         })
