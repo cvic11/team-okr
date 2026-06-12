@@ -196,6 +196,7 @@
       if (!this.el) return;
       if (!sb()) { this.el.innerHTML = '<div class="empty big-empty">메시지는 플래너 DB 연동 모드에서만 사용할 수 있습니다.</div>'; return; }
       if (!this.loaded) { this.el.innerHTML = '<div class="empty">메시지 불러오는 중...</div>'; this.boot(); return; }
+      if (this.view !== 'conv' && this.view !== 'room' && this._cpmT) { clearInterval(this._cpmT); this._cpmT = null; }
       if (this.view === 'list') this.renderList();
       else if (this.view === 'conv' || this.view === 'room') this.renderConv();
       else if (this.view === 'new-room' || this.view === 'invite') this.renderPick();
@@ -256,13 +257,28 @@
         + '</div>'
         + '<div class="chat-scroll" id="chat-scroll">' + lines + '</div>'
         + '<div class="chat-input-line"><span class="prompt">&gt;</span>'
-        + '<input type="text" id="chat-t-input" autocomplete="off" placeholder="메시지 입력 후 ⏎ · Esc 목록">'
+        + '<input type="text" id="chat-t-input" autocomplete="off" placeholder="메시지 ⏎ 전송 · Esc 목록">'
+        + '<span class="dim chat-cpm" id="chat-cpm" title="타자 속도"></span>'
         + '<button class="lnk" data-ca="send">[보내기]</button></div>'
         + '</div>';
       const sc = document.getElementById('chat-scroll'); if (sc) sc.scrollTop = sc.scrollHeight;
       const inp = document.getElementById('chat-t-input');
       inp.value = this.drafts[this.key()] || '';
-      inp.addEventListener('input', () => { this.drafts[this.key()] = inp.value; });
+      // 타자수(속도) 표시 — 최근 10초 타수 기준 타/분
+      this._taps = this._taps || [];
+      const cpmEl = document.getElementById('chat-cpm');
+      const updCpm = () => {
+        const now = Date.now();
+        this._taps = this._taps.filter(t => now - t <= 10000);
+        const cpm = Math.round(this._taps.length * 6);
+        if (cpmEl) cpmEl.textContent = cpm > 0 ? cpm + '타/분' : '';
+      };
+      if (this._cpmT) clearInterval(this._cpmT);
+      this._cpmT = setInterval(updCpm, 1000);
+      inp.addEventListener('input', (e) => {
+        this.drafts[this.key()] = inp.value;
+        if (e.data) { this._taps.push(Date.now()); updCpm(); }
+      });
       inp.addEventListener('keydown', (e) => {
         if (e.isComposing || e.keyCode === 229) { e.stopPropagation(); return; } // 한글 조합 보호
         if (e.key === 'Enter') { e.preventDefault(); this._sendFromInput(); }
