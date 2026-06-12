@@ -116,7 +116,7 @@
     isInteracting() {
       return !!((window.ViewWBS && window.ViewWBS.drag)
         || (window.ViewTree && (window.ViewTree.editingId || window.ViewTree.dragId))
-        || (window.ViewToday && window.ViewToday.editingId));
+        || (window.ViewToday && window.ViewToday.isTyping && window.ViewToday.isTyping()));
     },
     flushPending() {
       if (!this._pending) return;
