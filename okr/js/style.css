@@ -126,16 +126,12 @@ input[type="date"]::-webkit-calendar-picker-indicator { display: inline-block; c
 input[type="date"]::-webkit-calendar-picker-indicator:hover { opacity: 1; }
 
 /* 타자 "쿵쿵" 스탬프 효과 */
-@keyframes stamp-in {
-  0% { transform: scale(2.2); }
-  60% { transform: scale(0.9); }
-  100% { transform: scale(1); }
-}
+/* v133 — 도장은 첫 모습 1회만: 다단계 스케일 애니메이션 제거 */
 .type-stamp {
   position: fixed; z-index: 99; pointer-events: none;
   display: inline-flex; align-items: center;
   background: var(--fg); color: var(--bg);
-  animation: stamp-in 130ms steps(2) both; /* v130 — 2프레임 도장 */
+  transform: scale(1.7);
 }
 .type-jolt { transform: translateY(2px); }
 
