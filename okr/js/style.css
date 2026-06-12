@@ -230,3 +230,7 @@ a.switch-link:hover { background: var(--fg); color: var(--bg); }
 .chat-name-input { border-bottom: 1px dashed var(--faint); min-width: 260px; }
 .add-task-row { margin-top: 8px; border-top: 1px dashed var(--faint); padding-top: 6px; }
 .add-task-row select.add-parent { max-width: 240px; border: none; }
+.chat-pal { display: inline-flex; gap: 2px; }
+.chat-swatch { border: none; background: none; cursor: pointer; padding: 0 2px; font-size: 0.95em; line-height: 1; }
+.chat-swatch:hover { background: var(--faint); }
+.chat-pal-label { font-size: 0.85em; }
