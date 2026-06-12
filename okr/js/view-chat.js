@@ -16,6 +16,9 @@
     return d.toDateString() === t.toDateString() ? hm : (d.getMonth() + 1) + '/' + d.getDate() + ' ' + hm;
   }
 
+  // 내 글씨 색 팔레트 (인광 계열 — 본인 선택, 저장)
+  const PALETTE = ['#33ff33', '#ffb000', '#e6e6e6', '#5ad7ff', '#ff7ad7', '#b3ff66'];
+
   const ViewChat = {
     el: null,
     view: 'list',      // list | conv | room | new-room | invite
@@ -24,6 +27,7 @@
     messages: [], rooms: [], roomMems: {}, myRead: {},
     drafts: {},
     loaded: false, _booted: false, _refreshT: null,
+    myColor: localStorage.getItem('okrterm_chat_color') || '#ffb000',
 
     mount(el) { this.el = el; this.boot(); this.render(); },
 
@@ -242,10 +246,12 @@
           const sep = (i === 0 || new Date(msgs[i - 1].created_at).toLocaleDateString('ko-KR') !== day)
             ? '<div class="row dim chat-day">── ' + day + ' ──</div>' : '';
           const who = mine ? '나' : ((memberOf(x.from_id) || {}).name || '?');
+          // 내 글씨는 선택한 색, 상대 글씨는 기본 인광색 — 한눈에 구분
+          const bodyStyle = mine ? ' style="color:' + this.myColor + ';"' : '';
           return sep + '<div class="row chat-line' + (mine ? ' chat-mine' : '') + '">'
             + '<span class="dim">' + fmtTime(x.created_at) + '</span> '
-            + '<span class="' + (mine ? 'tlabel' : 'owner') + '">' + window.R.esc(who) + '</span>'
-            + '<span class="dim">│</span> <span class="chat-body">' + window.R.esc(x.body || '') + '</span>'
+            + '<span class="' + (mine ? 'tlabel' : 'owner') + '"' + (mine ? ' style="color:' + this.myColor + ';"' : '') + '>' + window.R.esc(who) + '</span>'
+            + '<span class="dim">│</span> <span class="chat-body"' + bodyStyle + '>' + window.R.esc(x.body || '') + '</span>'
             + (mine && !isRoom && x.read_at ? ' <span class="dim">✓읽음</span>' : '')
             + '</div>';
         }).join('');
@@ -253,11 +259,13 @@
         '<div class="panel chat-panel-t">'
         + '<div class="panel-title">┌─ ' + window.R.esc(title) + ' ' + '─'.repeat(4)
         + ' <button class="lnk" data-ca="back">[← 목록]</button>'
-        + (isRoom || !isRoom ? ' <button class="lnk" data-ca="invite">[+ 초대]</button>' : '')
-        + '</div>'
+        + ' <button class="lnk" data-ca="invite">[+ 초대]</button>'
+        + ' <span class="dim chat-pal-label">내 색:</span><span class="chat-pal">'
+        + PALETTE.map(c => '<button class="chat-swatch' + (c === this.myColor ? ' on' : '') + '" data-color="' + c + '" style="color:' + c + ';" title="내 글씨 색">' + (c === this.myColor ? '◉' : '■') + '</button>').join('')
+        + '</span></div>'
         + '<div class="chat-scroll" id="chat-scroll">' + lines + '</div>'
-        + '<div class="chat-input-line"><span class="prompt">&gt;</span>'
-        + '<input type="text" id="chat-t-input" autocomplete="off" placeholder="메시지 ⏎ 전송 · Esc 목록">'
+        + '<div class="chat-input-line"><span class="prompt" style="color:' + this.myColor + ';">&gt;</span>'
+        + '<input type="text" id="chat-t-input" autocomplete="off" placeholder="메시지 ⏎ 전송 · Esc 목록" style="color:' + this.myColor + ';caret-color:' + this.myColor + ';">'
         + '<span class="dim chat-cpm" id="chat-cpm" title="타자 속도"></span>'
         + '<button class="lnk" data-ca="send">[보내기]</button></div>'
         + '</div>';
@@ -287,6 +295,12 @@
       });
       setTimeout(() => { inp.focus(); try { inp.selectionStart = inp.selectionEnd = inp.value.length; } catch (e) { } }, 30);
       this.el.querySelector('[data-ca="back"]').addEventListener('click', () => this.back());
+      this.el.querySelectorAll('.chat-swatch').forEach(b => b.addEventListener('click', () => {
+        this.myColor = b.dataset.color;
+        try { localStorage.setItem('okrterm_chat_color', this.myColor); } catch (e) { }
+        this.render();
+        window.R.notice('내 글씨 색 변경됨');
+      }));
       const iv = this.el.querySelector('[data-ca="invite"]');
       if (iv) iv.addEventListener('click', () => {
         if (!isRoom) { // 1:1 → 현재 상대 포함 그룹 만들기
