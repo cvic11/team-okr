@@ -234,3 +234,7 @@ a.switch-link:hover { background: var(--fg); color: var(--bg); }
 .chat-swatch { border: none; background: none; cursor: pointer; padding: 0 2px; font-size: 0.95em; line-height: 1; }
 .chat-swatch:hover { background: var(--faint); }
 .chat-pal-label { font-size: 0.85em; }
+/* 내 메시지 행 전체에 선택 색 적용 — 시각·읽음 표시는 같은 색의 흐린 톤 */
+.chat-line.chat-mine { color: var(--mc, var(--fg)); }
+.chat-line.chat-mine .tlabel, .chat-line.chat-mine .chat-body { color: var(--mc, var(--fg)); }
+.chat-line.chat-mine .dim { color: var(--mc, var(--dim)); opacity: .62; }

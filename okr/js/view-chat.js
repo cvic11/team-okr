@@ -246,12 +246,11 @@
           const sep = (i === 0 || new Date(msgs[i - 1].created_at).toLocaleDateString('ko-KR') !== day)
             ? '<div class="row dim chat-day">── ' + day + ' ──</div>' : '';
           const who = mine ? '나' : ((memberOf(x.from_id) || {}).name || '?');
-          // 내 글씨는 선택한 색, 상대 글씨는 기본 인광색 — 한눈에 구분
-          const bodyStyle = mine ? ' style="color:' + this.myColor + ';"' : '';
-          return sep + '<div class="row chat-line' + (mine ? ' chat-mine' : '') + '">'
+          // 내 메시지는 행 전체(시각·이름·│·본문·읽음)가 선택한 색 — 상대는 기본 인광색
+          return sep + '<div class="row chat-line' + (mine ? ' chat-mine' : '') + '"' + (mine ? ' style="--mc:' + this.myColor + ';"' : '') + '>'
             + '<span class="dim">' + fmtTime(x.created_at) + '</span> '
-            + '<span class="' + (mine ? 'tlabel' : 'owner') + '"' + (mine ? ' style="color:' + this.myColor + ';"' : '') + '>' + window.R.esc(who) + '</span>'
-            + '<span class="dim">│</span> <span class="chat-body"' + bodyStyle + '>' + window.R.esc(x.body || '') + '</span>'
+            + '<span class="' + (mine ? 'tlabel' : 'owner') + '">' + window.R.esc(who) + '</span>'
+            + '<span class="dim">│</span> <span class="chat-body">' + window.R.esc(x.body || '') + '</span>'
             + (mine && !isRoom && x.read_at ? ' <span class="dim">✓읽음</span>' : '')
             + '</div>';
         }).join('');
