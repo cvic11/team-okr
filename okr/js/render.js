@@ -102,27 +102,51 @@
         o.start(t); o.stop(t + 0.05);
       } catch (e) { }
     },
+    _caretXY(el, cs) { // v134 — textarea 캐럿 좌표: 미러 div로 측정
+      const d = document.createElement('div');
+      ['fontFamily', 'fontSize', 'fontWeight', 'lineHeight', 'letterSpacing', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft', 'borderTopWidth', 'borderRightWidth', 'borderBottomWidth', 'borderLeftWidth', 'boxSizing'].forEach(k => { d.style[k] = cs[k]; });
+      d.style.cssText += ';position:fixed;left:-9999px;top:0;visibility:hidden;white-space:pre-wrap;word-wrap:break-word;overflow-wrap:break-word;';
+      d.style.width = el.clientWidth + 'px';
+      const caret = el.selectionStart != null ? el.selectionStart : el.value.length;
+      d.textContent = el.value.slice(0, caret);
+      const mark = document.createElement('span'); mark.textContent = '\u200b'; d.appendChild(mark);
+      document.body.appendChild(d);
+      const r = el.getBoundingClientRect();
+      const x = r.left + mark.offsetLeft - el.scrollLeft;
+      const y = r.top + mark.offsetTop - el.scrollTop;
+      const h = parseFloat(cs.lineHeight) || 20;
+      d.remove();
+      return { x, y, h };
+    },
     stamp(el, ch) {
       if (!this.enabled) return;
       // v129 — 입력칸을 위아래로 흔들던 jolt 제거: 스탬프·타건음만 유지
       this.click();
-      if (!ch || el.tagName === 'TEXTAREA') return;
+      if (!ch) return;
       const cs = getComputedStyle(el);
       const c = this._canvas.getContext('2d');
       c.font = cs.fontWeight + ' ' + cs.fontSize + ' ' + cs.fontFamily;
-      const caret = el.selectionStart != null ? el.selectionStart : el.value.length;
-      const before = c.measureText(el.value.slice(0, caret)).width;
       const chW = c.measureText(ch).width;
       const r = el.getBoundingClientRect();
-      const x = r.left + (parseFloat(cs.paddingLeft) || 0) + before - el.scrollLeft - chW;
-      if (x > r.right || x < r.left - chW) return;
+      let x, y, h;
+      if (el.tagName === 'TEXTAREA') { // v134 — 스탠드업 막힘 등 여러 줄 입력칸도 지원
+        const pos = this._caretXY(el, cs);
+        x = pos.x - chW; y = pos.y; h = pos.h;
+        if (y < r.top - 2 || y > r.bottom - h * 0.5 || x < r.left - chW || x > r.right) return;
+      } else {
+        const caret = el.selectionStart != null ? el.selectionStart : el.value.length;
+        const before = c.measureText(el.value.slice(0, caret)).width;
+        x = r.left + (parseFloat(cs.paddingLeft) || 0) + before - el.scrollLeft - chW;
+        y = r.top; h = r.height;
+        if (x > r.right || x < r.left - chW) return;
+      }
       const s = document.createElement('span');
       s.className = 'type-stamp';
       s.textContent = ch;
       s.style.background = cs.color; // 입력칸 글자색을 따라감 — 채팅에선 내가 고른 색과 통일 (v130)
       s.style.left = x + 'px';
-      s.style.top = r.top + 'px';
-      s.style.height = r.height + 'px';
+      s.style.top = y + 'px';
+      s.style.height = h + 'px';
       s.style.font = c.font;
       document.body.appendChild(s);
       setTimeout(() => s.remove(), 170);
