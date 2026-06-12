@@ -328,6 +328,9 @@ html.dark .krl-group-move-btn:hover{background:rgba(255,255,255,.10)}
 .date-bar-member-icon{width:28px;height:28px;border-radius:50%;border:2px solid white;cursor:pointer;font-size:11.5px;font-weight:800;color:white;display:inline-flex;align-items:center;justify-content:center;font-family:inherit;box-shadow:0 1px 3px rgba(0,0,0,.12);transition:transform .12s,box-shadow .12s,filter .12s;flex-shrink:0;padding:0;line-height:1}
 .date-bar-member-icon:hover{transform:translateY(-1px);box-shadow:0 3px 8px rgba(0,0,0,.22);filter:brightness(1.06)}
 .date-bar-member-icon:active{transform:translateY(0)}
+.date-bar-member-icon{position:relative}
+@keyframes presenceSpin{to{transform:rotate(360deg)}}
+.date-bar-member-icon.online::after{content:"";position:absolute;inset:-4px;border-radius:50%;background:conic-gradient(#30AB62,#B9F2D2 35%,#30AB62 60%,#E8FFF1 80%,#30AB62);-webkit-mask:radial-gradient(farthest-side,transparent calc(100% - 3px),#000 calc(100% - 2.5px));mask:radial-gradient(farthest-side,transparent calc(100% - 3px),#000 calc(100% - 2.5px));animation:presenceSpin 1.8s linear infinite;pointer-events:none}
 .member-card.highlight-flash{animation:mcFlash 1.5s ease-out}
 @keyframes mcFlash{0%{box-shadow:0 0 0 3px var(--primary),0 0 18px rgba(98,65,245,.4)}100%{box-shadow:0 0 0 0 transparent}}
 /* v38 — WBS·기타 점프 시 강한 펄스 하이라이트 */
@@ -6167,4 +6170,39 @@ init();
     fx.stamp(el,e.data?e.data.slice(-1):'');
   },true);
   window.typeFX=fx;
+})();
+
+// v131 — 접속중 표시: 터미널과 같은 presence 채널(okrterm-presence) 공유.
+// 접속 중인 멤버의 원형 아이콘 둘레에 색상이 도는 링을 표시한다.
+(function(){
+  let ch=null,joinedAs=null;
+  window._onlineNames=new Set();
+  function applyIcons(){
+    try{
+      const self=(typeof selfMember==='function')?selfMember():null;
+      document.querySelectorAll('.date-bar-member-icon').forEach(b=>{
+        const m=state.members.find(x=>x.id===b.dataset.mid);
+        const on=!!(m&&(window._onlineNames.has(m.name)||(self&&m.id===self.id))); // 본인은 로그인 중이면 항상 접속중
+        b.classList.toggle('online',on);
+      });
+    }catch(e){}
+  }
+  window._applyPresenceIcons=applyIcons;
+  function ensure(){
+    const m=(typeof selfMember==='function')?selfMember():null;
+    if(!m||typeof sb==='undefined'||!sb)return;
+    if(joinedAs===m.name){applyIcons();return;}
+    try{if(ch)sb.removeChannel(ch);}catch(e){}
+    joinedAs=m.name;
+    try{
+      ch=sb.channel('okrterm-presence',{config:{presence:{key:m.name}}});
+      ch.on('presence',{event:'sync'},()=>{
+        window._onlineNames=new Set(Object.keys(ch.presenceState()));
+        applyIcons();
+      });
+      ch.subscribe(st=>{if(st==='SUBSCRIBED')ch.track({at:Date.now()});});
+    }catch(e){console.warn('[presence] setup fail',e);}
+    applyIcons(); // 조인 직후에도 본인 링 즉시 표시
+  }
+  setInterval(ensure,2500);
 })();
