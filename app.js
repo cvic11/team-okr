@@ -3967,7 +3967,10 @@ function _resolveDragZone(tgt,clientY,src){
   const tgtT=tgt.dataset.dragType;
   const canNest=(srcT==='init'&&tgtT==='init')||(srcT==='init-task'&&tgtT==='init');
   if(canNest){
-    if(clientY>r.bottom)return{zone:'nest',rect:r};
+    // v138 — 헤더 아래(서브리스트 영역)는 nest. 단 init-row 전체 박스를 벗어난 빈 공간은 제외 →
+    // 최하단 KR의 이니셔티브 아래 빈 공간 드롭이 '할일 변환'으로 잘못 처리되어 이동이 안 되던 버그 수정.
+    const fullBottom=tgt.getBoundingClientRect().bottom;
+    if(clientY>r.bottom&&clientY<=fullBottom)return{zone:'nest',rect:r};
     if(rel>=0.33&&rel<=0.67)return{zone:'nest',rect:r};
   }
   return{zone:rel>0.5?'after':'before',rect:r};
