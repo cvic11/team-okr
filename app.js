@@ -3965,10 +3965,15 @@ function _resolveDragZone(tgt,clientY,src){
   // v50 — nest 가능 케이스: init→init (demote), init-task→init (다른 init으로 이동)
   const srcT=src&&src.dataset.dragType;
   const tgtT=tgt.dataset.dragType;
-  const canNest=(srcT==='init'&&tgtT==='init')||(srcT==='init-task'&&tgtT==='init');
-  if(canNest){
-    // v138 — 헤더 아래(서브리스트 영역)는 nest. 단 init-row 전체 박스를 벗어난 빈 공간은 제외 →
-    // 최하단 KR의 이니셔티브 아래 빈 공간 드롭이 '할일 변환'으로 잘못 처리되어 이동이 안 되던 버그 수정.
+  // v138/v139 — init→init: 가운데 1/3만 '할일 변환'. 헤더 아래는 이동(after)으로.
+  //   (이전엔 '헤더 아래=nest'였는데, nest 미리보기가 대상 행을 세로로 키워 커진 박스 기준
+  //    nest 영역이 아래로 확장 → 아래로 드래그 시 demote에 갇혀 '이동이 안 되던' 버그.)
+  if(srcT==='init'&&tgtT==='init'){
+    if(rel>=0.33&&rel<=0.67)return{zone:'nest',rect:r};
+    return{zone:rel>0.5?'after':'before',rect:r};
+  }
+  // init-task→init: 서브리스트 영역(헤더 아래)에 떨어뜨리면 그 init의 할일로 이동(nest)
+  if(srcT==='init-task'&&tgtT==='init'){
     const fullBottom=tgt.getBoundingClientRect().bottom;
     if(clientY>r.bottom&&clientY<=fullBottom)return{zone:'nest',rect:r};
     if(rel>=0.33&&rel<=0.67)return{zone:'nest',rect:r};
