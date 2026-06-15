@@ -2378,6 +2378,12 @@ function renderWBS(){
       const lightness=status==='doing'?58:65;
       return{bg:`hsl(${hue},45%,${lightness}%)`,bgGrad:`linear-gradient(90deg,hsl(${hue},45%,${lightness}%),hsl(${hue},50%,${lightness-3}%))`,fg:'white'};
     }
+    if(type==='T'){
+      // v137 — 할일: 가장 옅은 톤 (상태별 색 우선)
+      if(status==='done')return{bg:`hsl(140,45%,55%)`,bgGrad:`linear-gradient(90deg,hsl(140,45%,55%),hsl(140,48%,52%))`,fg:'white'};
+      if(status==='blocked')return{bg:`hsl(0,62%,62%)`,bgGrad:`linear-gradient(90deg,hsl(0,62%,62%),hsl(0,66%,58%))`,fg:'white'};
+      return{bg:`hsl(${hue},32%,74%)`,bgGrad:`linear-gradient(90deg,hsl(${hue},32%,74%),hsl(${hue},36%,71%))`,fg:'#2a2a2a'};
+    }
     if(type==='KR'){
       return{bg:`hsl(${hue},55%,50%)`,bgGrad:`linear-gradient(90deg,hsl(${hue},55%,50%),hsl(${hue},60%,45%))`,fg:'white'};
     }
@@ -2405,7 +2411,15 @@ function renderWBS(){
       (k.initiatives||[]).forEach(i=>{
         const iStart=i.startDate||krStart;
         const iEnd=i.dueDate||krEnd;
-        rows.push({type:'I',id:i.id,label:i.title||'(Initiative)',level:2,start:iStart,end:iEnd,owner:i.ownerId,status:i.status||'todo',objId:o.id,krId:k.id,confidence:i.confidence,objIdx});
+        const iTasks=(state.initiativeTasks&&state.initiativeTasks[i.id])||[];
+        rows.push({type:'I',id:i.id,label:i.title||'(Initiative)',level:2,start:iStart,end:iEnd,owner:i.ownerId,status:i.status||'todo',objId:o.id,krId:k.id,confidence:i.confidence,objIdx,taskCount:iTasks.length});
+        // v137 — 이니셔티브 하위 할일 행 (펼침 상태에서만)
+        if(isWBSKidsHidden('I',i.id))return;
+        iTasks.forEach(tsk=>{
+          const tStart=tsk.start_date||iStart;
+          const tEnd=tsk.due_date||tsk.start_date||iEnd;
+          rows.push({type:'T',id:tsk.id,label:tsk.title||'(할일)',level:3,start:tStart,end:tEnd,owner:tsk.owner_id,status:tsk.status||'todo',objId:o.id,krId:k.id,initId:i.id,objIdx});
+        });
       });
     });
   });
@@ -2424,16 +2438,31 @@ function renderWBS(){
     let icon='',badge='';
     if(r.type==='O'){icon='🎯';badge=`<span style="background:hsl(${labelHue},65%,90%);color:hsl(${labelHue},65%,30%);font-size:9px;padding:1px 6px;border-radius:999px;font-weight:700;">O</span>`;}
     else if(r.type==='KR'){icon='📌';badge=`<span style="background:hsl(${labelHue},55%,92%);color:hsl(${labelHue},55%,35%);font-size:9px;padding:1px 6px;border-radius:999px;font-weight:700;">KR</span>`;}
-    else{icon='⚡';badge=`<span style="background:hsl(${labelHue},45%,93%);color:hsl(${labelHue},45%,40%);font-size:9px;padding:1px 6px;border-radius:999px;font-weight:700;">Init</span>`;}
-    const canCollapse=r.type==='O'||r.type==='KR';
+    else if(r.type==='I'){icon='⚡';badge=`<span style="background:hsl(${labelHue},45%,93%);color:hsl(${labelHue},45%,40%);font-size:9px;padding:1px 6px;border-radius:999px;font-weight:700;">Init</span>`;}
+    else{icon='↳';badge=`<span style="background:hsl(${labelHue},30%,94%);color:hsl(${labelHue},30%,45%);font-size:9px;padding:1px 6px;border-radius:999px;font-weight:700;">할일</span>`;}
+    // v137 — I(할일 보유 시)도 접기/펼치기, 할일 추가·소속 KR 변경 컨트롤
+    const wbsEditable=(typeof canEditOKR==='function'&&canEditOKR());
+    const canCollapse=r.type==='O'||r.type==='KR'||(r.type==='I'&&(r.taskCount||0)>0);
     const collapseKey=r.type+':'+r.id;
     const isCollapsed=isWBSKidsHidden(r.type,r.id);
     const toggleBtn=canCollapse?`<button class="btn-icon" data-act="wbs-toggle" data-key="${collapseKey}" style="padding:0 4px;flex-shrink:0;">${caret(!isCollapsed,11)}</button>`:`<span style="display:inline-block;width:14px;"></span>`;
-    const rowBg=r.type==='O'?`background:hsl(${labelHue},60%,96%);`:'';
+    let wbsCtrl='';
+    if(r.type==='I'&&wbsEditable){
+      const krOpts=state.objectives.map(o2=>`<optgroup label="${esc((o2.title||'O').slice(0,18))}">`+(o2.keyResults||[]).map(k2=>`<option value="${k2.id}" ${k2.id===r.krId?'selected':''}>${esc((k2.title||'KR').slice(0,20))}</option>`).join('')+`</optgroup>`).join('');
+      wbsCtrl=`<button class="btn-icon" data-act="wbs-add-task" data-iid="${r.id}" data-krid="${r.krId}" title="이 이니셔티브에 할일 추가" style="padding:0 4px;flex-shrink:0;font-weight:800;color:var(--primary);">＋</button>`
+        +`<select class="wbs-init-kr-move" data-field="wbs-init-kr" data-iid="${r.id}" data-curkr="${r.krId}" title="소속 KR 변경(다른 KR로 이동)" style="flex-shrink:0;font-size:10px;max-width:108px;border:1px solid var(--line);border-radius:5px;padding:2px 4px;background:white;color:var(--text-soft);font-family:inherit;cursor:pointer;">${krOpts}</select>`;
+    }else if(r.type==='T'&&wbsEditable){
+      wbsCtrl=`<button class="btn-icon" data-act="wbs-del-task" data-iid="${r.initId}" data-tid="${r.id}" title="할일 삭제" style="padding:0 4px;flex-shrink:0;color:var(--warning);">${I.x}</button>`;
+    }
+    const rowBg=r.type==='O'?`background:hsl(${labelHue},60%,96%);`:r.type==='T'?`background:hsl(${labelHue},25%,98.5%);`:'';
     const sideBar=`<span style="position:absolute;left:0;top:0;bottom:0;width:3px;background:hsl(${labelHue},60%,55%);"></span>`;
     // v62 — 제목 2줄까지 wrap. O는 shimmer. 텍스트 잘림 X
     const titleCls=r.type==='O'?'wbs-title-clamp obj-shimmer':'wbs-title-clamp';
-    labelsHtml+=`<div class="wbs-label-row" style="position:relative;min-height:${ROW_H}px;display:flex;align-items:center;gap:6px;padding:0 10px 0 ${lvIndent}px;border-bottom:1px solid #F4F4F5;font-size:${r.type==='O'?'13':r.type==='KR'?'12.5':'12'}px;${rowBg}${r.type==='O'?'font-weight:800;':r.type==='KR'?'font-weight:600;':''}">${sideBar}${toggleBtn}<span style="flex-shrink:0;">${icon}</span>${badge}<span class="${titleCls}" title="${esc(r.label)}">${esc(r.label)}</span>${ownerChip}</div>`;
+    // v137 — 할일(T) 제목은 인라인 입력칸으로 (WBS에서 직접 입력·수정·저장)
+    const titleHtml=(r.type==='T'&&wbsEditable)
+      ?`<input class="wbs-task-title-input" data-field="wbs-task-title" data-iid="${r.initId}" data-tid="${r.id}" value="${esc(r.label==='(할일)'?'':r.label)}" placeholder="할일 내용 입력" style="flex:1;min-width:80px;font-size:11px;padding:3px 6px;border:1px solid transparent;border-radius:5px;background:transparent;font-family:inherit;${r.status==='done'?'text-decoration:line-through;color:var(--text-soft);':''}" title="${esc(r.label)}"/>`
+      :`<span class="${titleCls}" title="${esc(r.label)}">${esc(r.label)}</span>`;
+    labelsHtml+=`<div class="wbs-label-row" style="position:relative;min-height:${ROW_H}px;display:flex;align-items:center;gap:6px;padding:0 10px 0 ${lvIndent}px;border-bottom:1px solid #F4F4F5;font-size:${r.type==='O'?'13':r.type==='KR'?'12.5':r.type==='T'?'11':'12'}px;${rowBg}${r.type==='O'?'font-weight:800;':r.type==='KR'?'font-weight:600;':''}">${sideBar}${toggleBtn}<span style="flex-shrink:0;">${icon}</span>${badge}${titleHtml}${ownerChip}${wbsCtrl}</div>`;
 
     // 바 위치
     const sOff=Math.max(0,daysBetween(startD,r.start));
@@ -2450,7 +2479,7 @@ function renderWBS(){
     const endInfo=r.end?dueShort(r.end):'';
     const dateLabel=startInfo&&endInfo?` · ${startInfo} ~ ${endInfo}`:'';
     barsHtml+=`<div class="wbs-bar-row" style="height:${ROW_H}px;position:relative;border-bottom:1px solid #F4F4F5;">
-      <div class="wbs-bar" data-act="wbs-jump" data-type="${r.type}" data-id="${r.id}" data-oid="${r.objId||r.id}" data-krid="${r.krId||(r.type==='KR'?r.id:'')}" data-start="${r.start||''}" data-end="${r.end||''}" style="position:absolute;left:${bl}px;top:5px;width:${bw}px;height:24px;background:${c.bgGrad};color:${c.fg};border-radius:5px;display:flex;align-items:center;padding:0 8px;font-size:10.5px;font-weight:700;box-shadow:0 1px 2px rgba(0,0,0,.1);overflow:hidden;white-space:nowrap;text-overflow:ellipsis;${overdue&&r.type==='I'&&r.status!=='done'?'border:1.5px solid #B71D24;':''}" title="${esc(r.label)}${dateLabel} · 끝 잡고 드래그=마감 변경, 가운데 드래그=일정 이동, 더블클릭=날짜 직접 입력">${label?esc(label):esc(r.label).slice(0,30)}</div>
+      <div class="wbs-bar" data-act="wbs-jump" data-type="${r.type}" data-id="${r.id}" data-oid="${r.objId||r.id}" data-krid="${r.krId||(r.type==='KR'?r.id:'')}" data-iid="${r.type==='T'?(r.initId||''):''}" data-start="${r.start||''}" data-end="${r.end||''}" style="position:absolute;left:${bl}px;top:5px;width:${bw}px;height:${r.type==='T'?'20':'24'}px;background:${c.bgGrad};color:${c.fg};border-radius:5px;display:flex;align-items:center;padding:0 8px;font-size:10.5px;font-weight:700;box-shadow:0 1px 2px rgba(0,0,0,.1);overflow:hidden;white-space:nowrap;text-overflow:ellipsis;${overdue&&r.type==='I'&&r.status!=='done'?'border:1.5px solid #B71D24;':''}" title="${esc(r.label)}${dateLabel} · 끝 잡고 드래그=마감 변경, 가운데 드래그=일정 이동, 더블클릭=날짜 직접 입력">${label?esc(label):esc(r.label).slice(0,30)}</div>
     </div>`;
   });
 
@@ -2556,6 +2585,13 @@ async function downloadWBSPng(){
         for(const i of(k.initiatives||[])){
           if(type==='I'&&i.id===id)return{kind:'I',krid:k.id,item:i};
         }
+      }
+    }
+    // v137 — 할일(T): startDate/dueDate를 가진 어댑터로 래핑해 기존 막대 드래그 재사용
+    if(type==='T'&&state.initiativeTasks){
+      for(const iid of Object.keys(state.initiativeTasks)){
+        const tk=(state.initiativeTasks[iid]||[]).find(x=>x.id===id);
+        if(tk)return{kind:'T',iid,item:{get startDate(){return tk.start_date;},set startDate(v){tk.start_date=v;},get dueDate(){return tk.due_date;},set dueDate(v){tk.due_date=v;},_raw:tk}};
       }
     }
     return null;
@@ -2684,6 +2720,7 @@ async function downloadWBSPng(){
       if(d.found.kind==='O'&&typeof saveObjective==='function')saveObjective(it);
       else if(d.found.kind==='KR'&&typeof saveKR==='function')saveKR(d.found.oid,it);
       else if(d.found.kind==='I'&&typeof saveInitiative==='function')saveInitiative(d.found.krid,it);
+      else if(d.found.kind==='T'&&typeof saveInitiativeTask==='function')saveInitiativeTask(it._raw); // v137
     }catch(err){console.warn('[WBS drag] save failed',err);}
     // v41 — 깜빡임 제거: render() 호출 안 함. 막대 시각 상태는 이미 드래그 중 업데이트됨.
     // 드래그한 막대의 data 속성과 propagation으로 갱신된 상위 막대만 인플레이스 업데이트.
@@ -3365,6 +3402,26 @@ document.addEventListener('click',async e=>{
   if(a==='wbs-toggle'){const key=btn.dataset.key;const set=window._wbsToggled||(window._wbsToggled=new Set());set.has(key)?set.delete(key):set.add(key);render();return;}
   if(a==='wbs-view'){window._wbsView=btn.dataset.mode;render();return;}
   if(a==='wbs-download'){downloadWBSPng();return;}
+  // v137 — WBS에서 이니셔티브에 할일 추가 (펼친 뒤 새 행 입력)
+  if(a==='wbs-add-task'){
+    const iid=btn.dataset.iid;
+    if(typeof selfMember==='function'&&!selfMember()){showToast('본인 선택 필요',true);return;}
+    const list=state.initiativeTasks[iid]||(state.initiativeTasks[iid]=[]);
+    const newT={id:uid(),initiative_id:iid,title:'',status:'todo',owner_id:(selfMember()&&selfMember().id)||null,start_date:null,due_date:null,sort_order:list.length};
+    list.push(newT);
+    const set=window._wbsToggled||(window._wbsToggled=new Set());set.delete('I:'+iid); // 펼침 보장
+    saveInitiativeTask(newT);
+    render();
+    setTimeout(()=>{const el=document.querySelector(`input[data-field="wbs-task-title"][data-tid="${newT.id}"]`);if(el){el.focus();el.scrollIntoView({block:'center',behavior:'smooth'});}},60);
+    return;
+  }
+  if(a==='wbs-del-task'){
+    if(!confirm('이 할일을 삭제할까요?'))return;
+    const iid=btn.dataset.iid,tid=btn.dataset.tid;
+    state.initiativeTasks[iid]=(state.initiativeTasks[iid]||[]).filter(x=>x.id!==tid);
+    await deleteInitiativeTask(tid);
+    render();return;
+  }
   if(a==='wbs-jump'){
     // v39 — 더블클릭(날짜 팝오버) 가능성을 위해 280ms 지연, dblclick 발동 시 취소
     const type=btn.dataset.type;const id=btn.dataset.id;
@@ -3376,10 +3433,11 @@ document.addEventListener('click',async e=>{
       if(type==='O'){expanded.add(id);}
       else if(type==='KR'){expanded.add(oid);krCollapsed.delete(id);}
       else if(type==='I'){expanded.add(oid);krCollapsed.delete(krid);}
+      else if(type==='T'){expanded.add(oid);krCollapsed.delete(krid);if(window._initSubOpen)window._initSubOpen.add(btn.dataset.iid);else window._initSubOpen=new Set([btn.dataset.iid]);} // v137 — 할일 → 소속 이니셔티브로 점프
       render();
       // v38 — 점프 후 펄스 하이라이트로 시각 cue 강화
       setTimeout(()=>{
-        const sel=type==='O'?`[data-obj-id="${id}"]`:type==='KR'?`[data-kr-id="${id}"]`:`[data-init-id="${id}"]`;
+        const sel=type==='O'?`[data-obj-id="${id}"]`:type==='KR'?`[data-kr-id="${id}"]`:type==='T'?`[data-init-id="${btn.dataset.iid}"]`:`[data-init-id="${id}"]`;
         const el=document.querySelector(sel);
         if(!el)return;
         el.scrollIntoView({behavior:'smooth',block:'center'});
@@ -3937,11 +3995,19 @@ document.addEventListener('dragover',e=>{
   const srcType=dragSrc.dataset.dragType,tgtType=tgt.dataset.dragType;
   const sameType=srcType===tgtType;
   const isPromote=srcType==='init-task'&&tgtType==='init';
-  if(!sameType&&!isPromote)return;
+  const isInitToKR=srcType==='init'&&tgtType==='kr'; // v137 — 이니셔티브를 KR 행에 직접 드롭 = 그 KR로 이동
+  if(!sameType&&!isPromote&&!isInitToKR)return;
   e.preventDefault();
+  if(isInitToKR){
+    const ns='kr-into:'+tgt.dataset.krId;
+    if(ns===_lastDropState)return;
+    _lastDropState=ns;_clearDropTargets();clearNestPreview();
+    tgt.classList.add('drop-target-nest');
+    return;
+  }
   const{zone}=_resolveDragZone(tgt,e.clientY,dragSrc);
-  // v52 — reorder(before/after)만 같은 부모 검증, nest는 KR 가로질러도 허용
-  if(zone!=='nest'&&sameType&&tgt.dataset.dragParent!==dragSrc.dataset.dragParent)return;
+  // v52/v137 — reorder(before/after)는 같은 부모만. 단 init은 다른 KR로의 before/after = 이동 허용. nest는 KR 가로질러도 허용.
+  if(zone!=='nest'&&sameType&&srcType!=='init'&&tgt.dataset.dragParent!==dragSrc.dataset.dragParent)return;
   const newState=tgt.dataset.dragType+':'+(tgt.dataset.initId||tgt.dataset.taskId||tgt.dataset.krId||tgt.dataset.objId||tgt.dataset.memId||'')+':'+zone;
   if(newState===_lastDropState)return; // 변화 없음 → 아무것도 안 함 (깜빡임 차단)
   _lastDropState=newState;
@@ -3977,10 +4043,17 @@ document.addEventListener('drop',async e=>{
   const srcType=dragSrc.dataset.dragType,tgtType=tgt.dataset.dragType;
   const sameType=srcType===tgtType;
   const isPromote=srcType==='init-task'&&tgtType==='init';
-  if(!sameType&&!isPromote)return;
+  const isInitToKR=srcType==='init'&&tgtType==='kr'; // v137
+  if(!sameType&&!isPromote&&!isInitToKR)return;
   e.preventDefault();
+  if(isInitToKR){
+    const src=dragSrc;dragSrc=null;_lastDropState='';
+    _clearDropTargets();clearNestPreview();
+    await moveInitToKR(src.dataset.dragParent,src.dataset.initId,tgt.dataset.krId,null,true);
+    return;
+  }
   const{zone}=_resolveDragZone(tgt,e.clientY,dragSrc);
-  if(zone!=='nest'&&sameType&&tgt.dataset.dragParent!==dragSrc.dataset.dragParent)return;
+  if(zone!=='nest'&&sameType&&srcType!=='init'&&tgt.dataset.dragParent!==dragSrc.dataset.dragParent)return;
   const after=zone==='after';
   // v44 — Init 가운데 zone = demote-to-task
   if(srcType==='init'&&zone==='nest'){
@@ -4002,7 +4075,10 @@ document.addEventListener('drop',async e=>{
   }
   if(srcType==='obj'){await reorderObjectives(dragSrc.dataset.objId,tgt.dataset.objId,after);}
   else if(srcType==='kr'){await reorderKRs(dragSrc.dataset.dragParent,dragSrc.dataset.krId,tgt.dataset.krId,after);}
-  else if(srcType==='init'){await reorderInits(dragSrc.dataset.dragParent,dragSrc.dataset.initId,tgt.dataset.initId,after);}
+  else if(srcType==='init'){
+    if(dragSrc.dataset.dragParent===tgt.dataset.dragParent){await reorderInits(dragSrc.dataset.dragParent,dragSrc.dataset.initId,tgt.dataset.initId,after);}
+    else{await moveInitToKR(dragSrc.dataset.dragParent,dragSrc.dataset.initId,tgt.dataset.dragParent,tgt.dataset.initId,after);} // v137 — 다른 KR의 위/아래에 드롭 = 이동
+  }
   else if(srcType==='init-task'){await reorderInitTasks(dragSrc.dataset.dragParent,dragSrc.dataset.taskId,tgt.dataset.taskId,after);}
   else if(srcType==='member'){await reorderMembers(dragSrc.dataset.memId,tgt.dataset.memId,after);}
   _clearDropTargets();
@@ -4159,6 +4235,34 @@ async function reorderInits(krid,srcId,tgtId,after){
   for(let i=0;i<kr.initiatives.length;i++){markLocal('initiatives',kr.initiatives[i].id);await sb.from('initiatives').update({sort_order:i}).eq('id',kr.initiatives[i].id);}
   showToast('순서 저장됨');
 }
+// v137 — 이니셔티브를 다른 KR로 이동 (이니셔티브 그대로 유지, kr_id 변경). tgtId=null이면 맨 끝.
+async function moveInitToKR(srcKrId,initId,targetKrId,targetInitId,after){
+  if(!srcKrId||!targetKrId||srcKrId===targetKrId&&!targetInitId)return;
+  let srcKR=null,targetKR=null;
+  state.objectives.forEach(o=>o.keyResults.forEach(k=>{if(k.id===srcKrId)srcKR=k;if(k.id===targetKrId)targetKR=k;}));
+  if(!srcKR||!targetKR){showToast('KR을 찾을 수 없습니다',true);return;}
+  const sIdx=(srcKR.initiatives||[]).findIndex(i=>i.id===initId);
+  if(sIdx<0)return;
+  const init=srcKR.initiatives[sIdx];
+  if(typeof canEditInit==='function'&&!canEditInit(init)){showToast('본인 담당 또는 관리자만 이동 가능',true);return;}
+  if(srcKrId===targetKrId){await reorderInits(srcKrId,initId,targetInitId,after);return;}
+  srcKR.initiatives.splice(sIdx,1);
+  if(!targetKR.initiatives)targetKR.initiatives=[];
+  let tIdx=targetInitId?targetKR.initiatives.findIndex(i=>i.id===targetInitId):-1;
+  let insertIdx=tIdx<0?targetKR.initiatives.length:(tIdx+(after?1:0));
+  if(insertIdx<0)insertIdx=0;
+  targetKR.initiatives.splice(insertIdx,0,init);
+  scheduleRender();
+  try{
+    markLocal('initiatives',init.id);
+    const{error}=await sb.from('initiatives').update({kr_id:targetKrId,sort_order:insertIdx}).eq('id',init.id);
+    if(error){showToast('이동 저장 실패',true);console.warn('[moveInitToKR]',error);return;}
+    for(let i=0;i<targetKR.initiatives.length;i++){markLocal('initiatives',targetKR.initiatives[i].id);await sb.from('initiatives').update({sort_order:i}).eq('id',targetKR.initiatives[i].id);}
+    for(let i=0;i<srcKR.initiatives.length;i++){markLocal('initiatives',srcKR.initiatives[i].id);await sb.from('initiatives').update({sort_order:i}).eq('id',srcKR.initiatives[i].id);}
+    showToast(`'${(targetKR.title||'KR').slice(0,16)}'(으)로 이동됨`);
+    logChange('initiative',init.id,'update','kr_id',srcKR.title||'',targetKR.title||'',init.title||'');
+  }catch(err){console.warn('[moveInitToKR] failed',err);showToast('이동 실패',true);}
+}
 async function reorderInitTasks(initId,srcId,tgtId,after){
   const arr=state.initiativeTasks[initId]||[];
   const sIdx=arr.findIndex(t=>t.id===srcId);const tIdx=arr.findIndex(t=>t.id===tgtId);
@@ -4229,6 +4333,7 @@ document.addEventListener('input',e=>{
   else if(f==='rt-day-of-month'){const r=state.routines.find(x=>x.id===el.dataset.rid);if(r){r.day_of_month=parseInt(el.value)||1;saveRoutine(r);}}
   // v30 — Initiative 하위 sub-task 필드
   else if(f==='init-sub-title'){const iid=el.dataset.iid,stid=el.dataset.stid;const t=(state.initiativeTasks[iid]||[]).find(x=>x.id===stid);if(t){t.title=el.value;saveInitiativeTask(t);}}
+  else if(f==='wbs-task-title'){const iid=el.dataset.iid,tid=el.dataset.tid;const t=(state.initiativeTasks[iid]||[]).find(x=>x.id===tid);if(t){t.title=el.value;saveInitiativeTask(t);}} /* v137 — WBS 할일 제목 */
   else if(f==='init-sub-due'){const iid=el.dataset.iid,stid=el.dataset.stid;const t=(state.initiativeTasks[iid]||[]).find(x=>x.id===stid);if(t){t.due_date=el.value||null;saveInitiativeTask(t);}}
   else if(f==='init-sub-start'){const iid=el.dataset.iid,stid=el.dataset.stid;const t=(state.initiativeTasks[iid]||[]).find(x=>x.id===stid);if(t){t.start_date=el.value||null;saveInitiativeTask(t);}}
   else if(f==='rt-note'){saveRoutineLog(el.dataset.rid,viewingDate,!!(state.routineLogs[viewingDate]?.[el.dataset.rid]?.completed),el.value);}
@@ -4257,6 +4362,10 @@ document.addEventListener('change',async e=>{
   else if(f==='rt-owner'){const r=state.routines.find(x=>x.id===el.dataset.rid);if(r){r.owner_id=el.value||null;saveRoutine(r);}}
   // v30 — Initiative 하위 sub-task 담당자
   else if(f==='init-sub-owner'){const iid=el.dataset.iid,stid=el.dataset.stid;const t=(state.initiativeTasks[iid]||[]).find(x=>x.id===stid);if(t){t.owner_id=el.value||null;saveInitiativeTask(t);}}
+  else if(f==='wbs-init-kr'){ /* v137 — WBS에서 이니셔티브를 다른 KR로 이동 */
+    const iid=el.dataset.iid,curKr=el.dataset.curkr,newKr=el.value;
+    if(newKr&&newKr!==curKr)await moveInitToKR(curKr,iid,newKr,null,true);
+  }
   // v71 — init-sub-title: blur/Enter 시 즉시 저장 (debounce 타이머 미실행 시 손실 방지)
   else if(f==='init-sub-title'){const iid=el.dataset.iid,stid=el.dataset.stid;const t=(state.initiativeTasks[iid]||[]).find(x=>x.id===stid);if(t){t.title=el.value;saveInitiativeTask(t);}}
   else if(f==='init-sub-status'){const iid=el.dataset.iid,stid=el.dataset.stid;const t=(state.initiativeTasks[iid]||[]).find(x=>x.id===stid);if(t){t.status=el.value;saveInitiativeTask(t);let krid=null;state.objectives.forEach(o=>o.keyResults.forEach(k=>{if((k.initiatives||[]).some(i=>i.id===iid))krid=k.id;}));if(!(krid&&rerenderInitRowOKR(krid,iid)))scheduleRender();}}/* v110 — 부분 갱신 */
