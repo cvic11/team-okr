@@ -352,20 +352,14 @@
       this.children(parentId).forEach((s, i) => s.sort = i);
     },
 
-    // ── 오늘/최근 ──
+    // ── 오늘/최근 (작성·입력일 기준) ──
     todayTasks() {
-      // 날짜 기준 소속: 마감 도래·이월 + 진행 중(시작일 도래).
-      // 완료해도 '오늘 완료한 것'은 오늘의 할일에 [x]로 남는다 — 다음 날부터 최근 할일로.
+      // 오늘 날짜에 작성(입력)된 할일만 — 완료 여부 무관
       return Object.values(this.data.nodes)
-        .filter(n => {
-          if (n.type !== 'task') return false;
-          if (n.status === 'done') return !!(n.completedAt && String(n.completedAt).slice(0, 10) === TODAY);
-          if (n.due) return n.due <= TODAY || (n.start && n.start <= TODAY);
-          return !!(n.start && n.start <= TODAY);
-        })
+        .filter(n => n.type === 'task' && (n.createdAt || '').slice(0, 10) === TODAY)
         .sort((a, b) => {
           const ad = a.due || '9999-12-31', bd = b.due || '9999-12-31';
-          return ad < bd ? -1 : ad > bd ? 1 : a.sort - b.sort;
+          return ad < bd ? -1 : ad > bd ? 1 : (a.sort || 0) - (b.sort || 0);
         });
     },
     recentDone(days) {
@@ -374,16 +368,20 @@
         .filter(n => n.type === 'task' && n.status === 'done' && n.completedAt && n.completedAt.slice(0, 10) >= cut)
         .sort((a, b) => (a.completedAt < b.completedAt ? 1 : -1));
     },
-    recentTasks(days) { // '오늘 이전' 날짜에 입력(생성)된 최근 N일 내 할일 — 완료 여부 무관
-      const cut = D.add(TODAY, -(days || 7));
-      return Object.values(this.data.nodes)
-        .filter(n => {
-          if (n.type !== 'task') return false;
-          const cd = (n.createdAt || '').slice(0, 10);
-          return cd && cd < TODAY && cd >= cut;
-        })
-        .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+    recentTasks() {
+      // 오늘이 아닌 '가장 가까운 이전 작성일' 하루치만 — 완료 여부 무관
+      const tasks = Object.values(this.data.nodes).filter(n => n.type === 'task');
+      let nearest = '';
+      tasks.forEach(n => {
+        const d = (n.createdAt || '').slice(0, 10);
+        if (d && d < TODAY && d > nearest) nearest = d;
+      });
+      this._recentDay = nearest;
+      if (!nearest) return [];
+      return tasks.filter(n => (n.createdAt || '').slice(0, 10) === nearest)
+        .sort((a, b) => (a.sort || 0) - (b.sort || 0));
     },
+    recentDay() { return this._recentDay || ''; },
     dueSoon(days) {
       const lim = D.add(TODAY, days || 7);
       return Object.values(this.data.nodes)
