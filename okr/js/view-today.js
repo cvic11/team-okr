@@ -52,13 +52,14 @@
 
     render() {
       const tasks = this.list();
-      const recentAll = S().recentTasks(7); // 오늘 이전 날짜에 입력된 것 — 완료 여부 무관
+      const recentAll = S().recentTasks(); // 오늘이 아닌 가장 가까운 작성일 하루치 — 완료 여부 무관
+      const recentDay = S().recentDay();
       const recent = recentAll.slice(0, 15);
       if (this.sel >= tasks.length) this.sel = Math.max(0, tasks.length - 1);
 
       let left = '';
       if (!tasks.length) {
-        left = '<div class="empty">오늘의 할일이 없습니다. [2]트리에서 할일에 마감일을 지정하세요.</div>';
+        left = '<div class="empty">오늘 작성된 할일이 없습니다. 아래 [+]에서 추가하세요.</div>';
       } else {
         left = tasks.map((t, i) => {
           const editing = window.Sim && window.Sim.editingBy(t.id);
@@ -76,14 +77,14 @@
 
       let right = '';
       if (!recent.length) {
-        right = '<div class="empty">어제 이전 7일 내 입력된 할일이 없습니다.</div>';
+        right = '<div class="empty">이전에 작성된 할일이 없습니다.</div>';
       } else {
         right = recent.map(t => {
-          const meta = ' <span class="dim">— ' + window.R.esc(t.owner) + ' · ' + window.OKRD.fmt((t.createdAt || '').slice(0, 10)) + ' 입력</span>';
+          const meta = ' <span class="dim">— ' + window.R.esc(t.owner) + '</span>';
           return this.rowHtml(t, { cls: 'done-row', meta });
         }).join('');
         if (recentAll.length > recent.length) {
-          right += '<div class="row dim">… 외 ' + (recentAll.length - recent.length) + '건 (전체는 [5]관리 → 활동 로그)</div>';
+          right += '<div class="row dim">… 외 ' + (recentAll.length - recent.length) + '건</div>';
         }
       }
 
@@ -99,7 +100,7 @@
 
       this.el.innerHTML =
         '<div class="today-grid">'
-        + '<section class="panel"><div class="panel-title">┌─ 최근 할일 (오늘 이전 7일, ' + recentAll.length + ') ' + '─'.repeat(4) + '</div>'
+        + '<section class="panel"><div class="panel-title">┌─ 최근 할일 (' + (recentDay ? window.OKRD.fmt(recentDay) + ' 작성, ' : '') + recentAll.length + ') ' + '─'.repeat(4) + '</div>'
         + right + '</section>'
         + '<section class="panel"><div class="panel-title">┌─ 오늘의 할일 (' + tasks.length + ') ' + '─'.repeat(8) + '</div>'
         + left
