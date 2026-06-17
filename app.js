@@ -4740,10 +4740,12 @@ init();
           const isDone=t.status==='done';
           // 시작일이 없거나 시작일이 오늘 이하인 미완료 → 오늘 할일
           const hasStarted=!t.start_date||t.start_date<=vDate;
-          // v141 — 마감이 지난(과거 날짜) 미완료 할일은 '오늘 할 일'에서 제외(=어제 작성분).
-          //   이런 항목은 '최근 한 일/직전 작성 내역'에 표시됨. 마감 없음·오늘·미래는 오늘 할일 유지.
-          const notPast=!t.due_date||t.due_date>=vDate;
-          if(!isDone&&hasStarted&&notPast){
+          // v141/v142 — 과거(어제 이전) 항목은 '오늘 할 일'에서 제외(→ 최근 한 일).
+          //   마감일이 있으면 마감 기준, 없으면(날짜 미입력이 흔함) 작성일(created_at) 기준.
+          //   마감 없고 오늘 작성/오늘·미래 마감 항목은 오늘 할일 유지.
+          const createdDay=(t.created_at||'').slice(0,10);
+          const isPast=t.due_date?(t.due_date<vDate):(createdDay&&createdDay<vDate);
+          if(!isDone&&hasStarted&&!isPast){
             // v104 — _dueDate, _startDate 함께 전달 (오늘 탭에서도 날짜 편집 가능)
             tasks.push({id:t.id,t:t.title||'',i:iid,k:initToKr[iid]||'',d:false,_isInitTask:true,_iid:iid,c:[],_dueDate:t.due_date||'',_startDate:t.start_date||''});
           }
@@ -5154,11 +5156,12 @@ init();
             const parsed=e?parseTasksField(e.today||''):{tasks:[],legacy:''};
             // v88 — 제목이 비어있는 task는 제외
             const nonEmptyTasks=(parsed.tasks||[]).filter(t=>(t.t||'').trim());
-            // v112 — 그 날 작업된 DB 할일 (initiative_tasks, updated_at 기준, 완료 여부는 d 플래그) — DB 전용 사용자도 '최근 한 일' 표시
+            // v142 — 그 날 '작성(입력)'된 DB 할일. 날짜 미입력이 흔하므로 작성일(created_at) 기준으로
+            //   분류(없으면 updated_at fallback). 완료 여부와 무관하게 노출(완료는 d 플래그로 체크 표시).
             const dbDay=[];
             Object.keys(itAll).forEach(iid=>{(itAll[iid]||[]).forEach(t=>{
               if(!t.owner_id||t.owner_id===mid){
-                const dd=t.updated_at?String(t.updated_at).slice(0,10):'';
+                const dd=(t.created_at?String(t.created_at).slice(0,10):'')||(t.updated_at?String(t.updated_at).slice(0,10):'');
                 if(dd===d&&(t.title||'').trim())dbDay.push({id:t.id,t:t.title||'',i:iid,k:(initMap[iid]&&initMap[iid].krId)||'',d:t.status==='done',_isInitTask:true});
               }
             });});
