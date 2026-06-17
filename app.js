@@ -5232,7 +5232,9 @@ init();
           }
         }
       }catch(err){console.warn('[recent] render fail',err);}
-      return '<div class="field"><div class="field-label"><span class="field-dot"></span><span class="field-name">최근 한 일</span>'+(hasAny?'<span style="font-size:10.5px;color:var(--text-soft);margin-left:auto;font-weight:600;">최근 완료 작업</span>':'')+clearBtn+'</div>'+recentHtml+summaryHtml+renderTaskListBlock(mid,'yesterday','추가 작업')+'</div>';
+      // v143 — '최근 한 일'은 상단 '직전 작성 내역' 카드 하나로 통일. 하단 '추가 작업' 박스는
+      //   통일감을 해치고 중복 느낌이라 제거(작성 이력 기반 직전 작성 내역으로 충분).
+      return '<div class="field"><div class="field-label"><span class="field-dot"></span><span class="field-name">최근 한 일</span>'+(hasAny?'<span style="font-size:10.5px;color:var(--text-soft);margin-left:auto;font-weight:600;">최근 완료 작업</span>':'')+clearBtn+'</div>'+recentHtml+summaryHtml+'</div>';
     };
     const _origRenderToday=window.renderToday;
     window.renderToday=function(){return _origRenderToday.apply(this,arguments);}; // v10 — 분포 차트 호출 제거
