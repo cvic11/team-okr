@@ -4740,7 +4740,10 @@ init();
           const isDone=t.status==='done';
           // 시작일이 없거나 시작일이 오늘 이하인 미완료 → 오늘 할일
           const hasStarted=!t.start_date||t.start_date<=vDate;
-          if(!isDone&&hasStarted){
+          // v141 — 마감이 지난(과거 날짜) 미완료 할일은 '오늘 할 일'에서 제외(=어제 작성분).
+          //   이런 항목은 '최근 한 일/직전 작성 내역'에 표시됨. 마감 없음·오늘·미래는 오늘 할일 유지.
+          const notPast=!t.due_date||t.due_date>=vDate;
+          if(!isDone&&hasStarted&&notPast){
             // v104 — _dueDate, _startDate 함께 전달 (오늘 탭에서도 날짜 편집 가능)
             tasks.push({id:t.id,t:t.title||'',i:iid,k:initToKr[iid]||'',d:false,_isInitTask:true,_iid:iid,c:[],_dueDate:t.due_date||'',_startDate:t.start_date||''});
           }
