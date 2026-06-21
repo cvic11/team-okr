@@ -5162,7 +5162,10 @@ init();
             Object.keys(itAll).forEach(iid=>{(itAll[iid]||[]).forEach(t=>{
               if(!t.owner_id||t.owner_id===mid){
                 const dd=(t.created_at?String(t.created_at).slice(0,10):'')||(t.updated_at?String(t.updated_at).slice(0,10):'');
-                if(dd===d&&(t.title||'').trim())dbDay.push({id:t.id,t:t.title||'',i:iid,k:(initMap[iid]&&initMap[iid].krId)||'',d:t.status==='done',_isInitTask:true});
+                // v145 — 과거에 작성됐어도 마감이 오늘/미래인 미완료 할일은 '오늘 할 일'에 속하므로
+                //   '최근 한 일(직전 작성 내역)'에서는 제외(중복 방지).
+                const upcoming=t.status!=='done'&&t.due_date&&t.due_date>=viewing;
+                if(dd===d&&(t.title||'').trim()&&!upcoming)dbDay.push({id:t.id,t:t.title||'',i:iid,k:(initMap[iid]&&initMap[iid].krId)||'',d:t.status==='done',_isInitTask:true});
               }
             });});
             const hasLegacy=parsed.legacy&&parsed.legacy.trim();
