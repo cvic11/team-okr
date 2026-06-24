@@ -3407,7 +3407,7 @@ document.addEventListener('click',async e=>{
     const iid=btn.dataset.iid;
     if(typeof selfMember==='function'&&!selfMember()){showToast('본인 선택 필요',true);return;}
     const list=state.initiativeTasks[iid]||(state.initiativeTasks[iid]=[]);
-    const newT={id:uid(),initiative_id:iid,title:'',status:'todo',owner_id:(selfMember()&&selfMember().id)||null,start_date:null,due_date:null,sort_order:list.length};
+    const newT={id:uid(),initiative_id:iid,title:'',status:'todo',owner_id:(selfMember()&&selfMember().id)||null,start_date:todayKey(),due_date:todayKey(),sort_order:list.length};
     list.push(newT);
     const set=window._wbsToggled||(window._wbsToggled=new Set());set.delete('I:'+iid); // 펼침 보장
     saveInitiativeTask(newT);
@@ -3721,7 +3721,7 @@ document.addEventListener('click',async e=>{
     if(!window._initSubOpen)window._initSubOpen=new Set();
     window._initSubOpen.add(iid);
     const list=state.initiativeTasks[iid]||(state.initiativeTasks[iid]=[]);
-    const newT={id:uid(),initiative_id:iid,title:'',status:'todo',owner_id:selfMember()?.id||null,start_date:null,due_date:null,sort_order:list.length};
+    const newT={id:uid(),initiative_id:iid,title:'',status:'todo',owner_id:selfMember()?.id||null,start_date:todayKey(),due_date:todayKey(),sort_order:list.length};
     list.push(newT);
     saveInitiativeTask(newT);
     render();
@@ -5367,7 +5367,7 @@ init();
     // v99/v100 — 성공 상태 카드의 + 할일 추가
     if(a==='newinit-add-task'){
       const initId=btn.dataset.initId,mid=btn.dataset.mid,kind=btn.dataset.kind;
-      const newT={id:newTaskId(),initiative_id:initId,title:'',status:'todo',owner_id:mid||null,start_date:null,due_date:null,sort_order:(state.initiativeTasks[initId]||[]).length};
+      const newT={id:newTaskId(),initiative_id:initId,title:'',status:'todo',owner_id:mid||null,start_date:(typeof viewingDate!=='undefined'?viewingDate:todayKey()),due_date:(typeof viewingDate!=='undefined'?viewingDate:todayKey()),sort_order:(state.initiativeTasks[initId]||[]).length};
       if(!state.initiativeTasks[initId])state.initiativeTasks[initId]=[];
       state.initiativeTasks[initId].push(newT);
       if(typeof saveInitiativeTask==='function')saveInitiativeTask(newT);
@@ -5409,7 +5409,7 @@ init();
       const isRealInit=initId&&(typeof collectAllInit==='function')&&!!collectAllInit().find(x=>x.id===initId);
       if(isRealInit&&kind==='today'){
         // v74 — owner_id = mid (카드 담당자), selfId(관리자) 아님 → 담당자가 편집 가능
-        const newT={id:newTaskId(),initiative_id:initId,title:'',status:'todo',owner_id:mid||null,start_date:null,due_date:null,sort_order:(state.initiativeTasks[initId]||[]).length};
+        const newT={id:newTaskId(),initiative_id:initId,title:'',status:'todo',owner_id:mid||null,start_date:(typeof viewingDate!=='undefined'?viewingDate:todayKey()),due_date:(typeof viewingDate!=='undefined'?viewingDate:todayKey()),sort_order:(state.initiativeTasks[initId]||[]).length};
         if(!state.initiativeTasks[initId])state.initiativeTasks[initId]=[];
         state.initiativeTasks[initId].push(newT);
         if(typeof saveInitiativeTask==='function')saveInitiativeTask(newT);
@@ -5623,7 +5623,7 @@ init();
       if(val.startsWith('init:')){
         // 기존 이니셔티브에 빈 task 추가
         const initId=val.slice(5);
-        const newT={id:newTaskId(),initiative_id:initId,title:'',status:'todo',owner_id:mid||null,start_date:null,due_date:null,sort_order:(state.initiativeTasks[initId]||[]).length};
+        const newT={id:newTaskId(),initiative_id:initId,title:'',status:'todo',owner_id:mid||null,start_date:(typeof viewingDate!=='undefined'?viewingDate:todayKey()),due_date:(typeof viewingDate!=='undefined'?viewingDate:todayKey()),sort_order:(state.initiativeTasks[initId]||[]).length};
         if(!state.initiativeTasks[initId])state.initiativeTasks[initId]=[];
         state.initiativeTasks[initId].push(newT);
         if(typeof saveInitiativeTask==='function')saveInitiativeTask(newT);
