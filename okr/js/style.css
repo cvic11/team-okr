@@ -84,7 +84,7 @@ button { cursor: pointer; }
 .trow { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
 .trow .live-title { flex: 1 1 240px; min-width: 200px; border-bottom: 1px dashed var(--faint); }
 .trow .live-title:focus { border-bottom: 1px solid var(--dim); }
-.trow input[type="date"].seamless { color: var(--dim); width: 15ch; padding: 2px 4px; cursor: text; }
+.trow input[type="date"].seamless { color: var(--dim); width: 15ch; padding: 2px 4px; cursor: pointer; position: relative; }
 .trow .row-actions { margin-left: auto; }
 .row-actions.ta-show { visibility: visible; }
 input.done-title { color: var(--done); text-decoration: line-through; }
@@ -120,10 +120,12 @@ input.done-title { color: var(--done); text-decoration: line-through; }
 .edit-row select.seamless { color: var(--dim); }
 .edit-row .edit-owner { color: inherit; }
 .edit-dates { white-space: nowrap; }
-.edit-row input[type="date"].seamless { color: var(--dim); width: 15ch; padding: 2px 4px; cursor: text; }
-/* v123 — 달력 아이콘 노출 (클릭 시 요일이 보이는 네이티브 달력) */
-input[type="date"]::-webkit-calendar-picker-indicator { display: inline-block; cursor: pointer; filter: invert(1); opacity: .55; }
-input[type="date"]::-webkit-calendar-picker-indicator:hover { opacity: 1; }
+.edit-row input[type="date"].seamless { color: var(--dim); width: 15ch; padding: 2px 4px; cursor: pointer; position: relative; }
+/* 달력 아이콘을 입력 전체에 오버레이 — 어디 클릭해도 달력 열림 */
+input[type="date"]::-webkit-calendar-picker-indicator {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  opacity: 0; cursor: pointer;
+}
 
 /* 타자 "쿵쿵" 스탬프 효과 */
 /* v133 — 도장은 첫 모습 1회만: 다단계 스케일 애니메이션 제거 */
