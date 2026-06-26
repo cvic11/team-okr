@@ -5774,6 +5774,11 @@ init();
         const tid=el.dataset.tid,initId=el.dataset.initId,mid=el.dataset.mid,kind=el.dataset.kind;
         // 약간 지연 (다른 핸들러 완료 후)
         setTimeout(()=>{
+          // v147 — 같은 할일 행 내 다른 칸(날짜 입력 등)으로 포커스가 이동했으면 삭제하지 않음.
+          //   (제목을 비운 채 날짜를 먼저 세팅하려고 날짜 칸으로 이동 시 '미입력'으로 삭제되던 문제)
+          const ae=document.activeElement;
+          const row=document.querySelector('.krl-task-row[data-tid="'+tid+'"]');
+          if(row&&ae&&ae!==document.body&&row.contains(ae))return;
           if(state.initiativeTasks[initId]){
             const t=state.initiativeTasks[initId].find(x=>x.id===tid);
             if(t&&!(t.title||'').trim()){
