@@ -84,7 +84,7 @@ button { cursor: pointer; }
 .trow { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
 .trow .live-title { flex: 1 1 240px; min-width: 200px; border-bottom: 1px dashed var(--faint); }
 .trow .live-title:focus { border-bottom: 1px solid var(--dim); }
-.trow input[type="date"].seamless { color: var(--dim); width: 15ch; }
+.trow input[type="date"].seamless { color: var(--dim); width: 15ch; padding: 2px 4px; cursor: text; }
 .trow .row-actions { margin-left: auto; }
 .row-actions.ta-show { visibility: visible; }
 input.done-title { color: var(--done); text-decoration: line-through; }
@@ -120,7 +120,7 @@ input.done-title { color: var(--done); text-decoration: line-through; }
 .edit-row select.seamless { color: var(--dim); }
 .edit-row .edit-owner { color: inherit; }
 .edit-dates { white-space: nowrap; }
-.edit-row input[type="date"].seamless { color: var(--dim); width: 15ch; }
+.edit-row input[type="date"].seamless { color: var(--dim); width: 15ch; padding: 2px 4px; cursor: text; }
 /* v123 — 달력 아이콘 노출 (클릭 시 요일이 보이는 네이티브 달력) */
 input[type="date"]::-webkit-calendar-picker-indicator { display: inline-block; cursor: pointer; filter: invert(1); opacity: .55; }
 input[type="date"]::-webkit-calendar-picker-indicator:hover { opacity: 1; }
