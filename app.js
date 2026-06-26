@@ -5965,9 +5965,8 @@ init();
     state.members.filter(mm=>!mm.isObserver&&mm.id!==m.id).forEach(mm=>{if(!peers.has(mm.id))peers.set(mm.id,{last:null,unread:0,peerId:mm.id});});
     peers.forEach(p=>{const mem=memberOf(p.peerId);if(mem)entries.push({kind:'dm',id:mem.id,name:mem.name,color:mem.color,last:p.last,unread:p.unread});});
     entries.sort((a,b)=>{
-      const ao=wins.has(kOf(a.kind,a.id))?1:0,bo=wins.has(kOf(b.kind,b.id))?1:0;
-      if(ao!==bo)return bo-ao; // 채팅중(열린 창) 우선
-      if(a.unread&&!b.unread)return-1;if(!a.unread&&b.unread)return 1;
+      // v148 — 통상 메신저처럼 '최근 메시지 시간'순으로만 정렬. 창 열기/선택/읽음 처리로는
+      //   순서가 바뀌지 않음(안 읽음·대화중은 배지로만 표시). 실제 메시지 송수신 시에만 위로 올라옴.
       const at=a.last?new Date(a.last.created_at).getTime():0;const bt=b.last?new Date(b.last.created_at).getTime():0;return bt-at;
     });
     const totU=getTotalUnread();
@@ -6085,6 +6084,7 @@ init();
       autogrow();
       inp.addEventListener('keydown',(e)=>{
         if(e.isComposing||e.keyCode===229){e.stopPropagation();return;}
+        if(e.key==='Escape'){e.preventDefault();e.stopPropagation();closeWindow(key);return;} // v148 — ESC로 대화창 닫기
         if(e.key==='Enter'&&!e.shiftKey){
           e.preventDefault();
           const body=inp.value.trim();if(!body)return;
@@ -6155,6 +6155,15 @@ init();
     }catch(e){console.warn('[chat] invite fail',e);if(typeof showToast==='function')showToast('초대 실패: '+(e.message||e),true);}
   }
   function openChatWith(peerId){openWindow('dm',peerId,true);}
+  // v148 — ESC: 포커스가 채팅 대화창 안이면 그 창을 닫음(입력칸 밖에서 눌러도 동작)
+  document.addEventListener('keydown',function(e){
+    if(e.key!=='Escape')return;
+    const ae=document.activeElement;
+    const winEl=ae&&ae.closest&&ae.closest('.chat-win');
+    if(!winEl)return;
+    let foundKey=null;wins.forEach((w,k)=>{if(w.el===winEl)foundKey=k;});
+    if(foundKey){e.preventDefault();e.stopPropagation();closeWindow(foundKey);}
+  },true);
   // 메인 패널 액션
   document.addEventListener('click',function(e){
     const t=e.target.closest('[data-chat-act]');if(!t)return;
