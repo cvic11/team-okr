@@ -6074,8 +6074,7 @@ init();
       }).join('');
       el.innerHTML=head
         +'<div class="chat-panel-body chat-conv-body">'+bodyHtml+'</div>'
-        +'<div class="chat-input-wrap"><textarea class="chat-input" rows="1" placeholder="메시지 입력..." title="Enter 보내기 · Shift+Enter 줄바꿈"></textarea><button class="chat-send" data-wact="send">보내기</button></div>'
-        +'<div class="chat-resize-br" title="드래그로 크기 조절"></div>';
+        +'<div class="chat-input-wrap"><textarea class="chat-input" rows="1" placeholder="메시지 입력..." title="Enter 보내기 · Shift+Enter 줄바꿈"></textarea><button class="chat-send" data-wact="send">보내기</button></div>'; // v149 — 우하단 리사이즈 핸들 제거(입력칸 파란 테두리 가림). 이동·⤢ 확대로 대체
       const cb=el.querySelector('.chat-conv-body');if(cb)cb.scrollTop=cb.scrollHeight;
       const inp=el.querySelector('.chat-input');
       inp.value=drafts[key]||'';
