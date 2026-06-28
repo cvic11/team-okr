@@ -122,5 +122,15 @@ try {
   pass = false;
 }
 
+// 8) 런칭 전 다각도 스위트: 진척/날짜/분기/검색/권한/집계/루틴/전파/직렬화
+try {
+  require('child_process').execSync('node .test-suite.js', { cwd: __dirname, stdio: 'pipe' });
+  console.log('✓ 8/8 launch suite (진척/날짜/검색/권한/집계/루틴/전파/직렬화)');
+} catch (e) {
+  const out = (e.stdout ? e.stdout.toString() : '') + (e.stderr ? e.stderr.toString() : '');
+  console.log('✗ 8/8 LAUNCH SUITE FAIL:\n' + out.split('\n').slice(-25).join('\n'));
+  pass = false;
+}
+
 console.log(pass ? `\n✅ PASS — 푸시 가능${warnCount > 0 ? ' (경고 ' + warnCount + '건)' : ''}` : '\n❌ FAIL — 푸시 전 수정 필요');
 process.exit(pass ? 0 : 1);
