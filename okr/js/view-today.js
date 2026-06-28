@@ -167,6 +167,14 @@
         };
         if (ds) ds.addEventListener('change', dateCommit);
         if (dd) dd.addEventListener('change', dateCommit);
+        // 입력칸 어디를 눌러도 달력 열기 (네이티브는 일부 섹션 클릭에만 반응)
+        [ds, dd].forEach(inp => {
+          if (!inp) return;
+          inp.addEventListener('mousedown', (e) => {
+            e.preventDefault(); // 텍스트 섹션 포커스 대신 달력으로
+            try { inp.showPicker(); } catch (err) { inp.focus(); }
+          });
+        });
 
         // 소속 변경 (본인 할일)
         const lp = row.querySelector('.live-parent');
