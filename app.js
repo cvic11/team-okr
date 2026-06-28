@@ -1424,6 +1424,38 @@ async function logChange(et,eid,act,fn,bv,av,lb,category){
   // category: 'change' (의미 있는 변경, 기본) | 'check' (일일 체크 잡음 — 이력 모달에서 제외)
   try{await sb.from('audit_log').insert({team_id:state.currentTeamId,entity_type:et,entity_id:eid,entity_label:lb||'',action:act,field_name:fn||'',before_value:String(bv??''),after_value:String(av??''),category:category||'change'});}catch(e){}
 }
+// ── 삭제 안전장치: 하위 개수 집계 + 삭제 직전 전체 스냅샷 백업(deleted_snapshots) ──
+// 연쇄(cascade)로 사라지는 이니셔티브·할일을 사용자에게 명시하고, payload를 통째로 보존해 복구 가능하게 한다.
+function _tasksByInit(iids){const m={};let n=0;iids.forEach(id=>{const arr=(state.initiativeTasks&&state.initiativeTasks[id])||[];if(arr.length){m[id]=arr;n+=arr.length;}});return{map:m,count:n};}
+function buildDeleteSubtree(entityType,nodes){
+  // nodes: {o, kr, init} (해당 레벨에 맞는 것만 채움)
+  if(entityType==='objective'){
+    const o=nodes.o;const iids=[];(o.keyResults||[]).forEach(k=>(k.initiatives||[]).forEach(i=>iids.push(i.id)));
+    const t=_tasksByInit(iids);
+    return{payload:{objective:o,initiativeTasks:t.map},initCount:iids.length,taskCount:t.count};
+  }
+  if(entityType==='key_result'){
+    const kr=nodes.kr;const iids=(kr.initiatives||[]).map(i=>i.id);const t=_tasksByInit(iids);
+    return{payload:{keyResult:kr,parentObjId:nodes.o&&nodes.o.id,initiativeTasks:t.map},initCount:iids.length,taskCount:t.count};
+  }
+  // initiative
+  const init=nodes.init;const t=_tasksByInit([init.id]);
+  return{payload:{initiative:init,parentKrId:nodes.kr&&nodes.kr.id,initiativeTasks:t.map},initCount:1,taskCount:t.count};
+}
+function confirmCascadeDelete(kindLabel,label,initCount,taskCount){
+  let msg='"'+(label||'(제목 없음)')+'" '+kindLabel+'을(를) 삭제합니다.';
+  const lines=[];
+  if(kindLabel!=='이니셔티브'&&initCount)lines.push('· 하위 이니셔티브 '+initCount+'개');
+  if(taskCount)lines.push('· 하위 할일 '+taskCount+'개');
+  if(lines.length)msg+='\n\n⚠️ 아래 항목도 함께 영구 삭제됩니다:\n'+lines.join('\n');
+  msg+='\n\n계속할까요?\n(삭제 직전 백업이 저장되어 복구 요청이 가능합니다)';
+  return confirm(msg);
+}
+async function snapshotDelete(entityType,entityId,label,sub){
+  try{
+    await sb.from('deleted_snapshots').insert({id:uid(),team_id:state.currentTeamId,entity_type:entityType,entity_id:entityId,label:label||'',init_count:sub.initCount||0,task_count:sub.taskCount||0,payload:sub.payload,deleted_by:(selfMember()?selfMember().id:null)});
+  }catch(e){console.warn('[snapshot] 백업 저장 실패',e);}
+}
 async function saveTeam(t){debouncedSave(`tm-${t.id}`,async()=>{markLocal('teams',t.id);const{error}=await sb.from('teams').upsert({id:t.id,name:t.name,quarter:t.quarter,sort_order:t.sort_order||0});if(error)showToast('팀 저장 실패',true);});}
 async function saveMember(m){debouncedSave(`mem-${m.id}`,async()=>{markLocal('members',m.id);const{error}=await sb.from('members').upsert({id:m.id,team_id:m.team_id||state.currentTeamId,name:m.name,role:m.role||'',color:m.color||'#6241F5',is_admin:!!m.isAdmin,is_observer:!!m.isObserver,sort_order:state.members.findIndex(x=>x.id===m.id)});if(error)showToast('팀원 저장 실패',true);});}
 // v37 — 자식 일정이 부모 범위를 벗어나면 부모를 자동 확장 (절대 줄이지 않음)
@@ -3689,9 +3721,9 @@ document.addEventListener('click',async e=>{
   if(a==='show-history'){openHistory(btn.dataset.etype,btn.dataset.eid);return;}
   if(a==='close-modal'){closeModal();return;}
   if(a==='add-obj'){if(!canEditOKR()){showToast('관리자만 추가 가능',true);return;}const id=uid();const o={id,title:'',description:'',ownerId:state.members[0]?.id||null,confidence:'mid',realityBlocker:'',realityHelp:'',keyResults:[]};state.objectives.push(o);expanded.add(id);render();const{error}=await sb.from('objectives').insert({id,team_id:state.currentTeamId,title:'',description:'',owner_id:o.ownerId,confidence:'mid',sort_order:state.objectives.length-1});if(error)showToast('저장 실패',true);else logChange('objective',id,'create','','','(작성 중)','(작성 중)');setTimeout(()=>{const el=document.querySelector(`input[data-field="obj-title"][data-oid="${id}"]`);if(el){el.focus();el.scrollIntoView({block:"center",behavior:"smooth"});}},100);return;}
-  if(a==='del-obj'){if(!canEditOKR()){showToast('관리자만 삭제 가능',true);return;}if(!confirm('이 Objective와 하위 KR/Initiative를 삭제할까요?'))return;const oid=btn.dataset.oid;const o=state.objectives.find(x=>x.id===oid);state.objectives=state.objectives.filter(x=>x.id!==oid);render();await sb.from('objectives').delete().eq('id',oid);logChange('objective',oid,'delete','',o?.title||'','',o?.title||'');return;}
+  if(a==='del-obj'){if(!canEditOKR()){showToast('관리자만 삭제 가능',true);return;}const oid=btn.dataset.oid;const o=state.objectives.find(x=>x.id===oid);if(!o)return;const sub=buildDeleteSubtree('objective',{o});if(!confirmCascadeDelete('Objective',o.title,sub.initCount,sub.taskCount))return;await snapshotDelete('objective',oid,o.title,sub);state.objectives=state.objectives.filter(x=>x.id!==oid);render();await sb.from('objectives').delete().eq('id',oid);logChange('objective',oid,'delete','',o?.title||'','',o?.title||'');return;}
   if(a==='add-kr'){if(!canEditOKR()){showToast('관리자만 추가 가능',true);return;}const oid=btn.dataset.oid;const o=state.objectives.find(x=>x.id===oid);if(!o)return;const id=uid();const kr={id,title:'',target:100,current:0,unit:'%',ownerId:null,confidence:'mid',realityBlocker:'',realityHelp:'',initiatives:[]};o.keyResults.push(kr);render();const{error}=await sb.from('key_results').insert({id,objective_id:oid,title:'',target:kr.target,current:kr.current,unit:kr.unit,owner_id:null,confidence:'mid',sort_order:o.keyResults.length-1});if(error)showToast('저장 실패',true);else logChange('key_result',id,'create','','','(작성 중)','(작성 중)');setTimeout(()=>{const el=document.querySelector(`input[data-field="kr-title"][data-krid="${id}"]`);if(el){el.focus();el.scrollIntoView({block:"center",behavior:"smooth"});}},100);return;}
-  if(a==='del-kr'){if(!canEditOKR()){showToast('관리자만 삭제 가능',true);return;}if(!confirm('이 KR을 삭제할까요?'))return;const oid=btn.dataset.oid,krid=btn.dataset.krid;const o=state.objectives.find(x=>x.id===oid);const kr=o?.keyResults.find(k=>k.id===krid);if(o)o.keyResults=o.keyResults.filter(k=>k.id!==krid);render();await sb.from('key_results').delete().eq('id',krid);logChange('key_result',krid,'delete','',kr?.title||'','',kr?.title||'');return;}
+  if(a==='del-kr'){if(!canEditOKR()){showToast('관리자만 삭제 가능',true);return;}const oid=btn.dataset.oid,krid=btn.dataset.krid;const o=state.objectives.find(x=>x.id===oid);const kr=o?.keyResults.find(k=>k.id===krid);if(!kr)return;const sub=buildDeleteSubtree('key_result',{o,kr});if(!confirmCascadeDelete('KR',kr.title,sub.initCount,sub.taskCount))return;await snapshotDelete('key_result',krid,kr.title,sub);if(o)o.keyResults=o.keyResults.filter(k=>k.id!==krid);render();await sb.from('key_results').delete().eq('id',krid);logChange('key_result',krid,'delete','',kr?.title||'','',kr?.title||'');return;}
   if(a==='add-init'){
     // v15 — 본인 담당 Initiative만 추가 (관리자는 누구든 추가)
     const me=selfMember();if(!me){showToast('본인 선택 필요',true);return;}
@@ -3704,7 +3736,9 @@ document.addEventListener('click',async e=>{
     const krid=btn.dataset.krid,iid=btn.dataset.iid;let kr=null,init=null;state.objectives.forEach(o=>o.keyResults.forEach(k=>{if(k.id===krid){kr=k;init=k.initiatives.find(i=>i.id===iid);}}));
     if(!init)return;
     if(!canEditInit(init)){showToast('본인 담당 또는 관리자만 삭제 가능',true);return;}
-    if(!confirm('이 Initiative를 삭제할까요?'))return;
+    const sub=buildDeleteSubtree('initiative',{kr,init});
+    if(!confirmCascadeDelete('이니셔티브',init.title,sub.initCount,sub.taskCount))return;
+    await snapshotDelete('initiative',iid,init.title,sub);
     if(kr)kr.initiatives=kr.initiatives.filter(i=>i.id!==iid);render();await sb.from('initiatives').delete().eq('id',iid);logChange('initiative',iid,'delete','',init?.title||'','',init?.title||'');return;
   }
   if(a==='add-member'){const i=state.members.length;const m={id:uid(),team_id:state.currentTeamId,name:`팀원 ${i+1}`,role:'팀원',color:PALETTE[i%PALETTE.length]};state.members.push(m);render();const{error}=await sb.from('members').insert({...m,sort_order:i});if(error)showToast('저장 실패',true);else logChange('member',m.id,'create','','',m.name,m.name);return;}
@@ -5412,9 +5446,10 @@ init();
     // v82 — Initiative 삭제 (오늘 할 일 화면에서)
     if(a==='krl-del-init'){
       const iid=btn.dataset.iid,krid=btn.dataset.krid;
-      const tasksUnder=(state.initiativeTasks[iid]||[]).length;
-      const confirmMsg=tasksUnder>0?`이 이니셔티브와 하위 할일 ${tasksUnder}건을 모두 삭제할까요?`:'이 이니셔티브를 삭제할까요?';
-      if(!confirm(confirmMsg))return;
+      let initObj=null,krObj=null;(state.objectives||[]).forEach(o=>(o.keyResults||[]).forEach(k=>{if(k.id===krid){krObj=k;const f=(k.initiatives||[]).find(i=>i.id===iid);if(f)initObj=f;}}));
+      const sub=buildDeleteSubtree('initiative',{kr:krObj,init:initObj||{id:iid,title:''}});
+      if(!confirmCascadeDelete('이니셔티브',(initObj&&initObj.title)||'',sub.initCount,sub.taskCount))return;
+      snapshotDelete('initiative',iid,(initObj&&initObj.title)||'',sub); // payload는 이미 캡처됨 — fire-and-forget
       // 1. 하위 init_tasks DB 삭제
       (state.initiativeTasks[iid]||[]).forEach(t=>{if(typeof deleteInitiativeTask==='function')deleteInitiativeTask(t.id);});
       delete state.initiativeTasks[iid];

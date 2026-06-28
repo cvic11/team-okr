@@ -39,7 +39,8 @@ const TOP = ['pct', 'progressColor', 'isOverdue', 'withinThisWeek', 'daysBetween
   'parseQuarterRange', 'computeWBSRange', 'shiftDate', 'isoToLocalDay',
   'activeRoutinesForDate', 'freqText', 'matchesSearch', 'objectiveMatches', 'krMatches',
   'getInitOwnerIds', 'isInitTeamAll', 'initOwnersDisplay', 'memberAnalytics',
-  'collectDueThisWeek', 'propagateParentDates'];
+  'collectDueThisWeek', 'propagateParentDates',
+  '_tasksByInit', 'buildDeleteSubtree', 'confirmCascadeDelete'];
 let code = TOP.map(n => extractFn(n)).join('\n');
 // 중첩 함수(애드온 내부) — 선언문이라 추출 가능
 code += '\n' + extractFn('parseTasksField') + '\n' + extractFn('serializeTasks');
@@ -219,6 +220,43 @@ eq(S.matchesSearch(null, 'a'), false, '4.4 null 텍스트');
   eq(back.tasks, tasks, '9.4 왕복: tasks 보존');
   eq(S.serializeTasks('', []), '', '9.5 빈 직렬화는 빈 문자열');
   eq(S.serializeTasks('메모만', []), '메모만', '9.6 tasks 없으면 legacy 평문');
+}
+
+// ════ 10. 삭제 안전장치 (buildDeleteSubtree, confirmCascadeDelete) ════
+{
+  S.state = { initiativeTasks: { i1: [{ id: 't1' }, { id: 't2' }], i2: [{ id: 't3' }] },
+    objectives: [{ id: 'o1', title: 'O', keyResults: [
+      { id: 'k1', title: 'KR1', initiatives: [{ id: 'i1', title: 'I1' }, { id: 'i2', title: 'I2' }] },
+      { id: 'k2', title: 'KR2', initiatives: [] } ] }] };
+  const o = S.state.objectives[0], kr = o.keyResults[0];
+  // Objective: 하위 init 2 + task 3
+  const so = S.buildDeleteSubtree('objective', { o });
+  eq([so.initCount, so.taskCount], [2, 3], '10.1 Objective 하위 집계');
+  eq(!!so.payload.objective, true, '10.2 payload에 objective 보존');
+  // KR: 하위 init 2 + task 3
+  const sk = S.buildDeleteSubtree('key_result', { o, kr });
+  eq([sk.initCount, sk.taskCount], [2, 3], '10.3 KR 하위 집계');
+  eq(Object.keys(sk.payload.initiativeTasks).sort(), ['i1', 'i2'], '10.4 payload에 할일 백업 포함');
+  // Initiative: 자신 1 + task 2
+  const si = S.buildDeleteSubtree('initiative', { kr, init: kr.initiatives[0] });
+  eq([si.initCount, si.taskCount], [1, 2], '10.5 Initiative 하위 집계');
+  // 빈 KR
+  const sk2 = S.buildDeleteSubtree('key_result', { o, kr: o.keyResults[1] });
+  eq([sk2.initCount, sk2.taskCount], [0, 0], '10.6 빈 KR은 0/0');
+  // confirm 메시지: 하위 개수 명시
+  let captured = '';
+  S.confirm = (m) => { captured = m; return true; };
+  S.confirmCascadeDelete('KR', 'KR1', 2, 3);
+  eq(/이니셔티브 2개/.test(captured) && /할일 3개/.test(captured), true, '10.7 KR 삭제 경고에 하위 개수 표기');
+  // 이니셔티브 삭제 경고엔 '하위 이니셔티브' 줄 없음
+  captured = '';
+  S.confirmCascadeDelete('이니셔티브', 'I1', 1, 2);
+  eq(/하위 이니셔티브/.test(captured), false, '10.8 이니셔티브 경고엔 이니셔티브 줄 생략');
+  eq(/할일 2개/.test(captured), true, '10.9 이니셔티브 경고에 할일 개수 표기');
+  // 하위 없으면 경고 줄 없음(단순 확인)
+  captured = '';
+  S.confirmCascadeDelete('KR', 'KR2', 0, 0);
+  eq(/함께 영구 삭제/.test(captured), false, '10.10 하위 없으면 cascade 경고 생략');
 }
 
 // ── 결과 ──
