@@ -112,5 +112,15 @@ try {
   pass = false;
 }
 
+// 7) 통합 테스트: 오늘 작성·최근 한 일 연동·timezone 경계 (KST)
+try {
+  require('child_process').execSync('node .test-integration.js', { cwd: __dirname, stdio: 'pipe' });
+  console.log('✓ 7/7 integration suite (오늘/최근/timezone)');
+} catch (e) {
+  const out = (e.stdout ? e.stdout.toString() : '') + (e.stderr ? e.stderr.toString() : '');
+  console.log('✗ 7/7 INTEGRATION FAIL:\n' + out.split('\n').slice(-20).join('\n'));
+  pass = false;
+}
+
 console.log(pass ? `\n✅ PASS — 푸시 가능${warnCount > 0 ? ' (경고 ' + warnCount + '건)' : ''}` : '\n❌ FAIL — 푸시 전 수정 필요');
 process.exit(pass ? 0 : 1);

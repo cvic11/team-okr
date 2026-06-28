@@ -14,7 +14,7 @@ function extractFn(name){
   while(j<src.length&&depth>0){const c=src[j];if(c==='{')depth++;else if(c==='}')depth--;j++;}
   return src.slice(m.index,j);
 }
-const fnNames=['collectAllKR','getInitOwnerIds','buildInitTasksForToday','buildInitTasksForYesterday','buildTaskTree','selfMember','canEditAs','canEditInit','canEditOKR'];
+const fnNames=['isoToLocalDay','collectAllKR','getInitOwnerIds','buildInitTasksForToday','buildInitTasksForYesterday','buildTaskTree','selfMember','canEditAs','canEditInit','canEditOKR'];
 const fnSrc=fnNames.map(extractFn).join('\n');
 
 // --- 샌드박스 globals ---

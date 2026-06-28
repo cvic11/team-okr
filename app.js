@@ -1032,6 +1032,9 @@ function uid(){return Math.random().toString(36).slice(2,9)+Date.now().toString(
 function todayKey(){const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
 function formatDateLong(key){const[y,m,d]=key.split('-').map(Number);const dt=new Date(y,m-1,d);const dn=['일','월','화','수','목','금','토'];return `${y}. ${m}. ${d}. ${dn[dt.getDay()]}요일`;}
 function shiftDate(key,delta){const[y,m,d]=key.split('-').map(Number);const dt=new Date(y,m-1,d);dt.setDate(dt.getDate()+delta);return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;}
+// created_at/updated_at(타임스탬프, UTC ISO)을 '로컬' 날짜 YYYY-MM-DD로 변환.
+// .slice(0,10)은 UTC 날짜라 KST 오전(09시 이전) 작성 항목이 '어제'로 잡혀 오늘 할일에서 사라지는 버그가 있었음.
+function isoToLocalDay(iso){if(!iso)return '';const d=new Date(iso);if(isNaN(d))return String(iso).slice(0,10);return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
 function pct(c,t){if(!t||t<=0)return 0;return Math.max(0,Math.min(100,Math.round((c/t)*100)));}
 function progressColor(p){return p>=70?C.growth:p>=30?C.amber:C.warning;}
 function esc(s){if(s==null)return '';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
@@ -4755,7 +4758,7 @@ init();
           // v141/v142 — 과거(어제 이전) 항목은 '오늘 할 일'에서 제외(→ 최근 한 일).
           //   마감일이 있으면 마감 기준, 없으면(날짜 미입력이 흔함) 작성일(created_at) 기준.
           //   마감 없고 오늘 작성/오늘·미래 마감 항목은 오늘 할일 유지.
-          const createdDay=(t.created_at||'').slice(0,10);
+          const createdDay=isoToLocalDay(t.created_at);
           const isPast=t.due_date?(t.due_date<vDate):(createdDay&&createdDay<vDate);
           if(!isDone&&hasStarted&&!isPast){
             // v104 — _dueDate, _startDate 함께 전달 (오늘 탭에서도 날짜 편집 가능)
@@ -4775,7 +4778,7 @@ init();
     Object.entries(state.initiativeTasks||{}).forEach(([iid,arr])=>{
       (arr||[]).forEach(t=>{
         if((!t.owner_id||t.owner_id===mid)&&t.status==='done'){
-          const doneDate=t.updated_at?(t.updated_at.slice?t.updated_at.slice(0,10):''):'';
+          const doneDate=isoToLocalDay(t.updated_at);
           if(doneDate===targetDate){
             tasks.push({id:t.id,t:t.title||'',i:iid,k:initToKr[iid]||'',d:true,_isInitTask:true,_iid:iid,c:[]});
           }
@@ -5173,7 +5176,7 @@ init();
             const dbDay=[];
             Object.keys(itAll).forEach(iid=>{(itAll[iid]||[]).forEach(t=>{
               if(!t.owner_id||t.owner_id===mid){
-                const dd=(t.created_at?String(t.created_at).slice(0,10):'')||(t.updated_at?String(t.updated_at).slice(0,10):'');
+                const dd=isoToLocalDay(t.created_at)||isoToLocalDay(t.updated_at);
                 // v145 — 과거에 작성됐어도 마감이 오늘/미래인 미완료 할일은 '오늘 할 일'에 속하므로
                 //   '최근 한 일(직전 작성 내역)'에서는 제외(중복 방지).
                 const upcoming=t.status!=='done'&&t.due_date&&t.due_date>=viewing;
