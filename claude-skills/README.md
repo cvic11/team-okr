@@ -10,7 +10,7 @@ claude-skills/
 ├─ skills/
 │  ├─ research-harness/        멀티 에이전트 리서치 하네스 (오케스트레이터)
 │  ├─ cardnews/                요약/리포트 → SNS 카드뉴스 PNG·PDF·PPTX
-│  └─ _your-claude-ai-skill/   ⛳ claude.ai에서 만든 '핵심 재료' 들어갈 슬롯(비어 있음)
+│  └─ youtube-summary/         유튜브 URL → 자막 추출(yt-dlp) → 요약
 ├─ agents/                     리서치 하네스용 서브에이전트 5종
 ├─ install.sh                  ~/.claude 에 설치(심볼릭 링크 또는 복사)
 ├─ hooks/session-start-install.sh   세션 시작 시 자동 설치 스크립트
@@ -43,6 +43,7 @@ cd ~/team-okr/claude-skills
 | **Claude Code (로컬/웹)** | 이 repo가 단일 출처 → `install.sh` 또는 SessionStart 훅으로 각 머신에 설치 |
 | **API/Console** | 동일 SKILL.md 폴더를 별도 업로드 |
 
-## ⛳ 핵심 재료(claude.ai 스킬) 채우는 법
-`skills/_your-claude-ai-skill/SKILL.md` 참고. claude.ai에서 그 스킬을 다운로드해
-이 폴더를 교체하거나, 내용을 Claude에게 주면 대신 채워 커밋해 줍니다.
+## 스킬 추가하기
+`skills/<새이름>/SKILL.md` 를 만들면 끝. `install.sh`가 자동으로 포함하고,
+SessionStart 훅이 다음 세션부터 깔아줍니다. claude.ai에서 만든 스킬을 옮기려면
+그 SKILL.md 내용을 새 폴더에 넣고 커밋하세요.
