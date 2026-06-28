@@ -3372,7 +3372,19 @@ document.addEventListener('click',async e=>{
   if(a==='switch-team'){const tid=btn.dataset.tid;if(!tid||tid===state.currentTeamId){document.getElementById('team-menu')?.classList.remove('show');return;}state.currentTeamId=tid;localStorage.setItem(TEAM_KEY,tid);document.getElementById('team-menu')?.classList.remove('show');initialized=false;render();await loadTeamData(tid);initialized=true;render();return;}
   if(a==='add-team'){const n=prompt('새 팀 이름','새 팀');if(!n)return;const id=uid();const t={id,name:n,quarter:currentTeam()?.quarter||'2026 Q2',sort_order:state.teams.length};state.teams.push(t);state.currentTeamId=id;localStorage.setItem(TEAM_KEY,id);initialized=false;render();await sb.from('teams').insert(t);await loadTeamData(id);initialized=true;render();return;}
   if(a==='del-team'){if(state.teams.length<=1){showToast('마지막 팀은 삭제 불가',true);return;}const t=currentTeam();if(!t)return;if(!confirm(`팀 "${t.name}"과 모든 데이터를 삭제할까요?`))return;const oid=t.id;state.teams=state.teams.filter(x=>x.id!==oid);state.currentTeamId=state.teams[0].id;localStorage.setItem(TEAM_KEY,state.currentTeamId);initialized=false;render();await sb.from('teams').delete().eq('id',oid);await loadTeamData(state.currentTeamId);initialized=true;render();return;}
-  if(a==='view'){currentView=btn.dataset.view;render();return;}
+  if(a==='view'){
+    currentView=btn.dataset.view;
+    // '오늘' 탭은 항상 당일로 날짜를 되돌린다
+    if(currentView==='today'&&viewingDate!==todayKey()){
+      viewingDate=todayKey();
+      if(!state.standups[viewingDate]||!state.routineLogs[viewingDate]){
+        dateLoading=true;render();
+        Promise.all([loadStandup(viewingDate),loadRoutineLogs(viewingDate)]).then(()=>{dateLoading=false;render();});
+        return;
+      }
+    }
+    render();return;
+  }
   if(a==='present'){presentMode=!presentMode;if(presentMode){const pm=presentableMembers();presentMid=pm.length>0?pm[pm.length-1].id:null;}render();return;}
   if(a==='present-set'){presentMid=btn.dataset.mid;render();return;}
   if(a==='jump-to-member'){
