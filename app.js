@@ -5261,6 +5261,14 @@ init();
   // 드롭다운 열리는 순간 최신 state로 옵션 재생성 (task-kr 구버전 + group-kr 신버전)
   document.addEventListener('mousedown',function(e){const sel=e.target.closest('select[data-krl-field="task-kr"],select[data-krl-field="group-kr"],select[data-krl-field="init-task-kr"]');if(!sel)return;const cur=sel.value;sel.innerHTML=buildKROptions(cur,collectAllKR(),_krlSelMode(sel));},true);
   document.addEventListener('focusin',function(e){const sel=e.target;if(sel.tagName!=='SELECT'||(sel.dataset.krlField!=='task-kr'&&sel.dataset.krlField!=='group-kr'&&sel.dataset.krlField!=='init-task-kr'))return;sel.innerHTML=buildKROptions(sel.value,collectAllKR(),_krlSelMode(sel));},true);
+  // 날짜 입력 박스 어디를 눌러도 달력 열기 — 네이티브는 특정 섹션 클릭에만 반응
+  document.addEventListener('mousedown',function(e){
+    const inp=e.target.closest('input[type="date"]');
+    if(!inp||inp.readOnly||inp.disabled)return;
+    if(typeof inp.showPicker!=='function')return;
+    e.preventDefault(); // 섹션 포커스 대신 달력으로
+    try{inp.focus();inp.showPicker();}catch(_){inp.focus();}
+  },true);
   // v18 — 그룹 헤더 어디를 눌러도 KR/Initiative 드롭다운 열기 (운영 그룹 = renderIndividual용)
   // v34 — KR/Init 그룹은 제목 input + 별도 ▾ 이동 칩으로 분리되어 이 핸들러 적용 안 됨
   document.addEventListener('click',function(e){
