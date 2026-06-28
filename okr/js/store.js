@@ -21,6 +21,8 @@
       const d = D.parse(s); const q = Math.floor(d.getMonth() / 3);
       return { label: d.getFullYear() + '-Q' + (q + 1), start: D.str(new Date(d.getFullYear(), q * 3, 1)), end: D.str(new Date(d.getFullYear(), q * 3 + 3, 0)) };
     },
+    // ISO 문자열(UTC)을 로컬 날짜 'YYYY-MM-DD'로 변환 (timezone 보정)
+    localDate(iso) { if (!iso) return ''; return D.str(new Date(iso)); },
   };
 
   const TODAY = D.today();
@@ -354,9 +356,9 @@
 
     // ── 오늘/최근 (작성·입력일 기준) ──
     todayTasks() {
-      // 오늘 날짜에 작성(입력)된 할일만 — 완료 여부 무관
+      // 오늘 날짜에 작성(입력)된 할일만 — 완료 여부 무관 (로컬 시간 기준)
       return Object.values(this.data.nodes)
-        .filter(n => n.type === 'task' && (n.createdAt || '').slice(0, 10) === TODAY)
+        .filter(n => n.type === 'task' && D.localDate(n.createdAt) === TODAY)
         .sort((a, b) => {
           const ad = a.due || '9999-12-31', bd = b.due || '9999-12-31';
           return ad < bd ? -1 : ad > bd ? 1 : (a.sort || 0) - (b.sort || 0);
@@ -373,12 +375,12 @@
       const tasks = Object.values(this.data.nodes).filter(n => n.type === 'task');
       let nearest = '';
       tasks.forEach(n => {
-        const d = (n.createdAt || '').slice(0, 10);
+        const d = D.localDate(n.createdAt);
         if (d && d < TODAY && d > nearest) nearest = d;
       });
       this._recentDay = nearest;
       if (!nearest) return [];
-      return tasks.filter(n => (n.createdAt || '').slice(0, 10) === nearest)
+      return tasks.filter(n => D.localDate(n.createdAt) === nearest)
         .sort((a, b) => (a.sort || 0) - (b.sort || 0));
     },
     recentDay() { return this._recentDay || ''; },
