@@ -5651,11 +5651,16 @@ init();
     if(val)return{k:val,i:''}; // 레거시
     return{k:'',i:''};
   }
-  // v103 — 재렌더 전에 모든 task-text textarea 의 현재 값을 state 에 강제 반영 (IME 중간/디바운스 미반영 보호)
+  // v103 — 재렌더 전에 task-text textarea 의 현재 값을 state 에 반영 (IME 중간/디바운스 미반영 보호)
+  // v162 — '편집 중(포커스)'인 칸만 반영한다. 과거엔 블록의 모든 textarea 값을 무조건 밀어넣어,
+  //   공유 화면 등 '편집 안 하는' 화면에서 낡은 빈 DOM 값이 다른 기기에서 방금 입력한 내용을
+  //   빈 값으로 덮어쓰는(=작성 내용 사라짐) 치명적 경합이 있었음.
   function flushTaskInputs(mid,kind){
     const block=document.querySelector('[data-krl-block="'+mid+':'+kind+'"]');
     if(!block)return;
+    const active=document.activeElement;
     block.querySelectorAll('textarea[data-krl-field="task-text"]').forEach(ta=>{
+      if(ta!==active)return; // 포커스된(실제 편집 중) 칸만 flush — 수동 덮어쓰기 방지
       const tid=ta.dataset.tid;
       if(!tid)return;
       if(ta.dataset.isInitTask==='1'){
