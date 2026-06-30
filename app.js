@@ -4904,6 +4904,7 @@ init();
         '<button class="rt-check '+(t.d?'checked':'')+'" style="width:18px;height:18px;border-width:1.5px;border-radius:4px;flex-shrink:0;margin-top:6px;" data-act="krl-toggle-init-task" data-mid="'+escapeHtml(mid)+'" data-kind="'+escapeHtml(kind)+'" data-tid="'+escapeHtml(t.id)+'" data-init-id="'+escapeHtml(t._iid||'')+'"'+dis+tip+'>'+(t.d?'✓':'')+'</button>'+
         '<textarea data-krl-field="task-text" data-krl-autogrow data-mid="'+escapeHtml(mid)+'" data-kind="'+escapeHtml(kind)+'" data-tid="'+escapeHtml(t.id)+'" data-is-init-task="1" data-init-id="'+escapeHtml(t._iid||'')+'" rows="1" placeholder="할일을 적어주세요" style="'+textSt+'"'+(ed?'':' readonly')+tip+'>'+escapeHtml(t.t||'')+'</textarea>'+
         dateGroup+
+        (ed?'<button data-act="krl-save-task" data-mid="'+escapeHtml(mid)+'" data-kind="'+escapeHtml(kind)+'" data-tid="'+escapeHtml(t.id)+'" data-init-id="'+escapeHtml(t._iid||'')+'" title="이 할일 저장" style="flex-shrink:0;margin-top:5px;padding:3px 10px;background:var(--primary);color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:11px;font-weight:700;font-family:inherit;line-height:1.4;">저장</button>':'')+
         moveSelect+
         (ed?'<button data-act="krl-del-init-task" data-mid="'+escapeHtml(mid)+'" data-kind="'+escapeHtml(kind)+'" data-tid="'+escapeHtml(t.id)+'" data-init-id="'+escapeHtml(t._iid||'')+'" style="padding:2px 5px;margin-top:4px;background:none;border:1px solid transparent;border-radius:5px;cursor:pointer;color:var(--text-soft);font-size:12px;flex-shrink:0;line-height:1;" title="삭제">✕</button>':'')+
       '</div></div>';
@@ -5539,7 +5540,7 @@ init();
       scheduleDistributionUpdate();
       return;
     }
-    if(a!=='krl-add-task'&&a!=='krl-toggle-task'&&a!=='krl-del-task'&&a!=='krl-clear-legacy'&&a!=='krl-add-subtask'&&a!=='krl-toggle-init-task'&&a!=='krl-del-init-task')return;
+    if(a!=='krl-add-task'&&a!=='krl-toggle-task'&&a!=='krl-del-task'&&a!=='krl-clear-legacy'&&a!=='krl-add-subtask'&&a!=='krl-toggle-init-task'&&a!=='krl-del-init-task'&&a!=='krl-save-task')return;
     const mid=btn.dataset.mid,kind=btn.dataset.kind,tid=btn.dataset.tid;
     const data=getMemberTasks(mid,kind);
     if(a==='krl-add-task'){
@@ -5594,6 +5595,27 @@ init();
       if(legacyEl)legacyEl.remove();
     }
     // v69 — initiative_tasks 체크 토글
+    else if(a==='krl-save-task'){
+      // 명시적 저장 — 이 할일의 제목+시작/마감을 한 번에 확정 저장(자동저장 불안 보완)
+      const initId=btn.dataset.initId;
+      const arr=state.initiativeTasks[initId]||[];
+      const t=arr.find(x=>x.id===tid);if(!t)return;
+      const row=btn.closest('.krl-task-row')||document;
+      const ta=row.querySelector('textarea[data-krl-field="task-text"][data-tid="'+tid+'"]');
+      const ds=row.querySelector('input[data-krl-field="init-task-start"][data-tid="'+tid+'"]');
+      const dd=row.querySelector('input[data-krl-field="init-task-due"][data-tid="'+tid+'"]');
+      if(ta)t.title=ta.value;
+      if(ds)t.start_date=ds.value||null;
+      if(dd)t.due_date=dd.value||null;
+      if(typeof saveInitiativeTask==='function')saveInitiativeTask(t);
+      if(typeof flushPendingSaves==='function')flushPendingSaves();
+      if(typeof showToast==='function')showToast('저장됨');
+      // 버튼 즉시 피드백
+      const old=btn.textContent;btn.textContent='✓ 저장됨';btn.disabled=true;
+      setTimeout(()=>{btn.textContent=old;btn.disabled=false;},1200);
+      autoRecalcKRFromInitTasks();
+      return;
+    }
     else if(a==='krl-toggle-init-task'){
       const initId=btn.dataset.initId;
       const arr=state.initiativeTasks[initId]||[];
