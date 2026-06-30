@@ -3444,6 +3444,7 @@ document.addEventListener('click',async e=>{
   if(a==='add-team'){const n=prompt('새 팀 이름','새 팀');if(!n)return;const id=uid();const t={id,name:n,quarter:currentTeam()?.quarter||'2026 Q2',sort_order:state.teams.length};state.teams.push(t);state.currentTeamId=id;localStorage.setItem(TEAM_KEY,id);initialized=false;render();await sb.from('teams').insert(t);await loadTeamData(id);initialized=true;render();return;}
   if(a==='del-team'){if(state.teams.length<=1){showToast('마지막 팀은 삭제 불가',true);return;}const t=currentTeam();if(!t)return;if(!confirm(`팀 "${t.name}"과 모든 데이터를 삭제할까요?`))return;const oid=t.id;state.teams=state.teams.filter(x=>x.id!==oid);state.currentTeamId=state.teams[0].id;localStorage.setItem(TEAM_KEY,state.currentTeamId);initialized=false;render();await sb.from('teams').delete().eq('id',oid);await loadTeamData(state.currentTeamId);initialized=true;render();return;}
   if(a==='view'){
+    await flushPendingSaves(); // 뷰 이동 전 미저장 입력 확정(작성 내용 손실 방지)
     currentView=btn.dataset.view;
     // '오늘' 탭은 항상 당일로 날짜를 되돌린다
     if(currentView==='today'&&viewingDate!==todayKey()){
@@ -3475,8 +3476,8 @@ document.addEventListener('click',async e=>{
   if(a==='present-prev'){const pm=presentableMembers();if(pm.length===0)return;const i=pm.findIndex(m=>m.id===presentMid);const ni=i>0?i-1:pm.length-1;presentMid=pm[ni].id;render();return;}
   if(a==='present-next'){const pm=presentableMembers();if(pm.length===0)return;const i=pm.findIndex(m=>m.id===presentMid);const ni=i<pm.length-1?i+1:0;presentMid=pm[ni].id;render();return;}
   if(a==='toggle-dark'){setDark(!isDark());render();return;}
-  if(a==='date-shift'){viewingDate=shiftDate(viewingDate,parseInt(btn.dataset.delta));if(!state.standups[viewingDate]||!state.routineLogs[viewingDate]){dateLoading=true;render();await Promise.all([loadStandup(viewingDate),loadRoutineLogs(viewingDate)]);dateLoading=false;}render();return;}
-  if(a==='date-today'){viewingDate=todayKey();render();return;}
+  if(a==='date-shift'){await flushPendingSaves();viewingDate=shiftDate(viewingDate,parseInt(btn.dataset.delta));if(!state.standups[viewingDate]||!state.routineLogs[viewingDate]){dateLoading=true;render();await Promise.all([loadStandup(viewingDate),loadRoutineLogs(viewingDate)]);dateLoading=false;}render();return;}
+  if(a==='date-today'){await flushPendingSaves();viewingDate=todayKey();render();return;}
   if(a==='toggle-obj'){const oid=btn.dataset.oid;expanded.has(oid)?expanded.delete(oid):expanded.add(oid);render();return;}
   if(a==='toggle-kr'){const k=btn.dataset.krid;krCollapsed.has(k)?krCollapsed.delete(k):krCollapsed.add(k);render();return;}
   // v84 — 메인화면 KR 행에서 이니셔티브 펼침/접힘 토글
@@ -4381,6 +4382,7 @@ async function reorderMembers(srcId,tgtId,after){
 // 달력 날짜 변경 처리 (input/change 모두에서 호출되도록 함수 분리)
 async function handleDateChange(newDate){
   if(!newDate || newDate === viewingDate)return;
+  await flushPendingSaves(); // 날짜 이동 전 미저장 입력 확정(작성 내용 손실 방지)
   viewingDate = newDate;
   if(!state.standups[newDate] || !state.routineLogs[newDate]){
     dateLoading = true; render();
@@ -5247,10 +5249,10 @@ init();
             Object.keys(itAll).forEach(iid=>{(itAll[iid]||[]).forEach(t=>{
               if(!t.owner_id||t.owner_id===mid){
                 const dd=isoToLocalDay(t.created_at)||isoToLocalDay(t.updated_at);
-                // v145 — 과거에 작성됐어도 마감이 오늘/미래인 미완료 할일은 '오늘 할 일'에 속하므로
-                //   '최근 한 일(직전 작성 내역)'에서는 제외(중복 방지).
-                const upcoming=t.status!=='done'&&t.due_date&&t.due_date>=viewing;
-                if(dd===d&&(t.title||'').trim()&&!upcoming)dbDay.push({id:t.id,t:t.title||'',i:iid,k:(initMap[iid]&&initMap[iid].krId)||'',d:t.status==='done',_isInitTask:true});
+                // v165 — '시작~마감 구간' 기준. 구간이 그 날(d)을 덮으면 최근에도 표시.
+                //   날짜가 오늘과 과거에 걸친 항목은 '오늘 할 일'과 '최근 한 일' 양쪽에 모두 노출(사용자 방침).
+                const spansD=!!t.due_date&&(!t.start_date||t.start_date<=d)&&t.due_date>=d; // 마감 있는 항목만 구간 판정
+                if(((dd===d)||spansD)&&(t.title||'').trim())dbDay.push({id:t.id,t:t.title||'',i:iid,k:(initMap[iid]&&initMap[iid].krId)||'',d:t.status==='done',_isInitTask:true});
               }
             });});
             const hasLegacy=parsed.legacy&&parsed.legacy.trim();
