@@ -1417,7 +1417,27 @@ async function flushPendingSaves(){
 // v72 — visibilitychange만 사용 (beforeunload는 async 미지원으로 제거)
 document.addEventListener('visibilitychange',()=>{
   if(document.visibilityState==='hidden'&&initialized)flushPendingSaves();
+  else if(document.visibilityState==='visible')checkDayRollover();
 });
+// v160 — 자정 넘김 자동 처리: 페이지를 열어둔 채 날이 바뀌면 기준 날짜(viewingDate)가
+//   '어제'에 머물러 오늘 작성분이 '미래'로 분류돼 안 보이던 문제(회의실 화면 등) 해결.
+let _lastKnownToday=todayKey();
+function checkDayRollover(){
+  if(!initialized)return;
+  const t=todayKey();
+  if(t===_lastKnownToday)return;
+  const wasOnOldToday=(viewingDate===_lastKnownToday); // 사용자가 과거/미래로 직접 이동한 게 아니면 따라서 갱신
+  _lastKnownToday=t;
+  if(wasOnOldToday&&viewingDate!==t){
+    viewingDate=t;
+    if(!state.standups[t]||!state.routineLogs[t]){
+      dateLoading=true;render();
+      Promise.all([loadStandup(t),loadRoutineLogs(t)]).then(()=>{dateLoading=false;render();});
+    }else render();
+  }
+}
+window.addEventListener('focus',checkDayRollover);
+setInterval(checkDayRollover,60000); // 1분마다 날짜 변경 감지
 async function logChange(et,eid,act,fn,bv,av,lb,category){
   // v16 — 옵저버는 audit 기록 남기지 않음
   if(typeof isObserverMode==='function'&&isObserverMode())return;
@@ -5220,6 +5240,19 @@ init();
             const hasLegacy=parsed.legacy&&parsed.legacy.trim();
             if(nonEmptyTasks.length||dbDay.length||hasLegacy){recent.push({date:d,tasks:nonEmptyTasks.concat(dbDay),legacy:parsed.legacy||''});break;}
           }
+          // v160 — 지난 마감 미완료 할일은 하루치에 안 잡혀도 '모두' 노출 (회의 때 '안 보임' 방지).
+          //   '오늘 할 일'에서 제외되는 조건(과거+시작함+미완료)과 동일하게 수집해 이월 그룹으로 표시.
+          const shownIds=new Set();recent.forEach(r=>(r.tasks||[]).forEach(t=>{if(t.id)shownIds.add(t.id);}));
+          const carry=[];
+          Object.keys(itAll).forEach(iid=>{(itAll[iid]||[]).forEach(t=>{
+            if((!t.owner_id||t.owner_id===mid)&&t.status!=='done'&&(t.title||'').trim()&&!shownIds.has(t.id)){
+              const cd=isoToLocalDay(t.created_at)||isoToLocalDay(t.updated_at);
+              const started=!t.start_date||t.start_date<=viewing;
+              const isPast=t.due_date?(t.due_date<viewing):(cd&&cd<viewing);
+              if(started&&isPast){shownIds.add(t.id);carry.push({id:t.id,t:t.title||'',i:iid,k:(initMap[iid]&&initMap[iid].krId)||'',d:false,_isInitTask:true});}
+            }
+          });});
+          if(carry.length)recent.unshift({date:viewing,label:'⚠ 미완료 (이월) — 완료할 때까지 계속 표시',tasks:carry,legacy:''});
           if(recent.length>0){
             const fmtDate=window.formatRecentDateLabel||(d=>d);
             // v14 — 담당자(본인) 여부 확인: 본인은 다음 날에도 체크박스 토글 가능
