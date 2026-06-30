@@ -56,6 +56,23 @@ function recentDayTasks(mid) {
   return null;
 }
 
+// v160 — 지난 마감 미완료는 하루치에 안 잡혀도 '모두' 이월 노출 (app.js 5202~ 와 1:1)
+function carryOverTasks(mid, alreadyShownIds) {
+  const st = sandbox.state, viewing = sandbox.viewingDate;
+  const itAll = st.initiativeTasks || {};
+  const shown = new Set(alreadyShownIds || []);
+  const carry = [];
+  Object.keys(itAll).forEach(iid => (itAll[iid] || []).forEach(t => {
+    if ((!t.owner_id || t.owner_id === mid) && t.status !== 'done' && (t.title || '').trim() && !shown.has(t.id)) {
+      const cd = isoToLocalDay(t.created_at) || isoToLocalDay(t.updated_at);
+      const started = !t.start_date || t.start_date <= viewing;
+      const isPast = t.due_date ? (t.due_date < viewing) : (cd && cd < viewing);
+      if (started && isPast) { shown.add(t.id); carry.push({ id: t.id, t: t.title || '' }); }
+    }
+  }));
+  return carry;
+}
+
 // --- 테스트 러너 ---
 let pass = 0, fail = 0; const fails = [];
 function eq(actual, expected, msg) {
@@ -165,6 +182,39 @@ eq(isoToLocalDay(null), '', 'A6 null');
   sandbox.state = st;
   const r = recentDayTasks('m1');
   eq([r.date, idOf(r.tasks)], ['2026-06-27', ['b']], 'C5 가장 가까운 작성일 1건만 집계');
+}
+
+// ════════════════════════════════════════════════
+// 시나리오 C2 — 지난 미완료 '이월' 전수 노출 (v160, 회의 때 안 보임 방지)
+// ════════════════════════════════════════════════
+{
+  // 마감이 여러 날 지난 미완료 2건(다른 날 작성) — 둘 다 이월에 보여야 함 (하루치 한정 X)
+  const st = mkState({ init1: [
+    { id: 'a', title: '3일전 미완료', status: 'todo', due_date: '2026-06-25', created_at: '2026-06-25T03:00:00Z' },
+    { id: 'b', title: '어제 미완료', status: 'todo', due_date: '2026-06-27', created_at: '2026-06-27T03:00:00Z' },
+    { id: 'c', title: '오늘 할일', status: 'todo', due_date: '2026-06-28', created_at: '2026-06-28T03:00:00Z' },
+    { id: 'd', title: '완료된 지난건', status: 'done', due_date: '2026-06-26', created_at: '2026-06-26T03:00:00Z' },
+  ] });
+  sandbox.state = st; // TODAY=2026-06-28
+  const carry = carryOverTasks('m1', []).map(t => t.id).sort();
+  eq(carry, ['a', 'b'], 'C2-1 지난 미완료는 며칠 전이든 모두 이월(완료/오늘건 제외)');
+  eq(idOf(buildInitTasksForToday('m1')), ['c'], 'C2-2 오늘건은 오늘 할일에 그대로 표시');
+}
+{
+  // 이미 '최근 한 일'에 표시된 id는 이월에서 중복 제거
+  const st = mkState({ init1: [
+    { id: 'x', title: '지난 미완료', status: 'todo', due_date: '2026-06-26', created_at: '2026-06-26T03:00:00Z' },
+  ] });
+  sandbox.state = st;
+  eq(carryOverTasks('m1', ['x']).length, 0, 'C2-3 이미 표시된 항목은 이월 중복 제외');
+}
+{
+  // 시작일이 미래인 항목은 이월 아님(아직 시작 안 함)
+  const st = mkState({ init1: [
+    { id: 'f', title: '미래시작', status: 'todo', start_date: '2026-07-01', due_date: '2026-06-20', created_at: '2026-06-20T03:00:00Z' },
+  ] });
+  sandbox.state = st;
+  eq(carryOverTasks('m1', []).length, 0, 'C2-4 미래 시작은 이월 제외');
 }
 
 // ════════════════════════════════════════════════
