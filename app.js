@@ -4908,7 +4908,7 @@ init();
           dateGroup+
           (ed?'<span style="display:inline-flex;gap:4px;align-items:stretch;">'
             +'<button data-act="krl-save-task" data-mid="'+escapeHtml(mid)+'" data-kind="'+escapeHtml(kind)+'" data-tid="'+escapeHtml(t.id)+'" data-init-id="'+escapeHtml(t._iid||'')+'" title="이 할일 저장" style="flex:1;padding:3px 6px;background:var(--primary);color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:11px;font-weight:700;font-family:inherit;line-height:1.4;white-space:nowrap;text-align:center;">저장</button>'
-            +'<button data-act="krl-del-init-task" data-mid="'+escapeHtml(mid)+'" data-kind="'+escapeHtml(kind)+'" data-tid="'+escapeHtml(t.id)+'" data-init-id="'+escapeHtml(t._iid||'')+'" title="이 할일 삭제" style="padding:3px 7px;background:none;border:1px solid var(--line);border-radius:5px;cursor:pointer;color:var(--text-soft);font-size:11px;line-height:1.4;flex-shrink:0;">✕</button>'
+            +'<button data-act="krl-del-init-task" data-mid="'+escapeHtml(mid)+'" data-kind="'+escapeHtml(kind)+'" data-tid="'+escapeHtml(t.id)+'" data-init-id="'+escapeHtml(t._iid||'')+'" title="이 할일 삭제" style="flex:1;padding:3px 7px;background:none;border:1px solid var(--line);border-radius:5px;cursor:pointer;color:var(--text-soft);font-size:11px;line-height:1.4;">✕</button>'
           +'</span>':'')+
         '</span>'+
         moveSelect+
