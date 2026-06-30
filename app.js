@@ -4903,13 +4903,15 @@ init();
       '<div class="krl-task-row" data-tid="'+escapeHtml(t.id)+'" data-mid="'+escapeHtml(mid)+'" data-kind="'+escapeHtml(kind)+'" style="display:flex;align-items:flex-start;gap:6px;padding:4px 0;border-bottom:1px dashed #F0F0F2;">'+
         '<button class="rt-check '+(t.d?'checked':'')+'" style="width:18px;height:18px;border-width:1.5px;border-radius:4px;flex-shrink:0;margin-top:6px;" data-act="krl-toggle-init-task" data-mid="'+escapeHtml(mid)+'" data-kind="'+escapeHtml(kind)+'" data-tid="'+escapeHtml(t.id)+'" data-init-id="'+escapeHtml(t._iid||'')+'"'+dis+tip+'>'+(t.d?'✓':'')+'</button>'+
         '<textarea data-krl-field="task-text" data-krl-autogrow data-mid="'+escapeHtml(mid)+'" data-kind="'+escapeHtml(kind)+'" data-tid="'+escapeHtml(t.id)+'" data-is-init-task="1" data-init-id="'+escapeHtml(t._iid||'')+'" rows="1" placeholder="할일을 적어주세요" style="'+textSt+'"'+(ed?'':' readonly')+tip+'>'+escapeHtml(t.t||'')+'</textarea>'+
-        // v167 — 날짜+저장을 세로로 쌓아 가로 너비 절약(입력칸 확대). 저장은 날짜 하단.
+        // v168 — 날짜 아래에 [저장][삭제]를 나란히. 우측 단독 ✕ 제거로 입력칸 폭 확대.
         '<span style="display:inline-flex;flex-direction:column;align-items:stretch;gap:4px;flex-shrink:0;margin-top:5px;">'+
           dateGroup+
-          (ed?'<button data-act="krl-save-task" data-mid="'+escapeHtml(mid)+'" data-kind="'+escapeHtml(kind)+'" data-tid="'+escapeHtml(t.id)+'" data-init-id="'+escapeHtml(t._iid||'')+'" title="이 할일 저장" style="padding:3px 8px;background:var(--primary);color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:11px;font-weight:700;font-family:inherit;line-height:1.4;white-space:nowrap;text-align:center;">저장</button>':'')+
+          (ed?'<span style="display:inline-flex;gap:4px;align-items:stretch;">'
+            +'<button data-act="krl-save-task" data-mid="'+escapeHtml(mid)+'" data-kind="'+escapeHtml(kind)+'" data-tid="'+escapeHtml(t.id)+'" data-init-id="'+escapeHtml(t._iid||'')+'" title="이 할일 저장" style="flex:1;padding:3px 6px;background:var(--primary);color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:11px;font-weight:700;font-family:inherit;line-height:1.4;white-space:nowrap;text-align:center;">저장</button>'
+            +'<button data-act="krl-del-init-task" data-mid="'+escapeHtml(mid)+'" data-kind="'+escapeHtml(kind)+'" data-tid="'+escapeHtml(t.id)+'" data-init-id="'+escapeHtml(t._iid||'')+'" title="이 할일 삭제" style="padding:3px 7px;background:none;border:1px solid var(--line);border-radius:5px;cursor:pointer;color:var(--text-soft);font-size:11px;line-height:1.4;flex-shrink:0;">✕</button>'
+          +'</span>':'')+
         '</span>'+
         moveSelect+
-        (ed?'<button data-act="krl-del-init-task" data-mid="'+escapeHtml(mid)+'" data-kind="'+escapeHtml(kind)+'" data-tid="'+escapeHtml(t.id)+'" data-init-id="'+escapeHtml(t._iid||'')+'" style="padding:2px 5px;margin-top:4px;background:none;border:1px solid transparent;border-radius:5px;cursor:pointer;color:var(--text-soft);font-size:12px;flex-shrink:0;line-height:1;" title="삭제">✕</button>':'')+
       '</div></div>';
   }
   function renderTaskListBlock(mid,kind,label){
@@ -5099,8 +5101,8 @@ init();
       }
     }
     return '<div class="krl-block" data-krl-block="'+mid+':'+kind+'" style="background:#FAFAFB;border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin-top:8px;">'+
-      '<div class="krl-block-head" data-krl-head="'+mid+':'+kind+'" style="font-size:12px;color:var(--text-soft);font-weight:600;margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">'+
-        (tasks.length>0?'<span style="display:inline-flex;align-items:center;gap:6px;">'+escapeHtml(label)+'<span class="krl-count" style="font-size:11px;color:var(--text-soft);font-weight:600;">'+tasks.length+'건</span></span>':'<span></span>')+
+      // v168 — 라벨/카운트는 섹션 헤더('오늘 할 일') 옆으로 이관. 여기선 저장 배지 앵커만 유지(별도 행 차지 안 함).
+      '<div class="krl-block-head" data-krl-head="'+mid+':'+kind+'" style="display:flex;justify-content:flex-end;">'+
         '<span class="krl-right" style="display:inline-flex;align-items:center;gap:6px;">'+
       '</div>'+
       '<div class="krl-tasks" data-krl-tasks="'+mid+':'+kind+'">'+groupsHtml+emptyAddHtml+'</div>'+
@@ -5222,7 +5224,10 @@ init();
     if(typeof renderTodaySection!=='function'||typeof renderYesterdaySection!=='function'||typeof renderToday!=='function'){setTimeout(applyPatches,150);return;}
     window.renderTodaySection=function(mid,memo,myInits,checks){
       // v15 — Initiative 표시 제거 (OKR 탭의 완료 체크박스로 이관)
-      return '<div class="field"><div class="field-label"><span class="field-dot accent-primary"></span><span class="field-name accent-primary">오늘 할 일</span></div>'+renderTaskListBlock(mid,'today','추가 할일')+'</div>';
+      // v168 — 할일 건수를 '오늘 할 일' 헤더 옆에 나란히 표시(별도 행 제거)
+      let cnt=0;try{cnt=(buildInitTasksForToday(mid)||[]).length+(((getMemberTasks(mid,'today')||{}).tasks)||[]).length;}catch(e){}
+      const cntBadge=cnt>0?'<span class="krl-count" style="font-size:11px;color:var(--text-soft);font-weight:600;margin-left:6px;">'+cnt+'건</span>':'';
+      return '<div class="field"><div class="field-label"><span class="field-dot accent-primary"></span><span class="field-name accent-primary">오늘 할 일</span>'+cntBadge+'</div>'+renderTaskListBlock(mid,'today','추가 할일')+'</div>';
     };
     window.renderYesterdaySection=function(mid,memo,yDone){
       const summaryHtml=yDone.length>0
