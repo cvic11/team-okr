@@ -1029,12 +1029,21 @@ function caret(open,size){
   return `<svg width="${sz}" height="${sz}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:-1px;transform:rotate(${open?180:0}deg);transition:transform .15s ease;flex-shrink:0;"><polyline points="6 9 12 15 18 9"/></svg>`;
 }
 function uid(){return Math.random().toString(36).slice(2,9)+Date.now().toString(36).slice(-3);}
-function todayKey(){const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
+// 기기 타임존과 무관하게 항상 한국 시간(KST, Asia/Seoul) 기준 날짜 YYYY-MM-DD 산출.
+// en-CA 로케일은 YYYY-MM-DD 형식을 보장한다.
+const _KST_FMT=(typeof Intl!=='undefined'&&Intl.DateTimeFormat)?new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit'}):null;
+function kstDay(date){
+  if(_KST_FMT){try{return _KST_FMT.format(date);}catch(e){}}
+  // 폴백: UTC+9 수동 보정
+  const u=date.getTime()+date.getTimezoneOffset()*60000;const k=new Date(u+9*3600000);
+  return `${k.getFullYear()}-${String(k.getMonth()+1).padStart(2,'0')}-${String(k.getDate()).padStart(2,'0')}`;
+}
+function todayKey(){return kstDay(new Date());}
 function formatDateLong(key){const[y,m,d]=key.split('-').map(Number);const dt=new Date(y,m-1,d);const dn=['일','월','화','수','목','금','토'];return `${y}. ${m}. ${d}. ${dn[dt.getDay()]}요일`;}
 function shiftDate(key,delta){const[y,m,d]=key.split('-').map(Number);const dt=new Date(y,m-1,d);dt.setDate(dt.getDate()+delta);return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;}
 // created_at/updated_at(타임스탬프, UTC ISO)을 '로컬' 날짜 YYYY-MM-DD로 변환.
 // .slice(0,10)은 UTC 날짜라 KST 오전(09시 이전) 작성 항목이 '어제'로 잡혀 오늘 할일에서 사라지는 버그가 있었음.
-function isoToLocalDay(iso){if(!iso)return '';const d=new Date(iso);if(isNaN(d))return String(iso).slice(0,10);return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
+function isoToLocalDay(iso){if(!iso)return '';const d=new Date(iso);if(isNaN(d))return String(iso).slice(0,10);return kstDay(d);}
 function pct(c,t){if(!t||t<=0)return 0;return Math.max(0,Math.min(100,Math.round((c/t)*100)));}
 function progressColor(p){return p>=70?C.growth:p>=30?C.amber:C.warning;}
 function esc(s){if(s==null)return '';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}

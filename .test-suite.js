@@ -27,6 +27,7 @@ function extractFn(name, occurrence) {
 const TODAY = '2026-06-28';
 const sandbox = { state: null, window: {}, console };
 sandbox.todayKey = () => TODAY;
+sandbox.kstDay=(d)=>new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit'}).format(d);
 sandbox.C = { growth: 'GROWTH', amber: 'AMBER', warning: 'WARNING' };
 sandbox.esc = s => s == null ? '' : String(s);
 sandbox.getState = () => sandbox.state;

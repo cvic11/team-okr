@@ -27,6 +27,7 @@ const sandbox={
 };
 sandbox.getState=function(){return sandbox.state;};
 sandbox.todayKey=function(){return TODAY;};
+sandbox.kstDay=(d)=>new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit'}).format(d);
 sandbox.shiftDate=function(d,n){const x=new Date(d);x.setDate(x.getDate()+n);return x.toISOString().slice(0,10);};
 sandbox.collectAllInit=function(){const list=[];(sandbox.state.objectives||[]).forEach(o=>(o.keyResults||[]).forEach(k=>(k.initiatives||[]).forEach(i=>list.push({id:i.id,title:i.title||'',krId:k.id}))));return list;};
 vm.createContext(sandbox);
