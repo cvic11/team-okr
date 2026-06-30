@@ -36,8 +36,9 @@ vm.createContext(sandbox);
 vm.runInContext(fnSrc, sandbox);
 const { isoToLocalDay, buildInitTasksForToday, buildInitTasksForYesterday, buildTaskTree } = sandbox;
 
-// --- "최근 한 일(직전 작성 내역)" 핵심 로직 포트 (app.js 5162~5185 와 1:1) ---
-// 가장 가까운 '오늘 외' 날짜 1건을 작성일(created_at→로컬) 기준으로 집계, upcoming(마감 오늘/미래 미완료) 제외.
+// --- "최근 한 일(직전 작성 내역)" 핵심 로직 포트 (app.js 5246~ 와 1:1, v165) ---
+// 가장 가까운 '오늘 외' 날짜 d 에 대해: 그 날 작성(dd===d) 또는 시작~마감 구간이 d 를 덮는(spansD) 항목 집계.
+// 구간이 오늘과 과거에 걸치면 '오늘'과 '최근' 양쪽 모두 노출(중복 허용).
 function recentDayTasks(mid) {
   const st = sandbox.state, viewing = sandbox.viewingDate;
   const itAll = st.initiativeTasks || {};
@@ -47,8 +48,8 @@ function recentDayTasks(mid) {
     Object.keys(itAll).forEach(iid => (itAll[iid] || []).forEach(t => {
       if (!t.owner_id || t.owner_id === mid) {
         const dd = isoToLocalDay(t.created_at) || isoToLocalDay(t.updated_at);
-        const upcoming = t.status !== 'done' && t.due_date && t.due_date >= viewing;
-        if (dd === d && (t.title || '').trim() && !upcoming)
+        const spansD = !!t.due_date && (!t.start_date || t.start_date <= d) && t.due_date >= d;
+        if (((dd === d) || spansD) && (t.title || '').trim())
           dbDay.push({ id: t.id, t: t.title || '', d: t.status === 'done' });
       }
     }));
@@ -161,12 +162,13 @@ eq(isoToLocalDay(null), '', 'A6 null');
   eq([r && r.date, r ? idOf(r.tasks) : null], ['2026-06-27', ['t1']], 'C2 어제 작성분이 최근 한 일에 표시');
 }
 {
-  // 과거 작성이지만 마감이 오늘/미래인 미완료 → 최근에서 제외(오늘 할일 소속, 중복방지: v145)
-  const st = mkState({ init1: [{ id: 't1', title: '과거작성 미래마감', status: 'todo', due_date: '2026-06-28', created_at: '2026-06-25T03:00:00Z' }] });
+  // v165 — 시작~마감 구간이 오늘과 과거에 걸친 항목은 '오늘'과 '최근' 양쪽 모두 표기
+  // start 06-25 ~ due 06-28(오늘), viewing 06-28 → 직전일 06-27 을 구간이 덮음 → 최근에도 노출
+  const st = mkState({ init1: [{ id: 't1', title: '걸친 항목', status: 'todo', start_date: '2026-06-25', due_date: '2026-06-28', created_at: '2026-06-25T03:00:00Z' }] });
   sandbox.state = st;
   const r = recentDayTasks('m1');
-  eq(r, null, 'C3 과거작성+마감 오늘/미래 미완료는 최근에서 제외');
-  eq(idOf(buildInitTasksForToday('m1')), ['t1'], 'C3b 동일 항목은 오늘 할일에 표시(상호배제 성립)');
+  eq([r && r.date, r ? idOf(r.tasks) : null], ['2026-06-27', ['t1']], 'C3 구간이 걸치면 최근에도 표시');
+  eq(idOf(buildInitTasksForToday('m1')), ['t1'], 'C3b 동일 항목이 오늘 할일에도 표시(양쪽 노출)');
 }
 {
   // 오늘 작성분은 최근 한 일에 안 나옴(가장 가까운 '오늘 외' 날짜만)
