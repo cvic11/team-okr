@@ -4903,8 +4903,11 @@ init();
       '<div class="krl-task-row" data-tid="'+escapeHtml(t.id)+'" data-mid="'+escapeHtml(mid)+'" data-kind="'+escapeHtml(kind)+'" style="display:flex;align-items:flex-start;gap:6px;padding:4px 0;border-bottom:1px dashed #F0F0F2;">'+
         '<button class="rt-check '+(t.d?'checked':'')+'" style="width:18px;height:18px;border-width:1.5px;border-radius:4px;flex-shrink:0;margin-top:6px;" data-act="krl-toggle-init-task" data-mid="'+escapeHtml(mid)+'" data-kind="'+escapeHtml(kind)+'" data-tid="'+escapeHtml(t.id)+'" data-init-id="'+escapeHtml(t._iid||'')+'"'+dis+tip+'>'+(t.d?'✓':'')+'</button>'+
         '<textarea data-krl-field="task-text" data-krl-autogrow data-mid="'+escapeHtml(mid)+'" data-kind="'+escapeHtml(kind)+'" data-tid="'+escapeHtml(t.id)+'" data-is-init-task="1" data-init-id="'+escapeHtml(t._iid||'')+'" rows="1" placeholder="할일을 적어주세요" style="'+textSt+'"'+(ed?'':' readonly')+tip+'>'+escapeHtml(t.t||'')+'</textarea>'+
-        dateGroup+
-        (ed?'<button data-act="krl-save-task" data-mid="'+escapeHtml(mid)+'" data-kind="'+escapeHtml(kind)+'" data-tid="'+escapeHtml(t.id)+'" data-init-id="'+escapeHtml(t._iid||'')+'" title="이 할일 저장" style="flex-shrink:0;margin-top:5px;padding:3px 10px;background:var(--primary);color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:11px;font-weight:700;font-family:inherit;line-height:1.4;">저장</button>':'')+
+        // v167 — 날짜+저장을 세로로 쌓아 가로 너비 절약(입력칸 확대). 저장은 날짜 하단.
+        '<span style="display:inline-flex;flex-direction:column;align-items:stretch;gap:4px;flex-shrink:0;margin-top:5px;">'+
+          dateGroup+
+          (ed?'<button data-act="krl-save-task" data-mid="'+escapeHtml(mid)+'" data-kind="'+escapeHtml(kind)+'" data-tid="'+escapeHtml(t.id)+'" data-init-id="'+escapeHtml(t._iid||'')+'" title="이 할일 저장" style="padding:3px 8px;background:var(--primary);color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:11px;font-weight:700;font-family:inherit;line-height:1.4;white-space:nowrap;text-align:center;">저장</button>':'')+
+        '</span>'+
         moveSelect+
         (ed?'<button data-act="krl-del-init-task" data-mid="'+escapeHtml(mid)+'" data-kind="'+escapeHtml(kind)+'" data-tid="'+escapeHtml(t.id)+'" data-init-id="'+escapeHtml(t._iid||'')+'" style="padding:2px 5px;margin-top:4px;background:none;border:1px solid transparent;border-radius:5px;cursor:pointer;color:var(--text-soft);font-size:12px;flex-shrink:0;line-height:1;" title="삭제">✕</button>':'')+
       '</div></div>';
