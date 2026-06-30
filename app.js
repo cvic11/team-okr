@@ -663,8 +663,10 @@ function isObserver(){return state.selfId==='__observer__';}
 function canEditAs(memberId){
   if(!memberId)return false;
   if(!state.selfId||state.selfId==='__observer__')return false; // 옵저버/미인증 불가
-  if(state.selfId===memberId)return true;                       // 본인 카드는 무조건 가능
-  const s=selfMember();return !!(s&&s.isAdmin);                 // 타인 카드는 관리자만
+  return state.selfId===memberId;                                // v164 — 본인 내용은 본인만 작성·수정·삭제.
+  //   관리자라도 타인의 개인 콘텐츠(오늘 할일·스탠드업·루틴)는 편집 불가 →
+  //   공유/관리자 화면이 타인 입력을 빈 값으로 덮어쓰던 통로를 원천 차단.
+  //   (OKR 구조 편집은 canEditOKR, 관리자 기능은 isAdmin 으로 별도 관리되어 영향 없음)
 }
 // v16 — 세션 추적 (로그인 시작·하트비트)
 let _currentSessionId=null,_heartbeatTimer=null;

@@ -166,9 +166,10 @@ assert(canEditAs('m2')===false,'타인 카드는 비관리자가 편집 불가(m
 sandbox.state={selfId:'m1',members:[{id:'m1',isAdmin:false},{id:'m2',isAdmin:false}],objectives:[]};
 assert(canEditAs('m1')===true,'본인 카드 편집 가능');
 assert(canEditAs('m2')===false,'비관리자는 타인 카드 편집 불가');
-// 관리자
+// v164 — 개인 콘텐츠는 본인만: 관리자라도 타인 카드 편집 불가(덮어쓰기/혼선 차단)
 sandbox.state={selfId:'m1',members:[{id:'m1',isAdmin:true},{id:'m2',isAdmin:false}],objectives:[]};
-assert(canEditAs('m2')===true,'관리자는 타인 카드 편집 가능');
+assert(canEditAs('m2')===false,'관리자도 타인 개인 콘텐츠는 편집 불가(본인만)');
+assert(canEditAs('m1')===true,'관리자 본인 카드는 편집 가능');
 // 옵저버
 sandbox.state={selfId:'__observer__',members:[{id:'m1',isAdmin:false}],objectives:[]};
 assert(canEditAs('m1')===false,'옵저버는 편집 불가');
