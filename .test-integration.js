@@ -25,6 +25,7 @@ let TODAY = '2026-06-28';
 const sandbox = { state: null, viewingDate: TODAY, window: {}, console };
 sandbox.getState = () => sandbox.state;
 sandbox.todayKey = () => TODAY;
+sandbox.kstDay=(d)=>new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit'}).format(d);
 sandbox.collectAllInit = function () {
   const list = [];
   (sandbox.state.objectives || []).forEach(o => (o.keyResults || []).forEach(k =>
