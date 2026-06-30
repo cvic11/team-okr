@@ -1031,9 +1031,14 @@ function caret(open,size){
 function uid(){return Math.random().toString(36).slice(2,9)+Date.now().toString(36).slice(-3);}
 // 기기 타임존과 무관하게 항상 한국 시간(KST, Asia/Seoul) 기준 날짜 YYYY-MM-DD 산출.
 // en-CA 로케일은 YYYY-MM-DD 형식을 보장한다.
-const _KST_FMT=(typeof Intl!=='undefined'&&Intl.DateTimeFormat)?new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit'}):null;
+// ⚠ 포매터는 '지연 생성' — 최상위 const 로 두면 todayKey()가 그보다 앞 줄에서 호출될 때
+//   TDZ(초기화 전 접근) ReferenceError 로 앱 전체가 빈 화면이 됨(v161 회귀). 함수 내부 캐시 사용.
+var _kstFmt;
 function kstDay(date){
-  if(_KST_FMT){try{return _KST_FMT.format(date);}catch(e){}}
+  try{
+    if(_kstFmt===undefined)_kstFmt=(typeof Intl!=='undefined'&&Intl.DateTimeFormat)?new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit'}):null;
+    if(_kstFmt)return _kstFmt.format(date);
+  }catch(e){}
   // 폴백: UTC+9 수동 보정
   const u=date.getTime()+date.getTimezoneOffset()*60000;const k=new Date(u+9*3600000);
   return `${k.getFullYear()}-${String(k.getMonth()+1).padStart(2,'0')}-${String(k.getDate()).padStart(2,'0')}`;
