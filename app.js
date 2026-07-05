@@ -6413,7 +6413,9 @@ init();
 (function(){
   const st=document.createElement('style');
   st.textContent=''
-    +'.tk-stamp{position:fixed;z-index:99999;pointer-events:none;display:inline-flex;align-items:center;background:#6241F5;color:#fff;border-radius:3px;padding:0 1px;transform:scale(1.18)}'
+    // v170 — 도장을 캐럿 기준 '우측 정렬'(translateX(-100%))로: canvas 측정 폭과 실제 렌더 폭이
+    //   달라(폰트 폴백·letter-spacing) 글자 오른쪽으로 밀리던 문제 해결. scale 은 우측 기준.
+    +'.tk-stamp{position:fixed;z-index:99999;pointer-events:none;display:inline-flex;align-items:center;background:#6241F5;color:#fff;border-radius:3px;padding:0 1px;transform:translateX(-100%) scale(1.18);transform-origin:right center}'
     +'.tk-jolt{transform:translateY(1.5px)}';
   document.head.appendChild(st);
   const fx={
@@ -6457,16 +6459,18 @@ init();
       const chW=c.measureText(ch).width;
       let x,y,h;
       const r=el.getBoundingClientRect();
+      // v170 — x 는 '캐럿 위치(글자 오른쪽 끝)'. 도장은 CSS translateX(-100%)로 우측 정렬되어
+      //   자신의 실제 렌더 폭만큼 왼쪽으로 붙음 → canvas 폭 오차로 우측으로 밀리던 문제 해소.
       if(el.tagName==='TEXTAREA'){ // v134 — 여러 줄 입력칸에서도 캐럿 위치에 도장
         const pos=this._caretXY(el,cs);
-        x=pos.x-chW;y=pos.y;h=pos.h;
-        if(y<r.top-2||y>r.bottom-h*0.5||x<r.left-chW||x>r.right)return;
+        x=pos.x;y=pos.y;h=pos.h;
+        if(y<r.top-2||y>r.bottom-h*0.5||x<r.left||x>r.right+chW)return;
       }else{
         const caret=el.selectionStart!=null?el.selectionStart:el.value.length;
         const before=c.measureText(el.value.slice(0,caret)).width;
-        x=r.left+(parseFloat(cs.paddingLeft)||0)+before-el.scrollLeft-chW;
+        x=r.left+(parseFloat(cs.paddingLeft)||0)+before-el.scrollLeft;
         y=r.top;h=r.height;
-        if(x>r.right||x<r.left-chW)return;
+        if(x>r.right+chW||x<r.left)return;
       }
       document.querySelectorAll('.tk-stamp').forEach(e=>e.remove()); // v136 — 다음 타이핑 즉시 이전 도장 제거 (속도감)
       const s=document.createElement('span');
