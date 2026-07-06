@@ -5307,50 +5307,33 @@ init();
           const initMap={};collectAllInit().forEach(i=>{initMap[i.id]=i;});
           const recent=[];
           const itAll=(st.initiativeTasks)||{};
-          // v112 — 가장 가까운 '오늘 외' 날짜 1건. JSON 스탠드업 + DB initiative_tasks(그 날 작업분) 모두 집계.
+          // v175 — 재설계: '최근 한 일' = 마감일(due_date)이 '오늘보다 과거'인 항목만, 마감일별 그룹.
+          //   작성일(created_at)·수정시각(updated_at)·spansD·이월 로직 전부 제거 →
+          //   과거 항목을 오늘 수정해도 '오늘자'로 잘못 뜨는 문제를 구조적으로 차단(마감일만 본다).
+          const dayMap={}; // due_date → { tasks:[], legacy:'' }
+          const ensureDay=(d)=>{ if(!dayMap[d])dayMap[d]={tasks:[],legacy:''}; return dayMap[d]; };
+          Object.keys(itAll).forEach(iid=>{(itAll[iid]||[]).forEach(t=>{
+            if((!t.owner_id||t.owner_id===mid)&&(t.title||'').trim()&&t.due_date&&t.due_date<viewing){
+              ensureDay(t.due_date).tasks.push({id:t.id,t:t.title||'',i:iid,k:(initMap[iid]&&initMap[iid].krId)||'',d:t.status==='done',_isInitTask:true});
+            }
+          });});
+          // 레거시 JSON 스탠드업(구버전 데이터) — 마감일 개념이 없으므로 '작성한 날짜(과거)'에 그대로 표시
           for(let i=1;i<=30;i++){
             const d=window.shiftDate?window.shiftDate(viewing,-i):(()=>{const x=new Date(viewing);x.setDate(x.getDate()-i);return `${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,'0')}-${String(x.getDate()).padStart(2,'0')}`;})();
             const e=st.standups&&st.standups[d]&&st.standups[d].entries&&st.standups[d].entries[mid];
-            const parsed=e?parseTasksField(e.today||''):{tasks:[],legacy:''};
-            // v88 — 제목이 비어있는 task는 제외
+            if(!e)continue;
+            const parsed=parseTasksField(e.today||'');
             const nonEmptyTasks=(parsed.tasks||[]).filter(t=>(t.t||'').trim());
-            // v142 — 그 날 '작성(입력)'된 DB 할일. 날짜 미입력이 흔하므로 작성일(created_at) 기준으로
-            //   분류(없으면 updated_at fallback). 완료 여부와 무관하게 노출(완료는 d 플래그로 체크 표시).
-            const dbDay=[];
-            Object.keys(itAll).forEach(iid=>{(itAll[iid]||[]).forEach(t=>{
-              if(!t.owner_id||t.owner_id===mid){
-                const dd=isoToLocalDay(t.created_at)||isoToLocalDay(t.updated_at);
-                // v165 — '시작~마감 구간' 기준. 구간이 그 날(d)을 덮으면 최근에도 표시.
-                //   날짜가 오늘과 과거에 걸친 항목은 '오늘 할 일'과 '최근 한 일' 양쪽에 모두 노출(사용자 방침).
-                // v171 — 시작일이 없으면 '작성일'을 시작으로 간주. (기존엔 시작일 미입력 시 무조건
-                //   과거를 덮는 것으로 판정되어, 오늘 작성한 항목이 '최근 한 일'에 노출되는 버그)
-                const effStart=t.start_date||dd;
-                const spansD=!!t.due_date&&(!effStart||effStart<=d)&&t.due_date>=d;
-                if(((dd===d)||spansD)&&(t.title||'').trim())dbDay.push({id:t.id,t:t.title||'',i:iid,k:(initMap[iid]&&initMap[iid].krId)||'',d:t.status==='done',_isInitTask:true});
-              }
-            });});
             const hasLegacy=parsed.legacy&&parsed.legacy.trim();
-            if(nonEmptyTasks.length||dbDay.length||hasLegacy){recent.push({date:d,tasks:nonEmptyTasks.concat(dbDay),legacy:parsed.legacy||''});break;}
+            if(nonEmptyTasks.length||hasLegacy){const g=ensureDay(d);g.tasks=g.tasks.concat(nonEmptyTasks);if(hasLegacy&&!g.legacy)g.legacy=parsed.legacy;break;}
           }
-          // v160 — 지난 마감 미완료 할일은 하루치에 안 잡혀도 '모두' 노출 (회의 때 '안 보임' 방지).
-          //   '오늘 할 일'에서 제외되는 조건(과거+시작함+미완료)과 동일하게 수집해 이월 그룹으로 표시.
-          const shownIds=new Set();recent.forEach(r=>(r.tasks||[]).forEach(t=>{if(t.id)shownIds.add(t.id);}));
-          const carry=[];
-          Object.keys(itAll).forEach(iid=>{(itAll[iid]||[]).forEach(t=>{
-            if((!t.owner_id||t.owner_id===mid)&&t.status!=='done'&&(t.title||'').trim()&&!shownIds.has(t.id)){
-              const cd=isoToLocalDay(t.created_at)||isoToLocalDay(t.updated_at);
-              const started=!t.start_date||t.start_date<=viewing;
-              const isPast=t.due_date?(t.due_date<viewing):(cd&&cd<viewing);
-              if(started&&isPast){shownIds.add(t.id);carry.push({id:t.id,t:t.title||'',i:iid,k:(initMap[iid]&&initMap[iid].krId)||'',d:false,_isInitTask:true});}
-            }
-          });});
-          if(carry.length)recent.unshift({date:viewing,label:'⚠ 미완료 (이월) — 완료할 때까지 계속 표시',tasks:carry,legacy:''});
+          Object.keys(dayMap).sort().reverse().forEach(d=>recent.push({date:d,tasks:dayMap[d].tasks,legacy:dayMap[d].legacy}));
           if(recent.length>0){
             const fmtDate=window.formatRecentDateLabel||(d=>d);
             // v14 — 담당자(본인) 여부 확인: 본인은 다음 날에도 체크박스 토글 가능
             const ownerEditable=(typeof canEditAs==='function')&&canEditAs(mid);
             recentHtml='<div class="krl-recent" style="margin-bottom:8px;background:#FFFDF2;border:1px solid #F5C76A;border-radius:8px;padding:10px 12px;">'+
-              '<div style="font-size:11px;color:#946800;font-weight:700;margin-bottom:8px;letter-spacing:.3px;">📅 직전 작성 내역 (담당자 본인은 ✓ 체크 가능)</div>'+
+              '<div style="font-size:11px;color:#946800;font-weight:700;margin-bottom:8px;letter-spacing:.3px;">📅 지난 마감 · 마감일 기준 (담당자 본인은 ✓ 체크 가능)</div>'+
               recent.map(r=>{
                 const dateLabel=fmtDate(r.date);
                 // v16 — 날짜 내에서 KR/Init별 그룹화

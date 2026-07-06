@@ -36,45 +36,22 @@ vm.createContext(sandbox);
 vm.runInContext(fnSrc, sandbox);
 const { isoToLocalDay, buildInitTasksForToday, buildInitTasksForYesterday, buildTaskTree } = sandbox;
 
-// --- "최근 한 일(직전 작성 내역)" 핵심 로직 포트 (app.js 5246~ 와 1:1, v165) ---
-// 가장 가까운 '오늘 외' 날짜 d 에 대해: 그 날 작성(dd===d) 또는 시작~마감 구간이 d 를 덮는(spansD) 항목 집계.
-// 구간이 오늘과 과거에 걸치면 '오늘'과 '최근' 양쪽 모두 노출(중복 허용).
-function recentDayTasks(mid) {
+// --- "최근 한 일" v175 재설계 로직 포트 (app.js 5308~ 와 1:1) ---
+// 규칙: 마감일(due_date)이 '오늘(viewing)보다 과거'인 항목만, 마감일별 그룹. 작성일/수정시각 무관.
+// 반환: {date, ids} 그룹 배열(마감일 내림차순). 없으면 [].
+function recentGroups(mid) {
   const st = sandbox.state, viewing = sandbox.viewingDate;
   const itAll = st.initiativeTasks || {};
-  for (let i = 1; i <= 30; i++) {
-    const d = sandbox.shiftDate(viewing, -i);
-    const dbDay = [];
-    Object.keys(itAll).forEach(iid => (itAll[iid] || []).forEach(t => {
-      if (!t.owner_id || t.owner_id === mid) {
-        const dd = isoToLocalDay(t.created_at) || isoToLocalDay(t.updated_at);
-        const effStart = t.start_date || dd; // v171 — 시작일 없으면 작성일을 시작으로 간주(오늘자 유입 차단)
-        const spansD = !!t.due_date && (!effStart || effStart <= d) && t.due_date >= d;
-        if (((dd === d) || spansD) && (t.title || '').trim())
-          dbDay.push({ id: t.id, t: t.title || '', d: t.status === 'done' });
-      }
-    }));
-    if (dbDay.length) return { date: d, tasks: dbDay };
-  }
-  return null;
-}
-
-// v160 — 지난 마감 미완료는 하루치에 안 잡혀도 '모두' 이월 노출 (app.js 5202~ 와 1:1)
-function carryOverTasks(mid, alreadyShownIds) {
-  const st = sandbox.state, viewing = sandbox.viewingDate;
-  const itAll = st.initiativeTasks || {};
-  const shown = new Set(alreadyShownIds || []);
-  const carry = [];
+  const dayMap = {};
   Object.keys(itAll).forEach(iid => (itAll[iid] || []).forEach(t => {
-    if ((!t.owner_id || t.owner_id === mid) && t.status !== 'done' && (t.title || '').trim() && !shown.has(t.id)) {
-      const cd = isoToLocalDay(t.created_at) || isoToLocalDay(t.updated_at);
-      const started = !t.start_date || t.start_date <= viewing;
-      const isPast = t.due_date ? (t.due_date < viewing) : (cd && cd < viewing);
-      if (started && isPast) { shown.add(t.id); carry.push({ id: t.id, t: t.title || '' }); }
+    if ((!t.owner_id || t.owner_id === mid) && (t.title || '').trim() && t.due_date && t.due_date < viewing) {
+      (dayMap[t.due_date] = dayMap[t.due_date] || []).push(t.id);
     }
   }));
-  return carry;
+  return Object.keys(dayMap).sort().reverse().map(d => ({ date: d, ids: dayMap[d].sort() }));
 }
+// 최근에 들어간 전체 id 집합
+function recentIds(mid) { return recentGroups(mid).flatMap(g => g.ids).sort(); }
 
 // --- 테스트 러너 ---
 let pass = 0, fail = 0; const fails = [];
@@ -152,80 +129,55 @@ eq(isoToLocalDay(null), '', 'A6 null');
 }
 
 // ════════════════════════════════════════════════
-// 시나리오 C — 최근 한 일 연동 (recentDayTasks) + 상호배제
+// 시나리오 C — 최근 한 일 v175 재설계 (마감일 과거 = 최근, 오늘/미래 제외, 마감일별 그룹)
+// TODAY = 2026-06-28
 // ════════════════════════════════════════════════
 {
-  // 어제(06-27) 작성·미완료, 날짜 미입력 → 최근 한 일에 표시 / 오늘엔 없음
-  const st = mkState({ init1: [{ id: 't1', title: '어제 작성', status: 'todo', created_at: '2026-06-26T23:00:00Z' /* KST 06-27 08:00 */ }] });
+  // 마감 어제(06-27) → 최근(06-27 그룹) / 오늘엔 없음
+  const st = mkState({ init1: [{ id: 't1', title: '어제 마감', status: 'todo', due_date: '2026-06-27', created_at: '2026-06-27T03:00:00Z' }] });
   sandbox.state = st;
-  eq(idOf(buildInitTasksForToday('m1')), [], 'C1 어제 작성분은 오늘 없음');
-  const r = recentDayTasks('m1');
-  eq([r && r.date, r ? idOf(r.tasks) : null], ['2026-06-27', ['t1']], 'C2 어제 작성분이 최근 한 일에 표시');
+  eq(idOf(buildInitTasksForToday('m1')), [], 'C1 지난 마감은 오늘 없음');
+  eq(recentGroups('m1'), [{ date: '2026-06-27', ids: ['t1'] }], 'C2 지난 마감이 최근에 마감일 그룹으로 표시');
 }
 {
-  // v165 — 시작~마감 구간이 오늘과 과거에 걸친 항목은 '오늘'과 '최근' 양쪽 모두 표기
-  // start 06-25 ~ due 06-28(오늘), viewing 06-28 → 직전일 06-27 을 구간이 덮음 → 최근에도 노출
-  const st = mkState({ init1: [{ id: 't1', title: '걸친 항목', status: 'todo', start_date: '2026-06-25', due_date: '2026-06-28', created_at: '2026-06-25T03:00:00Z' }] });
+  // ★핵심 회귀★ 과거 마감 항목을 '오늘 수정'(updated_at=오늘)해도 최근은 '마감일'로 유지 → 오늘자로 안 뜸
+  const st = mkState({ init1: [{ id: 't1', title: '과거 항목 오늘 수정', status: 'todo', due_date: '2026-06-25', created_at: '2026-06-25T03:00:00Z', updated_at: '2026-06-28T05:00:00Z' }] });
   sandbox.state = st;
-  const r = recentDayTasks('m1');
-  eq([r && r.date, r ? idOf(r.tasks) : null], ['2026-06-27', ['t1']], 'C3 구간이 걸치면 최근에도 표시');
-  eq(idOf(buildInitTasksForToday('m1')), ['t1'], 'C3b 동일 항목이 오늘 할일에도 표시(양쪽 노출)');
+  eq(recentGroups('m1'), [{ date: '2026-06-25', ids: ['t1'] }], 'C3 오늘 수정해도 최근은 마감일(06-25) 기준(오늘자 유입 없음)');
 }
 {
-  // 오늘 작성분은 최근 한 일에 안 나옴(가장 가까운 '오늘 외' 날짜만)
-  const st = mkState({ init1: [{ id: 't1', title: '오늘작성', status: 'todo', created_at: '2026-06-28T03:00:00Z' }] });
+  // 오늘 마감 → 최근에 없음(오늘 할 일 소속)
+  const st = mkState({ init1: [{ id: 't1', title: '오늘 마감', status: 'todo', due_date: '2026-06-28', created_at: '2026-06-28T03:00:00Z' }] });
   sandbox.state = st;
-  eq(recentDayTasks('m1'), null, 'C4 오늘 작성분은 최근 한 일에 없음');
+  eq(recentIds('m1'), [], 'C4 오늘 마감은 최근 제외');
+  eq(idOf(buildInitTasksForToday('m1')), ['t1'], 'C4b 오늘 마감은 오늘 할 일에 표시');
 }
 {
-  // v171 회귀 — 오늘 작성 + 마감 오늘 + '시작일 없음'이어도 최근에 유입되면 안 됨
-  const st = mkState({ init1: [{ id: 't1', title: '오늘작성 시작일없음', status: 'todo', due_date: '2026-06-28', created_at: '2026-06-28T03:00:00Z' }] });
+  // 마감일 없는 항목 → 최근에 안 들어감(마감일만 판정)
+  const st = mkState({ init1: [{ id: 't1', title: '마감없음', status: 'todo', created_at: '2026-06-20T03:00:00Z' }] });
   sandbox.state = st;
-  eq(recentDayTasks('m1'), null, 'C4b 시작일 없는 오늘자도 최근 제외(작성일을 시작으로 간주)');
-  eq(idOf(buildInitTasksForToday('m1')), ['t1'], 'C4c 해당 항목은 오늘 할 일에 표시');
+  eq(recentIds('m1'), [], 'C5 마감일 없는 항목은 최근 제외');
 }
 {
-  // 가장 가까운 1일치만: 06-27, 06-25 둘 다 있으면 06-27만
+  // 여러 날 지난 마감 — 모두, 마감일별 그룹(내림차순). 완료건도 포함(체크 표시).
   const st = mkState({ init1: [
-    { id: 'a', title: '그제', status: 'todo', created_at: '2026-06-25T03:00:00Z' },
-    { id: 'b', title: '어제', status: 'todo', created_at: '2026-06-27T03:00:00Z' },
+    { id: 'a', title: '3일전', status: 'todo', due_date: '2026-06-25', created_at: '2026-06-25T03:00:00Z' },
+    { id: 'b', title: '어제', status: 'todo', due_date: '2026-06-27', created_at: '2026-06-27T03:00:00Z' },
+    { id: 'd', title: '완료 지난건', status: 'done', due_date: '2026-06-26', created_at: '2026-06-26T03:00:00Z' },
+    { id: 'c', title: '오늘', status: 'todo', due_date: '2026-06-28', created_at: '2026-06-28T03:00:00Z' },
   ] });
   sandbox.state = st;
-  const r = recentDayTasks('m1');
-  eq([r.date, idOf(r.tasks)], ['2026-06-27', ['b']], 'C5 가장 가까운 작성일 1건만 집계');
-}
-
-// ════════════════════════════════════════════════
-// 시나리오 C2 — 지난 미완료 '이월' 전수 노출 (v160, 회의 때 안 보임 방지)
-// ════════════════════════════════════════════════
-{
-  // 마감이 여러 날 지난 미완료 2건(다른 날 작성) — 둘 다 이월에 보여야 함 (하루치 한정 X)
-  const st = mkState({ init1: [
-    { id: 'a', title: '3일전 미완료', status: 'todo', due_date: '2026-06-25', created_at: '2026-06-25T03:00:00Z' },
-    { id: 'b', title: '어제 미완료', status: 'todo', due_date: '2026-06-27', created_at: '2026-06-27T03:00:00Z' },
-    { id: 'c', title: '오늘 할일', status: 'todo', due_date: '2026-06-28', created_at: '2026-06-28T03:00:00Z' },
-    { id: 'd', title: '완료된 지난건', status: 'done', due_date: '2026-06-26', created_at: '2026-06-26T03:00:00Z' },
-  ] });
-  sandbox.state = st; // TODAY=2026-06-28
-  const carry = carryOverTasks('m1', []).map(t => t.id).sort();
-  eq(carry, ['a', 'b'], 'C2-1 지난 미완료는 며칠 전이든 모두 이월(완료/오늘건 제외)');
-  eq(idOf(buildInitTasksForToday('m1')), ['c'], 'C2-2 오늘건은 오늘 할일에 그대로 표시');
+  eq(recentGroups('m1'), [
+    { date: '2026-06-27', ids: ['b'] },
+    { date: '2026-06-26', ids: ['d'] },
+    { date: '2026-06-25', ids: ['a'] },
+  ], 'C6 지난 마감 전부 마감일별 그룹(오늘건 c 제외, 완료 d 포함)');
 }
 {
-  // 이미 '최근 한 일'에 표시된 id는 이월에서 중복 제거
-  const st = mkState({ init1: [
-    { id: 'x', title: '지난 미완료', status: 'todo', due_date: '2026-06-26', created_at: '2026-06-26T03:00:00Z' },
-  ] });
+  // 타인 소유는 내 최근에서 제외
+  const st = mkState({ init1: [{ id: 't1', title: '남의 지난건', status: 'todo', owner_id: 'm2', due_date: '2026-06-27', created_at: '2026-06-27T03:00:00Z' }] });
   sandbox.state = st;
-  eq(carryOverTasks('m1', ['x']).length, 0, 'C2-3 이미 표시된 항목은 이월 중복 제외');
-}
-{
-  // 시작일이 미래인 항목은 이월 아님(아직 시작 안 함)
-  const st = mkState({ init1: [
-    { id: 'f', title: '미래시작', status: 'todo', start_date: '2026-07-01', due_date: '2026-06-20', created_at: '2026-06-20T03:00:00Z' },
-  ] });
-  sandbox.state = st;
-  eq(carryOverTasks('m1', []).length, 0, 'C2-4 미래 시작은 이월 제외');
+  eq(recentIds('m1'), [], 'C7 타인 소유는 최근 제외');
 }
 
 // ════════════════════════════════════════════════
