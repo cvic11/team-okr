@@ -6664,26 +6664,28 @@ init();
   .mtag{font-size:9.5px;font-weight:800;letter-spacing:.04em;opacity:.85;margin-bottom:3px}
   .mlbl{font-weight:700;line-height:1.35;outline:none}
   .mhd{display:flex;align-items:center;gap:6px;margin-bottom:2px}
-  .m-o .mbub{border:2.5px solid var(--primary);padding:13px 17px;width:250px}
-  .m-o .mlbl{font-size:16px;font-weight:800;color:var(--primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis} /* O 1줄 */
+  .m-o .mbub{border:2.5px solid var(--primary);padding:15px 22px;width:auto;white-space:nowrap}
+  .m-o .mlbl{font-size:20px;font-weight:800;white-space:nowrap;background:linear-gradient(92deg,#4B2AAE,#7B4DFF 55%,#B47BFF);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent;filter:drop-shadow(0 1px 7px rgba(123,77,255,.42))} /* O 1줄·그라데이션 빛남 */
+  .m-o .mlbl[contenteditable]{-webkit-text-fill-color:var(--text);color:var(--text);background:none;filter:none}
   .m-o .mtag{color:var(--primary)}
-  .m-kr .mbub{border-color:var(--bc,var(--primary));padding:10px 13px;width:220px}
+  .m-kr .mbub{border-color:var(--bc,var(--primary));border-width:2px;padding:12px 15px;width:auto;white-space:nowrap}
   .m-kr .mtag{color:var(--bc,var(--primary))}
-  .m-kr .mlbl{font-size:12.5px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden} /* KR 최대 2줄 */
-  .m-meter{height:5px;border-radius:99px;background:color-mix(in srgb,var(--bc,var(--primary)) 16%,transparent);margin-top:8px;overflow:hidden}
+  .m-kr .mlbl{font-size:14px;font-weight:700;white-space:nowrap} /* KR 제목 1줄(안 잘림) */
+  .m-meter{display:inline-block;vertical-align:middle;width:84px;height:6px;border-radius:99px;background:color-mix(in srgb,var(--bc,var(--primary)) 18%,transparent);overflow:hidden;flex:0 0 auto}
   .m-meter i{display:block;height:100%;background:var(--bc,var(--primary));border-radius:99px}
-  .m-ini .mbub{border-color:var(--bc,#0E8A8F);padding:9px 12px;width:206px}
+  .m-ini .mbub{border-color:var(--bc,#0E8A8F);padding:9px 13px;width:auto;display:flex;align-items:center;gap:7px;white-space:nowrap}
   .m-ini .mtag{color:var(--bc,#0E8A8F)}
-  .m-ini .mlbl{font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis} /* 이니셔티브 1줄 */
-  .m-task .mbub{border-color:var(--bc,var(--line));padding:7px 10px;width:auto;max-width:340px;display:flex;align-items:center;gap:7px}
-  .m-task .mlbl{font-size:12px;font-weight:600;flex:1;min-width:40px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .m-ini .mlbl{font-size:13px;font-weight:700;white-space:nowrap} /* 이니셔티브 1줄(안 잘림) */
+  .mic{font-size:13px;flex:0 0 auto}
+  .m-task .mbub{border-color:var(--bc,var(--line));padding:7px 11px;width:auto;display:flex;align-items:center;gap:7px;white-space:nowrap}
+  .m-task .mlbl{font-size:12px;font-weight:600;white-space:nowrap} /* 할일 1줄(안 잘림) */
   .m-task.done .mlbl{text-decoration:line-through;color:var(--text-soft)}
   .m-task.done .mbub{opacity:.72}
   .m-task.hl .mbub{border:3px solid var(--text)!important}
   .m-task.dim .mbub{opacity:.32}
   .mcb{width:16px;height:16px;border-radius:5px;border:1.6px solid var(--text-soft);flex:0 0 auto;display:grid;place-items:center;color:#fff;font-size:10px;cursor:pointer}
   .mcb.on{background:var(--growth);border-color:var(--growth)}
-  .mrow{display:flex;align-items:center;gap:6px;margin-top:7px;flex-wrap:wrap}
+  .mrow{display:flex;align-items:center;gap:7px;margin-top:8px;flex-wrap:nowrap;white-space:nowrap}
   .mpct{font-size:12px;font-weight:800;color:var(--bc,var(--primary));cursor:pointer}
   .mconf{font-size:10px;font-weight:800;padding:2px 8px;border-radius:999px;cursor:pointer;white-space:nowrap;border:1px solid transparent;flex:0 0 auto}
   .mconf.high{background:color-mix(in srgb,var(--growth) 16%,transparent);color:var(--growth);border-color:color-mix(in srgb,var(--growth) 42%,transparent)}
@@ -6691,6 +6693,10 @@ init();
   .mconf.low{background:var(--warning-soft);color:var(--warning);border-color:color-mix(in srgb,var(--warning) 42%,transparent)}
   .mdue{display:inline-flex;align-items:center;gap:3px;font-size:9.5px;font-weight:700;color:var(--text-soft);cursor:pointer;border:1px dashed var(--line);border-radius:6px;padding:2px 6px;flex:0 0 auto}
   .mdue.set{border-style:solid}
+  .mdate{display:inline-flex;align-items:center;gap:2px;font-size:9.5px;font-weight:700;color:var(--text-soft);cursor:pointer;border:1px dashed var(--line);border-radius:6px;padding:2px 6px;flex:0 0 auto;white-space:nowrap}
+  .mdate.set{border-style:solid}
+  .mdate.od{color:var(--warning);border-color:var(--warning)}
+  .mdate:hover{border-color:var(--primary);color:var(--primary)}
   .mnode.overdue .mbub{background:var(--warning-soft);border-color:var(--warning)!important}
   .mavs{display:flex;align-items:center;margin-left:2px;flex:0 0 auto}
   .mav{width:19px;height:19px;border-radius:50%;border:2px solid var(--card);color:#fff;font-size:9px;font-weight:800;display:grid;place-items:center;margin-left:-6px;cursor:pointer}
@@ -6708,10 +6714,18 @@ init();
   `;document.head.appendChild(s);
 })();
 
-const MM={view:{x:80,y:30,k:1},collapsed:{},sel:null,hlMember:null,nodes:{},_krCols:{},_fitted:false,_stageBound:false};
+const MM={view:{x:80,y:30,k:1},collapsed:{},sel:null,hlMember:null,showHidden:false,nodes:{},_krCols:{},_fitted:false,_stageBound:false};
 const MM_BRANCH=["#6241F5","#0E8A8F","#E2683B","#2C7BE5","#D6409F","#16A34A","#B8860B","#9333EA"];
 
-function mmConfLabel(c){return c==='high'?'확신 상':c==='low'?'확신 하':'확신 중';}
+function mmConfLabel(c){return c==='high'?'자신감 상':c==='low'?'자신감 하':'자신감 중';}
+function mmYmd(d){return d?String(d).slice(5).replace('-','/'):'';}
+// 기간: 시작 ~ 마감 (둘 다 표기, 각각 클릭 편집)
+function mmPeriodHtml(n){
+  const isTask=n.kind==='task';const s=isTask?n.ref.start_date:n.ref.startDate;const d=isTask?n.ref.due_date:n.ref.dueDate;
+  const done=isTask?mmTaskDone(n.ref):(n.ref.status==='done');const od=d&&!done&&d<todayKey();
+  return `<span class="mdate${s?' set':''}" data-mm="start" data-id="${n.id}" title="시작일">▶ ${s?mmYmd(s):'시작'}</span>`+
+         `<span class="mdate${d?' set':''}${od?' od':''}" data-mm="due" data-id="${n.id}" title="마감일">🏁 ${d?mmYmd(d):'마감'}${od?'·지연':''}</span>`;
+}
 function mmConfCls(c){return c==='high'?'high':c==='low'?'low':'mid';}
 function mmKrPct(k){return pct(Number(k.current||0),Number(k.target||0));}
 function mmObjRoll(o){const ks=(o.keyResults||[]);if(!ks.length)return{pct:0,conf:'mid'};let sum=0;const ord={low:0,mid:1,high:2};let worst='high';ks.forEach(k=>{sum+=mmKrPct(k);if(ord[k.confidence||'mid']<ord[worst])worst=k.confidence||'mid';});return{pct:Math.round(sum/ks.length),conf:worst};}
@@ -6739,6 +6753,9 @@ function mmBuild(){
 function mmKids(id){return Object.values(MM.nodes).filter(n=>n.parent===id);}
 function mmBranchColor(n){let c=n;while(c&&c.kind!=='kr'){c=MM.nodes[c.parent];}return c?MM._krCols[c.id]:null;}
 function mmHidden(n){let p=n.parent;while(p){if(MM.collapsed[p])return true;p=MM.nodes[p]?MM.nodes[p].parent:null;}return false;}
+// 발표/필터: 담당자 선택 시 그 담당자의 '오늘 참여' 할일만 보이고 나머지 할일은 숨김(흐리게가 아니라 안 보이게). '전체 보기' 체크 시 모두 표시.
+function mmFilteredOut(n){if(!MM.hlMember||MM.showHidden)return false;if(n.kind!=='task')return false;const parts=state.taskDailyLogs[todayKey()]?.[n.ref.id]||{};return !parts[MM.hlMember];}
+function mmVisible(n){return !mmHidden(n)&&!mmFilteredOut(n);}
 function mmDepth(n){let d=0,p=n.parent;while(p){d++;p=MM.nodes[p]?MM.nodes[p].parent:null;}return d;}
 
 function mmNodeSize(id){const el=document.querySelector('#mm-nodes .mnode[data-id="'+CSS.escape(id)+'"] .mbub');if(!el)return{w:200,h:52};return{w:el.offsetWidth,h:el.offsetHeight};}
@@ -6754,7 +6771,7 @@ function mmLayout(){
   const cardH=n=>mmNodeSize(n.id).h+16;
   const cur={y:0};
   function place(id,depth){
-    const n=MM.nodes[id];if(!n)return;const kids=MM.collapsed[id]?[]:mmKids(id);
+    const n=MM.nodes[id];if(!n)return;const kids=(MM.collapsed[id]?[]:mmKids(id)).filter(c=>!mmFilteredOut(c));
     if(n.kind==='task'){ // 할일: 열 왼쪽 끝선에 맞춤(좌측 정렬)
       const colc=(colX[depth]!=null?colX[depth]:colX[0]),colL=colc-((maxW[depth]||mmNodeSize(id).w)/2);n.x=colL+mmNodeSize(id).w/2;
     }else n.x=(colX[depth]!=null?colX[depth]:colX[0])||0;
@@ -6776,7 +6793,7 @@ function mmLayout(){
 function mmApplyPositions(){Object.values(MM.nodes).forEach(n=>{const el=document.querySelector('#mm-nodes .mnode[data-id="'+CSS.escape(n.id)+'"]');if(el){el.style.left=n.x+'px';el.style.top=n.y+'px';}});}
 function mmApplyView(){const c=document.getElementById('mm-canvas');if(c)c.style.transform=`translate(${Math.round(MM.view.x)}px,${Math.round(MM.view.y)}px) scale(${MM.view.k})`;} // 정수 translate → 또렷
 function mmBounds(){
-  const ns=Object.values(MM.nodes).filter(n=>!mmHidden(n));if(!ns.length)return null;
+  const ns=Object.values(MM.nodes).filter(n=>mmVisible(n));if(!ns.length)return null;
   let minX=1e9,maxX=-1e9,minY=1e9,maxY=-1e9,iniMaxX=-1e9;
   ns.forEach(n=>{const s=mmNodeSize(n.id);const l=n.x-s.w/2,r=n.x+s.w/2;if(l<minX)minX=l;if(r>maxX)maxX=r;if(n.y<minY)minY=n.y;if(n.y+s.h>maxY)maxY=n.y+s.h;if(mmDepth(n)<=2&&r>iniMaxX)iniMaxX=r;});
   if(iniMaxX<-1e8)iniMaxX=maxX;
@@ -6800,16 +6817,18 @@ function mmFit(){ // 좌상단 정렬(O가 최상단) + 좌측(O~이니셔티브
 
 function mmDrawEdges(){
   const OFF=4000;let parts='';const AN=26;
-  Object.values(MM.nodes).forEach(n=>{if(!n.parent)return;const p=MM.nodes[n.parent];if(!p)return;if(mmHidden(n)||mmHidden(p)||MM.collapsed[n.parent])return;
+  Object.values(MM.nodes).forEach(n=>{if(!n.parent)return;const p=MM.nodes[n.parent];if(!p)return;if(mmHidden(n)||mmHidden(p)||MM.collapsed[n.parent]||mmFilteredOut(n)||mmFilteredOut(p))return;
     const ps=mmNodeSize(p.id),ns=mmNodeSize(n.id);
+    const col=mmBranchColor(n)||'#8E86B8';   // 연결선을 KR 고유 색으로(색으로 어느 KR인지 구분) · 진하게
+    const seg=`stroke="${col}" stroke-width="2.6"`;
     const x2=n.x-ns.w/2+OFF, y2=n.y+AN+OFF;          // 자식 좌측 상단앵커(계단식 방지)
     if(p.kind==='o'){ // O는 KR 열 위 → 왼쪽 거터를 타고 내려와 각 KR로 수평 직선
       const tx=p.x-ps.w/2+46+OFF, ob=p.y+ps.h+OFF;
-      parts+=`<path d="M${tx} ${ob} L${tx} ${y2} L${x2} ${y2}"/>`;
+      parts+=`<path ${seg} d="M${tx} ${ob} L${tx} ${y2} L${x2} ${y2}"/>`;
     }else{ // 좌→우: 같은 y면 완전 직선, 아니면 엘보 1회
       const x1=p.x+ps.w/2+OFF, y1=p.y+AN+OFF, mx=(x1+x2)/2;
-      if(Math.abs(y1-y2)<1)parts+=`<path d="M${x1} ${y1} L${x2} ${y2}"/>`;
-      else parts+=`<path d="M${x1} ${y1} L${mx} ${y1} L${mx} ${y2} L${x2} ${y2}"/>`;
+      if(Math.abs(y1-y2)<1)parts+=`<path ${seg} d="M${x1} ${y1} L${x2} ${y2}"/>`;
+      else parts+=`<path ${seg} d="M${x1} ${y1} L${mx} ${y1} L${mx} ${y2} L${x2} ${y2}"/>`;
     }
   });
   const e=document.getElementById('mm-edges');if(e)e.innerHTML=parts;
@@ -6837,17 +6856,14 @@ function mmCard(n){
   let inner='',cls='mnode m-'+n.kind;
   if(n.kind==='o'){const o=n.ref,r=mmObjRoll(o);
     inner=`<span class="mm-water" style="width:${r.pct}%"></span><div class="mtag">🎯 OBJECTIVE</div><div class="mlbl" data-mm="edit" data-id="${n.id}">${esc(o.title)||'<span style=opacity:.5>목표 입력…</span>'}</div>
-      <div class="mrow"><span style="font-size:12px;font-weight:700;color:var(--text-soft)">진척 <b style="color:var(--primary)">${r.pct}%</b></span><span class="mconf ${mmConfCls(r.conf)}">${mmConfLabel(r.conf)}</span></div>`;
+      <div class="mrow"><span style="font-size:12.5px;font-weight:700;color:var(--text-soft)">진척 <b style="color:var(--primary)">${r.pct}%</b></span><span class="mconf ${mmConfCls(r.conf)}">${mmConfLabel(r.conf)}</span></div>`;
     if(mmIsOverdueO(o,false))cls+=' overdue';
   }else if(n.kind==='kr'){const k=n.ref,p=mmKrPct(k);
     inner=`<span class="mm-water" style="width:${p}%"></span><div class="mtag">📌 KEY RESULT</div><div class="mlbl" data-mm="edit" data-id="${n.id}">${esc(k.title)||'<span style=opacity:.5>KR 입력…</span>'}</div>
-      <div class="m-meter"><i style="width:${p}%"></i></div>
-      <div class="mrow"><span class="mpct" data-mm="pct" data-id="${n.id}">${p}%</span><span class="mconf ${mmConfCls(k.confidence)}" data-mm="conf" data-id="${n.id}">${mmConfLabel(k.confidence)}</span>${mmDueHtml(n)}</div>`;
+      <div class="mrow"><span class="m-meter"><i style="width:${p}%"></i></span><span class="mpct" data-mm="pct" data-id="${n.id}">${p}%</span><span class="mconf ${mmConfCls(k.confidence)}" data-mm="conf" data-id="${n.id}">${mmConfLabel(k.confidence)}</span>${mmPeriodHtml(n)}</div>`;
     if(mmIsOverdueO(k,false))cls+=' overdue';
   }else if(n.kind==='ini'){const i=n.ref;const done=i.status==='done';
-    inner=`<div class="mhd"><span class="mcb${done?' on':''}" data-mm="idone" data-id="${n.id}">${done?'✓':''}</span><div class="mtag">⚡ 이니셔티브</div></div>
-      <div class="mlbl" data-mm="edit" data-id="${n.id}">${esc(i.title)||'<span style=opacity:.5>이니셔티브 입력…</span>'}</div>
-      <div class="mrow"><span class="mconf ${mmConfCls(i.confidence)}" data-mm="conf" data-id="${n.id}">${mmConfLabel(i.confidence)}</span>${mmDueHtml(n)}</div>`;
+    inner=`<span class="mcb${done?' on':''}" data-mm="idone" data-id="${n.id}">${done?'✓':''}</span><span class="mic">⚡</span><span class="mlbl" data-mm="edit" data-id="${n.id}">${esc(i.title)||'<span style=opacity:.5>이니셔티브 입력…</span>'}</span><span class="mconf ${mmConfCls(i.confidence)}" data-mm="conf" data-id="${n.id}">${mmConfLabel(i.confidence)}</span>${mmPeriodHtml(n)}`;
     if(mmIsOverdueO(i,done))cls+=' overdue';
     if(done)cls+=' done';
   }else{const t=n.ref;const done=mmTaskDone(t);
@@ -6855,7 +6871,7 @@ function mmCard(n){
     if(done)cls+=' done';
     if(mmIsOverdue(t,done))cls+=' overdue';
     // 발표/필터 하이라이트: 선택된 멤버가 오늘 참여한 작업
-    if(MM.hlMember){const parts=state.taskDailyLogs[todayKey()]?.[t.id]||{};if(parts[MM.hlMember])cls+=' hl';else cls+=' dim';}
+    if(MM.hlMember&&(state.taskDailyLogs[todayKey()]?.[t.id]||{})[MM.hlMember])cls+=' hl';
   }
   if(MM.sel===n.id)cls+=' sel';
   return `<div class="${cls}" data-id="${n.id}" style="${st}"><div class="mbub">${inner}${acts}${fold}</div></div>`;
@@ -6864,7 +6880,7 @@ function mmDueHtml(n){const ref=n.ref;const d=n.kind==='task'?ref.due_date:ref.d
 
 function mmRenderCards(){
   const wrap=document.getElementById('mm-nodes');if(!wrap)return;
-  let h='';Object.values(MM.nodes).forEach(n=>{if(mmHidden(n))return;h+=mmCard(n);});
+  let h='';Object.values(MM.nodes).forEach(n=>{if(!mmVisible(n))return;h+=mmCard(n);});
   wrap.innerHTML=h||'';
 }
 
@@ -6881,7 +6897,7 @@ function mmBarHtml(){
       <button class="mm-btn" data-mm="addobj">＋ 목표</button>
       ${owners.length?'<span style="font-size:11px;color:var(--text-soft);font-weight:700;margin-left:6px">오늘 참여:</span>':''}
       <div id="mm-owners">${ownerHtml}</div>
-      ${MM.hlMember?'<button class="mm-btn" data-mm="hlclear">필터 해제</button>':''}
+      ${MM.hlMember?`<button class="mm-btn" data-mm="showall" title="당일 외 항목도 표시">${MM.showHidden?'☑':'☐'} 전체 보기</button><button class="mm-btn" data-mm="hlclear">필터 해제</button>`:''}
       <span style="margin-left:auto">${presentNote}</span>`;
 }
 function mmSyncBar(){const b=document.getElementById('mm-bar');if(b)b.innerHTML=mmBarHtml();}
@@ -6940,14 +6956,16 @@ function mmOnClick(e){
   if(a==='tidy'){mmLayout();mmApplyPositions();mmDrawEdges();mmFit();return;}
   if(a==='zin'){mmZoom(1.15);return;} if(a==='zout'){mmZoom(0.87);return;} if(a==='zfit'){mmFit();return;}
   if(a==='addobj'){mmAddObjective();return;}
-  if(a==='hl'){MM.hlMember=(MM.hlMember===mid?null:mid);mmApplyHighlight();mmSyncBar();return;} // 클래스 토글만 → 깜빡임 없음
-  if(a==='hlclear'){MM.hlMember=null;mmApplyHighlight();mmSyncBar();return;}
+  if(a==='hl'){MM.hlMember=(MM.hlMember===mid?null:mid);MM.showHidden=false;mmRefresh();mmSyncBar();return;}
+  if(a==='showall'){MM.showHidden=!MM.showHidden;mmRefresh();mmSyncBar();return;}
+  if(a==='hlclear'){MM.hlMember=null;MM.showHidden=false;mmRefresh();mmSyncBar();return;}
   if(a==='fold'){if(MM.collapsed[id])delete MM.collapsed[id];else MM.collapsed[id]=true;mmRefresh();return;}
   if(a==='add'){mmAddChild(id);return;}
   if(a==='del'){mmDelete(id);return;}
   if(a==='conf'){mmCycleConf(id);return;}
   if(a==='pct'){mmEditPct(id,el);return;}
   if(a==='due'){mmEditDue(id);return;}
+  if(a==='start'){mmEditStart(id);return;}
   if(a==='tdone'){const n=MM.nodes[id];if(!n)return;n.ref.status=n.ref.status==='done'?'todo':'done';saveInitiativeTask(n.ref);mmUpdateNode(id);return;}
   if(a==='idone'){const n=MM.nodes[id];if(!n)return;n.ref.status=n.ref.status==='done'?'todo':'done';mmSaveNode(n);mmUpdateNode(id);return;}
   if(a==='pjoin'){if(!me){showToast('본인 선택 필요',true);return;}saveTaskDailyLog(id,me.id,today,false);mmUpdateNode(id);mmSyncBar();return;}
@@ -6996,13 +7014,14 @@ function mmEditLabel(id,el){
 function mmCycleConf(id){const n=MM.nodes[id];if(!n||n.kind==='task')return;const seq=['low','mid','high'];const cur=n.ref.confidence||'mid';n.ref.confidence=seq[(seq.indexOf(cur)+1)%3];mmSaveNode(n);mmUpdateNode(id);var ro=mmRootObj(id);if(ro&&ro!==id)mmUpdateNode(ro);}
 function mmEditPct(id,el){const n=MM.nodes[id];if(!n||n.kind!=='kr')return;el.setAttribute('contenteditable','true');el.textContent=mmKrPct(n.ref);el.focus();const r=document.createRange();r.selectNodeContents(el);r.collapse(false);const s=getSelection();s.removeAllRanges();s.addRange(r);let done=false;const commit=(cancel)=>{if(done)return;done=true;el.removeAttribute('contenteditable');if(!cancel){let v=parseInt((el.textContent||'').replace(/[^0-9]/g,''),10);if(isNaN(v))v=mmKrPct(n.ref);v=Math.max(0,Math.min(100,v));n.ref.current=Math.round(v/100*(Number(n.ref.target)||100));const o=mmObjOfKr(id);if(o)saveKR(o.id,n.ref);}mmUpdateNode(id);var ro=mmRootObj(id);if(ro&&ro!==id)mmUpdateNode(ro);};el.addEventListener('keydown',ev=>{if(ev.key==='Enter'){ev.preventDefault();commit(false);}else if(ev.key==='Escape'){ev.preventDefault();commit(true);}});el.addEventListener('blur',()=>commit(false));}
 function mmEditDue(id){const n=MM.nodes[id];if(!n)return;const inp=document.createElement('input');inp.type='date';const cur=n.kind==='task'?n.ref.due_date:n.ref.dueDate;if(cur)inp.value=cur;inp.style.cssText='position:fixed;left:-9999px';document.body.appendChild(inp);inp.addEventListener('change',()=>{const v=inp.value||null;if(n.kind==='task'){n.ref.due_date=v;}else{n.ref.dueDate=v;}mmSaveNode(n);mmUpdateNode(id);});inp.addEventListener('blur',()=>setTimeout(()=>inp.remove(),150));inp.focus();try{inp.showPicker();}catch(e){inp.click();}}
+function mmEditStart(id){const n=MM.nodes[id];if(!n)return;const inp=document.createElement('input');inp.type='date';const cur=n.kind==='task'?n.ref.start_date:n.ref.startDate;if(cur)inp.value=cur;inp.style.cssText='position:fixed;left:-9999px';document.body.appendChild(inp);inp.addEventListener('change',()=>{const v=inp.value||null;if(n.kind==='task'){n.ref.start_date=v;}else{n.ref.startDate=v;}mmSaveNode(n);mmUpdateNode(id);});inp.addEventListener('blur',()=>setTimeout(()=>inp.remove(),150));inp.focus();try{inp.showPicker();}catch(e){inp.click();}}
 
 /* 드래그 / 팬 / 줌 */
 function mmZoom(f){const st=document.getElementById('mm-stage');if(!st)return;const r=st.getBoundingClientRect();const cx=r.width/2,cy=r.height/2;const nk=Math.max(.3,Math.min(2.2,MM.view.k*f));MM.view.x=cx-(cx-MM.view.x)*(nk/MM.view.k);MM.view.y=cy-(cy-MM.view.y)*(nk/MM.view.k);MM.view.k=nk;mmClampView();mmApplyView();}
 function mmOnWheel(e){e.preventDefault();if(e.ctrlKey||e.metaKey){mmZoom(e.deltaY<0?1.1:0.9);return;}MM.view.y-=e.deltaY;MM.view.x-=(e.deltaX||0);mmClampView();mmApplyView();} // 휠=상하 스크롤(Ctrl+휠=확대/축소), 범위 제한
 function mmOnDown(e){
   const nodeEl=e.target.closest('.mnode');
-  if(nodeEl&&!e.target.closest('.mcb,.mconf,.mpct,.mdue,.mav,.mmini,.mfold')&&!e.target.isContentEditable){
+  if(nodeEl&&!e.target.closest('.mcb,.mconf,.mpct,.mdue,.mdate,.mav,.mmini,.mfold')&&!e.target.isContentEditable){
     const id=nodeEl.dataset.id;const n=MM.nodes[id];if(!n)return;e.stopPropagation();
     MM.drag={id,sx:e.clientX,sy:e.clientY,ox:n.x,oy:n.y,moved:false};
     MM.sel=id;document.querySelectorAll('#mm-nodes .mnode.sel').forEach(x=>x.classList.remove('sel'));nodeEl.classList.add('sel');nodeEl.classList.add('drag');
