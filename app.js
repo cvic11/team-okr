@@ -6629,6 +6629,9 @@ init();
  * ========================================================================== */
 (function(){
   const s=document.createElement('style');s.textContent=`
+  /* 전체 폭: 상단 헤더·푸터도 화면을 꽉 쓰도록(캐시된 index.html도 덮어씀) */
+  .hdr-inner{max-width:none!important}
+  footer.app-footer{max-width:none!important}
   #mm-wrap{position:relative;margin:-24px -28px 0;padding:10px 14px 0} /* main 여백 제거 → 화면 꽉 채움 */
   #mm-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px}
   #mm-bar .mm-btn{border:1px solid var(--line);background:var(--card);color:var(--text-soft);font-weight:700;font-size:12.5px;padding:6px 11px;border-radius:9px;cursor:pointer}
