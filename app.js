@@ -2378,8 +2378,11 @@ function computeWBSRange(qRange){
 }
 function isWBSKidsHidden(type,id){
   // v62 — 기본은 모두 펼침. 사용자가 명시적으로 접은 것만 _wbsToggled에 저장
+  // v172 — 단, 이니셔티브(I)의 하위 '할일'은 기본 접힘(난잡함 방지). 펼침 표시가 있을 때만 노출.
+  //   → 'I'는 의미를 뒤집어: set 에 있으면 '펼침', 없으면 '접힘'(할일 숨김). O/KR 은 기존과 동일.
   if(!window._wbsToggled)window._wbsToggled=new Set();
   const key=type+':'+id;
+  if(type==='I')return !window._wbsToggled.has(key); // 기본 접힘, 토글 시 펼침
   return window._wbsToggled.has(key);
 }
 function renderWBS(){
