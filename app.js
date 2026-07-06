@@ -6733,57 +6733,56 @@ function mmDepth(n){let d=0,p=n.parent;while(p){d++;p=MM.nodes[p]?MM.nodes[p].pa
 function mmNodeSize(id){const el=document.querySelector('#mm-nodes .mnode[data-id="'+CSS.escape(id)+'"] .mbub');if(!el)return{w:200,h:52};return{w:el.offsetWidth,h:el.offsetHeight};}
 
 // 위→아래 조직도: O 최상단, 아래로 KR 행, 그 아래 이니셔티브 행. 할일은 이니셔티브 아래에 세로로 쌓고 '좌측 끝선 정렬'.
+// 좌→우 아웃라인: O는 최상단, KR은 그 아래 '세로 열', 이니셔티브·할일은 오른쪽 열로. 형제는 세로로 쌓음. (계단식 없는 직선 연결)
 function mmLayout(){
-  const size=id=>mmNodeSize(id);
-  const VGAP=130, HGAP=48, TGAP=8;
-  function iniBlock(iniId){const s=size(iniId);const tasks=MM.collapsed[iniId]?[]:mmKids(iniId);let w=s.w,h=s.h;tasks.forEach(t=>{const ts=size(t.id);if(ts.w>w)w=ts.w;h+=TGAP+ts.h;});return{w,h,tasks};}
-  let baseY=0;
+  const maxW={};Object.values(MM.nodes).forEach(n=>{if(mmHidden(n))return;const d=mmDepth(n);const w=mmNodeSize(n.id).w;if(w>(maxW[d]||0))maxW[d]=w;});
+  let maxD=0;for(const k in maxW)if(+k>maxD)maxD=+k;
+  const GAP=66,colX={0:(maxW[0]||220)/2};
+  for(let d=1;d<=maxD;d++)colX[d]=colX[d-1]+(maxW[d-1]||220)/2+GAP+(maxW[d]||220)/2;
+  const rowGap=n=>n.kind==='task'?58:98;
+  const cardH=n=>mmNodeSize(n.id).h+16;
+  const cur={y:0};
+  function place(id,depth){
+    const n=MM.nodes[id];if(!n)return;const kids=MM.collapsed[id]?[]:mmKids(id);
+    if(n.kind==='task'){ // 할일: 열 왼쪽 끝선에 맞춤(좌측 정렬)
+      const colc=(colX[depth]!=null?colX[depth]:colX[0]),colL=colc-((maxW[depth]||mmNodeSize(id).w)/2);n.x=colL+mmNodeSize(id).w/2;
+    }else n.x=(colX[depth]!=null?colX[depth]:colX[0])||0;
+    if(!kids.length){n.y=cur.y;cur.y+=Math.max(rowGap(n),cardH(n));}
+    else{const s0=cur.y;kids.forEach(c=>place(c.id,depth+1));n.y=MM.nodes[kids[0].id].y;const need=cardH(n);if(cur.y-s0<need)cur.y=s0+need;}
+  }
+  (state.objectives||[]).forEach(o=>{place(o.id,0);cur.y+=54;});
+  // O를 KR 열 위(상단)로, 살짝 왼쪽에 — O→KR은 거터 직각선으로 연결
   (state.objectives||[]).forEach(o=>{
-    const oNode=MM.nodes[o.id];if(!oNode)return;
-    const krs=MM.collapsed[o.id]?[]:mmKids(o.id);
-    let localX=0, bottom=baseY+size(o.id).h;
-    const krXs=[];
-    krs.forEach(kr=>{
-      const kNode=MM.nodes[kr.id];const inis=MM.collapsed[kr.id]?[]:mmKids(kr.id);
-      if(!inis.length){kNode.x=localX+size(kr.id).w/2;kNode.y=baseY+VGAP;localX+=size(kr.id).w+HGAP;bottom=Math.max(bottom,kNode.y+size(kr.id).h);}
-      else{
-        const iniXs=[];
-        inis.forEach(ini=>{
-          const blk=iniBlock(ini.id);const iNode=MM.nodes[ini.id];
-          iNode.x=localX+blk.w/2;iNode.y=baseY+2*VGAP;
-          const iniLeft=iNode.x-size(ini.id).w/2;
-          let ty=iNode.y+size(ini.id).h+TGAP;
-          blk.tasks.forEach(t=>{const ts=size(t.id);const tn=MM.nodes[t.id];tn.x=iniLeft+ts.w/2;tn.y=ty;ty+=ts.h+TGAP;}); // 좌측 끝선(iniLeft) 정렬
-          iniXs.push(iNode.x);bottom=Math.max(bottom,ty);
-          localX+=blk.w+HGAP;
-        });
-        kNode.x=(iniXs[0]+iniXs[iniXs.length-1])/2;kNode.y=baseY+VGAP;
-      }
-      krXs.push(kNode.x);
-    });
-    if(krXs.length){oNode.x=(krXs[0]+krXs[krXs.length-1])/2;oNode.y=baseY;}
-    else{oNode.x=size(o.id).w/2;oNode.y=baseY;}
-    baseY=bottom+80; // 다음 목표 트리는 아래로 스택(상하 스크롤)
+    const on=MM.nodes[o.id];if(!on)return;const krs=MM.collapsed[o.id]?[]:mmKids(o.id);
+    if(krs.length){
+      let fk=MM.nodes[krs[0].id];krs.forEach(k=>{if(MM.nodes[k.id].y<fk.y)fk=MM.nodes[k.id];});
+      const os=mmNodeSize(o.id),ks=mmNodeSize(fk.id);
+      on.x=fk.x-ks.w/2+os.w/2-75;
+      on.y=fk.y-os.h-40;
+    }
   });
 }
 function mmApplyPositions(){Object.values(MM.nodes).forEach(n=>{const el=document.querySelector('#mm-nodes .mnode[data-id="'+CSS.escape(n.id)+'"]');if(el){el.style.left=n.x+'px';el.style.top=n.y+'px';}});}
 function mmApplyView(){const c=document.getElementById('mm-canvas');if(c)c.style.transform=`translate(${Math.round(MM.view.x)}px,${Math.round(MM.view.y)}px) scale(${MM.view.k})`;} // 정수 translate → 또렷
 function mmFit(){ // 축소 없이 100%(k=1)로 또렷하게. 가로 중앙, 위쪽 여백. 넘치면 상하 스크롤(휠)로 이동.
   const ns=Object.values(MM.nodes).filter(n=>!mmHidden(n));if(!ns.length){MM.view.k=1;MM.view.x=40;MM.view.y=24;mmApplyView();return;}
-  const xs=[];ns.forEach(n=>{const s=mmNodeSize(n.id);xs.push(n.x-s.w/2,n.x+s.w/2);});
-  const minX=Math.min(...xs),maxX=Math.max(...xs);const stage=document.getElementById('mm-stage');const w=stage?stage.clientWidth:1200;const cw=maxX-minX;
-  MM.view.k=1;MM.view.x=Math.max(24,(w-cw)/2-minX);MM.view.y=24;mmApplyView();
+  const xs=[],ys=[];ns.forEach(n=>{const s=mmNodeSize(n.id);xs.push(n.x-s.w/2,n.x+s.w/2);ys.push(n.y);});
+  const minX=Math.min(...xs),minY=Math.min(...ys);MM.view.k=1;MM.view.x=40-minX;MM.view.y=24-minY;mmApplyView(); // 좌상단 정렬(O 안 잘림), 넘치면 스크롤
 }
 
 function mmDrawEdges(){
-  const OFF=4000;let parts='';
+  const OFF=4000;let parts='';const AN=26;
   Object.values(MM.nodes).forEach(n=>{if(!n.parent)return;const p=MM.nodes[n.parent];if(!p)return;if(mmHidden(n)||mmHidden(p)||MM.collapsed[n.parent])return;
-    if(n.kind==='task')return; // 할일은 이니셔티브 아래 목록으로 묶여 표시(선 생략)
     const ps=mmNodeSize(p.id),ns=mmNodeSize(n.id);
-    // 위→아래: 부모 하단중앙 → 자식 상단중앙 (직각 엘보)
-    const x1=p.x+OFF,y1=p.y+ps.h+OFF,x2=n.x+OFF,y2=n.y+OFF,my=(y1+y2)/2;
-    if(Math.abs(x1-x2)<1)parts+=`<path d="M${x1} ${y1} L${x2} ${y2}"/>`;
-    else parts+=`<path d="M${x1} ${y1} L${x1} ${my} L${x2} ${my} L${x2} ${y2}"/>`;
+    const x2=n.x-ns.w/2+OFF, y2=n.y+AN+OFF;          // 자식 좌측 상단앵커(계단식 방지)
+    if(p.kind==='o'){ // O는 KR 열 위 → 왼쪽 거터를 타고 내려와 각 KR로 수평 직선
+      const tx=p.x-ps.w/2+46+OFF, ob=p.y+ps.h+OFF;
+      parts+=`<path d="M${tx} ${ob} L${tx} ${y2} L${x2} ${y2}"/>`;
+    }else{ // 좌→우: 같은 y면 완전 직선, 아니면 엘보 1회
+      const x1=p.x+ps.w/2+OFF, y1=p.y+AN+OFF, mx=(x1+x2)/2;
+      if(Math.abs(y1-y2)<1)parts+=`<path d="M${x1} ${y1} L${x2} ${y2}"/>`;
+      else parts+=`<path d="M${x1} ${y1} L${mx} ${y1} L${mx} ${y2} L${x2} ${y2}"/>`;
+    }
   });
   const e=document.getElementById('mm-edges');if(e)e.innerHTML=parts;
 }
