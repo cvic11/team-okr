@@ -48,7 +48,8 @@ function recentDayTasks(mid) {
     Object.keys(itAll).forEach(iid => (itAll[iid] || []).forEach(t => {
       if (!t.owner_id || t.owner_id === mid) {
         const dd = isoToLocalDay(t.created_at) || isoToLocalDay(t.updated_at);
-        const spansD = !!t.due_date && (!t.start_date || t.start_date <= d) && t.due_date >= d;
+        const effStart = t.start_date || dd; // v171 — 시작일 없으면 작성일을 시작으로 간주(오늘자 유입 차단)
+        const spansD = !!t.due_date && (!effStart || effStart <= d) && t.due_date >= d;
         if (((dd === d) || spansD) && (t.title || '').trim())
           dbDay.push({ id: t.id, t: t.title || '', d: t.status === 'done' });
       }
@@ -175,6 +176,13 @@ eq(isoToLocalDay(null), '', 'A6 null');
   const st = mkState({ init1: [{ id: 't1', title: '오늘작성', status: 'todo', created_at: '2026-06-28T03:00:00Z' }] });
   sandbox.state = st;
   eq(recentDayTasks('m1'), null, 'C4 오늘 작성분은 최근 한 일에 없음');
+}
+{
+  // v171 회귀 — 오늘 작성 + 마감 오늘 + '시작일 없음'이어도 최근에 유입되면 안 됨
+  const st = mkState({ init1: [{ id: 't1', title: '오늘작성 시작일없음', status: 'todo', due_date: '2026-06-28', created_at: '2026-06-28T03:00:00Z' }] });
+  sandbox.state = st;
+  eq(recentDayTasks('m1'), null, 'C4b 시작일 없는 오늘자도 최근 제외(작성일을 시작으로 간주)');
+  eq(idOf(buildInitTasksForToday('m1')), ['t1'], 'C4c 해당 항목은 오늘 할 일에 표시');
 }
 {
   // 가장 가까운 1일치만: 06-27, 06-25 둘 다 있으면 06-27만
