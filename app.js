@@ -6735,7 +6735,7 @@ function mmNodeSize(id){const el=document.querySelector('#mm-nodes .mnode[data-i
 // 위→아래 조직도: O 최상단, 아래로 KR 행, 그 아래 이니셔티브 행. 할일은 이니셔티브 아래에 세로로 쌓고 '좌측 끝선 정렬'.
 function mmLayout(){
   const size=id=>mmNodeSize(id);
-  const VGAP=120, HGAP=30, TGAP=8;
+  const VGAP=130, HGAP=48, TGAP=8;
   function iniBlock(iniId){const s=size(iniId);const tasks=MM.collapsed[iniId]?[]:mmKids(iniId);let w=s.w,h=s.h;tasks.forEach(t=>{const ts=size(t.id);if(ts.w>w)w=ts.w;h+=TGAP+ts.h;});return{w,h,tasks};}
   let baseY=0;
   (state.objectives||[]).forEach(o=>{
@@ -6876,6 +6876,13 @@ function mmMount(){
   mmBuild();mmRenderCards();mmLayout();mmApplyPositions();mmDrawEdges();
   if(!MM._fitted){mmFit();MM._fitted=true;}else{mmApplyView();}
   mmBindStage();
+  // 카드 크기가 폰트/레이아웃 이후 확정되므로 재측정→재정렬(초기 정렬 꼬임 방지, '자동정렬' 자동 적용)
+  mmRelayoutSoon();
+  if(document.fonts&&document.fonts.ready&&!MM._fontHooked){MM._fontHooked=true;document.fonts.ready.then(function(){if(currentView==='mindmap'){mmLayout();mmApplyPositions();mmDrawEdges();}});}
+}
+function mmRelayoutSoon(){
+  [0,60,220].forEach(function(d){setTimeout(function(){if(currentView!=='mindmap')return;if(!document.getElementById('mm-stage'))return;mmLayout();mmApplyPositions();mmDrawEdges();},d);});
+  requestAnimationFrame(function(){if(currentView!=='mindmap')return;if(!document.getElementById('mm-stage'))return;mmLayout();mmApplyPositions();mmDrawEdges();});
 }
 function mmBindStage(){
   const wrap=document.getElementById('mm-wrap'),stage=document.getElementById('mm-stage');if(!wrap||!stage)return;
