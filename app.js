@@ -262,6 +262,29 @@ body.present .member-card .member-head{padding-bottom:8px;margin-bottom:6px}
 html.dark body.present .present-member-nav{background:#1A1D27;border-color:#2A2D38}
 html.dark body.present .present-member-btn{background:#1A1D27;color:#E5E7EB;border-color:#2A2D38}
 html.dark body.present .present-arrow{background:#1A1D27;border-color:#2A2D38;color:#E5E7EB}
+/* v173 — 발표 전용 스테이지 (오늘 탭과 전혀 다른 대형 읽기 레이아웃) */
+.present-stage{max-width:1080px;margin:0 auto}
+.ps-hero{display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap;padding:24px 28px;border-radius:18px;color:#fff;background:linear-gradient(135deg,var(--ps-accent) 0%,rgba(0,0,0,.35) 220%);box-shadow:0 10px 30px rgba(0,0,0,.18);margin-bottom:16px}
+.ps-hero-id{display:flex;align-items:center;gap:18px;min-width:0}
+.ps-avatar{width:72px;height:72px;border-radius:20px;display:inline-flex;align-items:center;justify-content:center;font-size:32px;font-weight:800;color:#fff;background:rgba(255,255,255,.18);box-shadow:inset 0 0 0 2px rgba(255,255,255,.4);flex-shrink:0}
+.ps-name{font-size:34px;font-weight:800;line-height:1.1;letter-spacing:-.5px}
+.ps-role{font-size:14px;font-weight:600;opacity:.85;margin-top:4px}
+.ps-hero-stats{display:flex;gap:26px;flex-shrink:0}
+.ps-stat{text-align:center}
+.ps-stat-val{font-size:26px;font-weight:800;line-height:1}
+.ps-stat-lbl{font-size:11px;font-weight:700;opacity:.85;margin-top:5px;letter-spacing:.3px}
+.ps-body{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.ps-card{background:var(--card,#fff);border:1px solid var(--line);border-radius:14px;padding:16px 18px;box-shadow:0 2px 10px rgba(0,0,0,.04)}
+.ps-card.ps-today{grid-column:1/-1;border-color:#D9CFFB;background:linear-gradient(180deg,#FBFAFF,#fff)}
+.ps-card.ps-blocker.on{grid-column:1/-1;border-color:#F5B5B7;background:linear-gradient(180deg,#FFF6F6,#fff)}
+.ps-card-head{font-size:15px;font-weight:800;color:var(--text);margin-bottom:10px;letter-spacing:-.2px}
+.ps-card-body .field-label{display:none}
+.ps-card-body .field{margin:0}
+.ps-card-body textarea{font-size:16px !important;line-height:1.6}
+@media(max-width:820px){.ps-body{grid-template-columns:1fr}.ps-name{font-size:26px}.ps-hero-stats{gap:18px}}
+html.dark .ps-card{background:#151821;border-color:#2A2D38}
+html.dark .ps-card.ps-today{background:linear-gradient(180deg,#1B1730,#151821);border-color:#3A2F70}
+html.dark .ps-card.ps-blocker.on{background:linear-gradient(180deg,#2A1618,#151821);border-color:#7A3034}
 /* v11 — 읽기 전용 필드 시각 표시 (본인이 아닌 항목) */
 textarea[readonly], input[readonly]{background:#F5F5F6 !important;color:var(--text-soft) !important;cursor:not-allowed;border-color:#EDEDEE !important}
 textarea[readonly]:focus, input[readonly]:focus{outline:none;box-shadow:none}
@@ -1739,8 +1762,40 @@ function renderTodayPresent(date,isToday,standup,todayRoutines,rl){
     }).join('')}
     <button class="present-arrow" data-act="present-next" title="다음 팀원 (${esc(next.name)})">${I.chevRight}</button>
   </div>
-  ${renderMemberCard(cur,entry)}
-  ${memberRoutines.length>0?`<section class="card card-section" style="margin-top:10px;"><div class="section-head"><span style="color:var(--primary);">${I.loop}</span><span class="section-title">${esc(cur.name)}님 오늘의 루틴</span><span class="section-meta">· ${memberRoutines.length}건</span></div>${memberRoutines.map(r=>renderRoutineCheck(r,rl[r.id]||{})).join('')}</section>`:''}`;
+  ${renderPresentStage(cur,entry,memberRoutines,rl)}`;
+}
+// v173 — 발표 모드 전용 스테이지: 오늘 탭과 전혀 다른 '발표용' 대형 읽기 레이아웃.
+//   담당자가 작성한 내용을 팀에게 공유하는 화면 — 히어로 헤더 + 큰 카드.
+function renderPresentStage(m,e,memberRoutines,rl){
+  const date=viewingDate;
+  const yesterday=shiftDate(date,-1);
+  const myInits=getMemberInitiatives(m.id);
+  const todayChecks=getIDLForMemberDate(m.id,date);
+  const yChecks=getIDLForMemberDate(m.id,yesterday);
+  const yDoneInits=Object.entries(yChecks).filter(([_,v])=>v.checked).map(([iid,v])=>{const i=findInitiative(iid);return i?{id:iid,title:i.title,note:v.note}:null;}).filter(Boolean);
+  const a=(typeof memberAnalytics==='function')?memberAnalytics(m.id):{krAvg:0,inits:0,initsDone:0,initsBlocked:0};
+  const hasBlocker=!!(e.blockers&&e.blockers.trim());
+  const hue=m.color||'#6241F5';
+  const stat=(label,val,color)=>`<div class="ps-stat"><div class="ps-stat-val" style="${color?'color:'+color+';':''}">${val}</div><div class="ps-stat-lbl">${label}</div></div>`;
+  return `<div class="present-stage">
+    <div class="ps-hero" style="--ps-accent:${hue};">
+      <div class="ps-hero-id">
+        <div class="ps-avatar" style="background:${hue};">${esc(m.name.slice(0,1).toUpperCase())}</div>
+        <div class="ps-hero-name"><div class="ps-name">${esc(m.name)}</div><div class="ps-role">${esc(m.role||'팀원')}</div></div>
+      </div>
+      <div class="ps-hero-stats">
+        ${stat('KR 진척',a.krAvg+'%',progressColor(a.krAvg))}
+        ${stat('이니셔티브',a.initsDone+'/'+a.inits)}
+        ${hasBlocker?stat('도움 필요','⚠','var(--warning)'):stat('막힘','없음','var(--growth)')}
+      </div>
+    </div>
+    <div class="ps-body">
+      <section class="ps-card ps-today"><div class="ps-card-head">📌 오늘 할 일</div><div class="ps-card-body">${window.renderTodaySection?window.renderTodaySection(m.id,e.today,myInits,todayChecks):''}</div></section>
+      <section class="ps-card ps-recent"><div class="ps-card-head">🕘 최근 한 일</div><div class="ps-card-body">${window.renderYesterdaySection?window.renderYesterdaySection(m.id,e.yesterday,yDoneInits):''}</div></section>
+      <section class="ps-card ${hasBlocker?'ps-blocker on':'ps-blocker'}"><div class="ps-card-head">${hasBlocker?'🚨':'🤝'} 막힘 / 도움 필요</div><div class="ps-card-body">${renderBlockerSection(m.id,e)}</div></section>
+      ${memberRoutines.length>0?`<section class="ps-card"><div class="ps-card-head">🔁 오늘의 루틴 · ${memberRoutines.length}건</div><div class="ps-card-body">${memberRoutines.map(r=>renderRoutineCheck(r,rl[r.id]||{})).join('')}</div></section>`:''}
+    </div>
+  </div>`;
 }
 // ============================================================
 // Initiative My Items — 오늘 화면 하단 본인 담당 Initiative 통합 뷰
