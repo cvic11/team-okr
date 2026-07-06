@@ -254,6 +254,16 @@ body.present .field-input{font-size:14.5px}
 <div id="app"></div>
 <div id="sync-toast" class="sync-toast"></div>
 <div id="modal-back" class="modal-back"><div class="modal" id="modal"></div></div>
-<script src="app.js?v=180"></script>
+<script>
+/* 캐시 원천 차단: 매 로드마다 version.json(캐시 우회)을 읽어 최신 app.js를 부른다.
+   index.html이 브라우저/CDN에 캐시돼 있어도 항상 최신 코드를 받는다. */
+(function(){
+  function load(v){var s=document.createElement('script');s.src='app.js?v='+v;s.onerror=function(){/* 실패 시 무버전 폴백 */var f=document.createElement('script');f.src='app.js';document.body.appendChild(f);};document.body.appendChild(s);}
+  fetch('version.json?_='+Date.now(),{cache:'no-store'})
+    .then(function(r){return r.ok?r.json():null;})
+    .then(function(d){load(d&&d.v?d.v:Date.now());})
+    .catch(function(){load(Date.now());});
+})();
+</script>
 </body>
 </html>
