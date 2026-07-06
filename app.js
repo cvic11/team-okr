@@ -302,6 +302,16 @@ html.dark .member-card.is-readonly .member-head::after{background:#22252F;color:
 .krl-group-head.is-interactive:active{transform:translateY(1px);box-shadow:inset 0 0 0 999px rgba(0,0,0,.085)}
 .krl-group-head.is-interactive:focus-within{box-shadow:inset 0 0 0 999px rgba(0,0,0,.045),0 0 0 2px rgba(98,65,245,.25)}
 .krl-group-head .krl-group-caret{font-size:11px;font-weight:800;opacity:.85;line-height:1;flex-shrink:0;transition:transform .12s ease,opacity .12s ease}
+/* v176 — O→KR→이니셔티브→할일 위계 표현 */
+.krl-obj-group{margin-bottom:14px}
+.krl-obj-head{display:flex;align-items:center;gap:8px;padding:2px 2px 7px;margin-bottom:8px;border-bottom:2px solid #E7E2FB}
+.krl-obj-badge{flex-shrink:0;font-size:10px;font-weight:800;color:#3A2670;background:#EDE7FE;border:1px solid #D9CFFB;border-radius:999px;padding:2px 9px;letter-spacing:.3px}
+.krl-obj-title{font-size:14px;font-weight:800;color:var(--text);letter-spacing:-.2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.krl-obj-group .krl-group-kr{margin-left:12px;border-left:3px solid #D9CFFB}
+.krl-group-kr .krl-subgroup,.krl-group-kr .krl-direct-init{margin-left:8px;border-left:2px solid #E8E3FA}
+html.dark .krl-obj-head{border-bottom-color:#2A2D38}
+html.dark .krl-obj-badge{background:#241E3A;color:#C9BEF5;border-color:#3A2F70}
+html.dark .krl-obj-group .krl-group-kr{border-left-color:#3A2F70}
 .krl-group-head.is-interactive:hover .krl-group-caret{opacity:1}
 .krl-group-head.is-interactive:active .krl-group-caret{transform:translateY(1px)}
 /* v32 — 그룹 헤더(KR/Init)가 이미 상위 컨텍스트를 표시하므로 task 행의 상위 변경 chip 제거 */
@@ -5141,7 +5151,15 @@ init();
       '</div>';
     }
     // v82 — 운영(KR 무관) 제거: individualTasks 렌더링 안 함
-    const groupsHtml=tree.krOrder.map(krId=>renderKRTree(tree.krGroups[krId])).join('');
+    // v176 — O(Objective) 계층 추가: KR을 소속 Objective 로 묶어 O→KR→이니셔티브→할일 위계를 명확히.
+    const krToObj={},objTitleMap={},objOrder=[],objKRs={};
+    (state.objectives||[]).forEach(o=>{objTitleMap[o.id]=o.title||'(제목 없는 Objective)';(o.keyResults||[]).forEach(k=>{krToObj[k.id]=o.id;});});
+    tree.krOrder.forEach(krId=>{const oid=krToObj[krId]||'__none';if(!objKRs[oid]){objKRs[oid]=[];objOrder.push(oid);}objKRs[oid].push(krId);});
+    const groupsHtml=objOrder.map(oid=>{
+      const oTitle=oid==='__none'?'(소속 Objective 없음)':objTitleMap[oid];
+      const krHtml=objKRs[oid].map(krId=>renderKRTree(tree.krGroups[krId])).join('');
+      return '<div class="krl-obj-group"><div class="krl-obj-head"><span class="krl-obj-badge">🎯 O</span><span class="krl-obj-title" title="'+escapeHtml(oTitle)+'">'+escapeHtml(oTitle)+'</span></div>'+krHtml+'</div>';
+    }).join('');
     // v89/v90 — 비어있을 때 계층 드롭다운: KR > 이니셔티브 선택 OR 새 이니셔티브 등록
     let emptyAddHtml='';
     if(kind==='today'&&tree.krOrder.length===0&&editable){
