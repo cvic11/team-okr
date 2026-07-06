@@ -6632,6 +6632,14 @@ init();
   /* 전체 폭: 상단 헤더·푸터도 화면을 꽉 쓰도록(캐시된 index.html도 덮어씀) */
   .hdr-inner{max-width:none!important}
   footer.app-footer{max-width:none!important}
+  /* 상단 탭 — 넓은 화면용 리디자인 + hover 애니메이션 */
+  .tabs{gap:7px!important}
+  .tab{padding:9px 16px!important;font-size:13.5px!important;border-radius:10px!important;transition:transform .16s cubic-bezier(.34,1.5,.5,1),background .16s,box-shadow .16s,color .16s!important}
+  .tab:hover{background:var(--primary-soft)!important;color:var(--primary)!important;transform:translateY(-2px)!important;box-shadow:0 6px 16px rgba(98,65,245,.20)!important}
+  .tab.active{transform:translateY(-1px)!important;box-shadow:0 6px 16px rgba(98,65,245,.28)!important}
+  .btn-mode{transition:transform .16s ease,background .16s!important}
+  .btn-mode:hover{transform:translateY(-1px)!important;background:#F1EEFF!important}
+  .tab-divider{height:22px!important}
   #mm-wrap{position:relative;margin:-24px -28px 0;padding:10px 14px 0} /* main 여백 제거 → 화면 꽉 채움 */
   #mm-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px}
   #mm-bar .mm-btn{border:1px solid var(--line);background:var(--card);color:var(--text-soft);font-weight:700;font-size:12.5px;padding:6px 11px;border-radius:9px;cursor:pointer}
@@ -6642,7 +6650,7 @@ init();
   #mm-stage{position:relative;height:calc(100vh - 150px);min-height:460px;overflow:hidden;border:1px solid var(--line);border-radius:12px;background:
      radial-gradient(circle at 1px 1px,var(--line) 1px,transparent 0);background-size:24px 24px;cursor:grab}
   #mm-stage.panning{cursor:grabbing}
-  #mm-canvas{position:absolute;left:0;top:0;transform-origin:0 0;will-change:transform}
+  #mm-canvas{position:absolute;left:0;top:0;transform-origin:0 0} /* will-change 제거 → 확대해도 텍스트 재래스터라이즈되어 선명(벡터) */
   #mm-edges{position:absolute;left:-4000px;top:-4000px;width:8000px;height:8000px;overflow:visible;pointer-events:none}
   #mm-edges path{stroke:var(--line);stroke-width:2;fill:none}
   #mm-nodes .mnode{position:absolute;transform:translate(-50%,0);user-select:none}
@@ -6767,10 +6775,27 @@ function mmLayout(){
 }
 function mmApplyPositions(){Object.values(MM.nodes).forEach(n=>{const el=document.querySelector('#mm-nodes .mnode[data-id="'+CSS.escape(n.id)+'"]');if(el){el.style.left=n.x+'px';el.style.top=n.y+'px';}});}
 function mmApplyView(){const c=document.getElementById('mm-canvas');if(c)c.style.transform=`translate(${Math.round(MM.view.x)}px,${Math.round(MM.view.y)}px) scale(${MM.view.k})`;} // 정수 translate → 또렷
-function mmFit(){ // 축소 없이 100%(k=1)로 또렷하게. 가로 중앙, 위쪽 여백. 넘치면 상하 스크롤(휠)로 이동.
-  const ns=Object.values(MM.nodes).filter(n=>!mmHidden(n));if(!ns.length){MM.view.k=1;MM.view.x=40;MM.view.y=24;mmApplyView();return;}
-  const xs=[],ys=[];ns.forEach(n=>{const s=mmNodeSize(n.id);xs.push(n.x-s.w/2,n.x+s.w/2);ys.push(n.y);});
-  const minX=Math.min(...xs),minY=Math.min(...ys);MM.view.k=1;MM.view.x=40-minX;MM.view.y=24-minY;mmApplyView(); // 좌상단 정렬(O 안 잘림), 넘치면 스크롤
+function mmBounds(){
+  const ns=Object.values(MM.nodes).filter(n=>!mmHidden(n));if(!ns.length)return null;
+  let minX=1e9,maxX=-1e9,minY=1e9,maxY=-1e9,iniMaxX=-1e9;
+  ns.forEach(n=>{const s=mmNodeSize(n.id);const l=n.x-s.w/2,r=n.x+s.w/2;if(l<minX)minX=l;if(r>maxX)maxX=r;if(n.y<minY)minY=n.y;if(n.y+s.h>maxY)maxY=n.y+s.h;if(mmDepth(n)<=2&&r>iniMaxX)iniMaxX=r;});
+  if(iniMaxX<-1e8)iniMaxX=maxX;
+  return {minX,maxX,minY,maxY,iniMaxX};
+}
+// 스크롤 범위 제한 — 콘텐츠 위/아래로 빈 공백이 무한히 열리지 않게(최상단=Objective)
+function mmClampView(){
+  const bd=mmBounds();if(!bd)return;const st=document.getElementById('mm-stage');if(!st)return;
+  const sw=st.clientWidth,sh=st.clientHeight,k=MM.view.k,padT=16,padB=44,padL=24,padR=60;
+  const hiY=padT-bd.minY*k, loY=(sh-padB)-bd.maxY*k; MM.view.y=Math.max(Math.min(loY,hiY),Math.min(MM.view.y,hiY));
+  const hiX=padL-bd.minX*k, loX=(sw-padR)-bd.maxX*k; MM.view.x=Math.max(Math.min(loX,hiX),Math.min(MM.view.x,hiX));
+}
+function mmFit(){ // 좌상단 정렬(O가 최상단) + 좌측(O~이니셔티브)이 화면의 ~1/4가 되도록 확대. 확대는 벡터라 선명.
+  const st=document.getElementById('mm-stage');const sw=st?st.clientWidth:1400;
+  const bd=mmBounds();if(!bd){MM.view.k=1;MM.view.x=40;MM.view.y=20;mmApplyView();return;}
+  const span=Math.max(140,bd.iniMaxX-bd.minX);
+  let k=(0.25*sw)/span; k=Math.max(1.1,Math.min(2.2,k));
+  MM.view.k=k; MM.view.x=Math.round(24-bd.minX*k); MM.view.y=Math.round(16-bd.minY*k);
+  mmClampView(); mmApplyView();
 }
 
 function mmDrawEdges(){
@@ -6973,8 +6998,8 @@ function mmEditPct(id,el){const n=MM.nodes[id];if(!n||n.kind!=='kr')return;el.se
 function mmEditDue(id){const n=MM.nodes[id];if(!n)return;const inp=document.createElement('input');inp.type='date';const cur=n.kind==='task'?n.ref.due_date:n.ref.dueDate;if(cur)inp.value=cur;inp.style.cssText='position:fixed;left:-9999px';document.body.appendChild(inp);inp.addEventListener('change',()=>{const v=inp.value||null;if(n.kind==='task'){n.ref.due_date=v;}else{n.ref.dueDate=v;}mmSaveNode(n);mmUpdateNode(id);});inp.addEventListener('blur',()=>setTimeout(()=>inp.remove(),150));inp.focus();try{inp.showPicker();}catch(e){inp.click();}}
 
 /* 드래그 / 팬 / 줌 */
-function mmZoom(f){const st=document.getElementById('mm-stage');if(!st)return;const r=st.getBoundingClientRect();const cx=r.width/2,cy=r.height/2;const nk=Math.max(.3,Math.min(2.2,MM.view.k*f));MM.view.x=cx-(cx-MM.view.x)*(nk/MM.view.k);MM.view.y=cy-(cy-MM.view.y)*(nk/MM.view.k);MM.view.k=nk;mmApplyView();}
-function mmOnWheel(e){e.preventDefault();if(e.ctrlKey||e.metaKey){mmZoom(e.deltaY<0?1.1:0.9);return;}MM.view.y-=e.deltaY;MM.view.x-=(e.deltaX||0);mmApplyView();} // 휠=상하 스크롤(Ctrl+휠=확대/축소)
+function mmZoom(f){const st=document.getElementById('mm-stage');if(!st)return;const r=st.getBoundingClientRect();const cx=r.width/2,cy=r.height/2;const nk=Math.max(.3,Math.min(2.2,MM.view.k*f));MM.view.x=cx-(cx-MM.view.x)*(nk/MM.view.k);MM.view.y=cy-(cy-MM.view.y)*(nk/MM.view.k);MM.view.k=nk;mmClampView();mmApplyView();}
+function mmOnWheel(e){e.preventDefault();if(e.ctrlKey||e.metaKey){mmZoom(e.deltaY<0?1.1:0.9);return;}MM.view.y-=e.deltaY;MM.view.x-=(e.deltaX||0);mmClampView();mmApplyView();} // 휠=상하 스크롤(Ctrl+휠=확대/축소), 범위 제한
 function mmOnDown(e){
   const nodeEl=e.target.closest('.mnode');
   if(nodeEl&&!e.target.closest('.mcb,.mconf,.mpct,.mdue,.mav,.mmini,.mfold')&&!e.target.isContentEditable){
@@ -6987,7 +7012,7 @@ function mmOnDown(e){
 }
 function mmOnMove(e){
   if(MM.drag){const d=MM.drag;const dx=(e.clientX-d.sx)/MM.view.k,dy=(e.clientY-d.sy)/MM.view.k;if(Math.abs(dx)+Math.abs(dy)>2)d.moved=true;const n=MM.nodes[d.id];if(!n)return;n.x=d.ox+dx;n.y=d.oy+dy;const el=document.querySelector('#mm-nodes .mnode[data-id="'+CSS.escape(d.id)+'"]');if(el){el.style.left=n.x+'px';el.style.top=n.y+'px';}mmDrawEdges();mmHighlightDrop(e);return;}
-  if(MM.pan){MM.view.x=MM.pan.ox+(e.clientX-MM.pan.sx);MM.view.y=MM.pan.oy+(e.clientY-MM.pan.sy);mmApplyView();}
+  if(MM.pan){MM.view.x=MM.pan.ox+(e.clientX-MM.pan.sx);MM.view.y=MM.pan.oy+(e.clientY-MM.pan.sy);mmClampView();mmApplyView();}
 }
 function mmDropTarget(e,dragId){const el=document.elementFromPoint(e.clientX,e.clientY);const nd=el&&el.closest('.mnode');if(!nd)return null;const tid=nd.dataset.id;if(tid===dragId)return null;let p=tid;while(p){if(p===dragId)return null;p=MM.nodes[p]?MM.nodes[p].parent:null;}return tid;}
 function mmHighlightDrop(e){document.querySelectorAll('#mm-nodes .mnode.drop').forEach(x=>x.classList.remove('drop'));const t=mmDropTarget(e,MM.drag.id);if(t){const el=document.querySelector('#mm-nodes .mnode[data-id="'+CSS.escape(t)+'"]');if(el)el.classList.add('drop');}}
