@@ -1377,16 +1377,20 @@ function onInitTaskChange(p){
     state.initiativeTasks[iid].sort((a,b)=>(a.sort_order||0)-(b.sort_order||0));
   }
   // v111 — '오늘' 탭에서는 전체 render() 대신 할일 블록만 부분 갱신 (아침 동시 편집 깜빡임 차단)
-  if(currentView==='today'){_scheduleTodayBlocksRerender();}
+  // v174 — 변경된 '해당 팀원' 블록만 갱신(다른 팀원 카드 깜빡임 제거). owner 없으면 전체.
+  if(currentView==='today'){_scheduleTodayBlocksRerender(r.owner_id||null);}
   else if(['okr','wbs','dashboard'].includes(currentView))scheduleRender();
 }
 // v111 — 다발성 echo 를 150ms 로 합쳐 today 블록 부분 갱신 (입력 중 카드는 자동 보존)
-let _todayBlocksTimer=null;
-function _scheduleTodayBlocksRerender(){
+let _todayBlocksTimer=null,_todayDirtyMids=new Set(),_todayDirtyAll=false;
+function _scheduleTodayBlocksRerender(mid){
+  if(mid)_todayDirtyMids.add(mid);else _todayDirtyAll=true;
   if(_todayBlocksTimer)return;
   _todayBlocksTimer=setTimeout(()=>{
     _todayBlocksTimer=null;
-    if(currentView==='today'&&typeof window.__rerenderTodayTaskBlocks==='function')window.__rerenderTodayTaskBlocks();
+    const mids=_todayDirtyAll?null:Array.from(_todayDirtyMids);
+    _todayDirtyMids=new Set();_todayDirtyAll=false;
+    if(currentView==='today'&&typeof window.__rerenderTodayTaskBlocks==='function')window.__rerenderTodayTaskBlocks(mids);
   },150);
 }
 async function saveInitiativeTask(it){debouncedSave(`init-task-${it.id}`,async()=>{markLocal('initiative_tasks',it.id);const{error}=await sb.from('initiative_tasks').upsert({id:it.id,initiative_id:it.initiative_id,title:it.title,status:it.status||'todo',owner_id:it.owner_id||null,start_date:it.start_date||null,due_date:it.due_date||null,sort_order:it.sort_order||0,updated_at:new Date().toISOString()});if(error){
@@ -5796,13 +5800,15 @@ init();
   }
   // v111 — 실시간 echo 가 전체 render() 대신 '오늘' 할일 블록만 부분 갱신 (아침 동시 편집 깜빡임 차단)
   //   - 입력 중인(active element 포함) 블록은 건드리지 않음 → 포커스/입력 손실 방지
-  window.__rerenderTodayTaskBlocks=function(){
+  window.__rerenderTodayTaskBlocks=function(onlyMids){
     const active=document.activeElement;
+    const only=(onlyMids&&onlyMids.length)?new Set(onlyMids):null; // v174 — 지정된 팀원 블록만
     const blocks=document.querySelectorAll('[data-krl-block$=":today"]');
     blocks.forEach(block=>{
       if(active&&block.contains(active))return; // 내가 타이핑 중인 카드는 보존
       const key=block.getAttribute('data-krl-block')||'';
       const mid=key.split(':')[0];
+      if(only&&!only.has(mid))return; // 변경 없는 팀원 카드는 건드리지 않음(깜빡임 제거)
       if(mid)try{rerenderTaskBlock(mid,'today');}catch(_){}
     });
   };
