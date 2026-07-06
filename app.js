@@ -1012,7 +1012,7 @@ const GUIDES={
   headline:{title:'오늘의 한 줄 — 회의 초점',body:'아침 스탠드업·본부 회의의 초점을 두괄식 한 문장으로. 모든 참석자가 회의 시작 전에 같은 그림을 보게 됩니다.',no:['"오늘 할 일들..." — 평면적 나열'],yes:['"가맹문의 KR 50% 돌파를 위해 인터뷰 결과 합의가 필요"','"AI MVP 시연 일정 확정"'],check:'두괄식 · 결론 · 의사결정 또는 합의 사항 명시'}
 };
 const CONF_HINTS={high:'자신있어요 — 9/10. 달성 거의 확실 (야심 부족 신호일 수도)',mid:'해볼만합니다 — 5~7/10. 적정 stretch (Wodtke 원칙의 권장 위치)',low:'쉽지 않아요 — 3/10 이하. 도움·자원 요청 권장'};
-let currentView='mindmap',viewingDate=todayKey(),presentMode=false; // v179 — 맵(마인드맵)을 기본 탭으로
+let currentView='today',viewingDate=todayKey(),presentMode=false; // 기본 탭=오늘(최초 접속·홈)
 let presentMid=null; // v12 — 발표 모드에서 현재 표시 중인 팀원 id (날짜 변경해도 유지)
 let expanded=new Set(),krCollapsed=new Set(),realityOpen=new Set(),krMenuOpen=new Set();
 let okrSearchQuery='';
@@ -6665,16 +6665,16 @@ init();
   .mlbl{font-weight:700;line-height:1.35;outline:none}
   .mhd{display:flex;align-items:center;gap:6px;margin-bottom:2px}
   .m-o .mbub{border:2.5px solid var(--primary);padding:13px 17px;width:250px}
-  .m-o .mlbl{font-size:16px;font-weight:800;color:var(--primary)}
+  .m-o .mlbl{font-size:16px;font-weight:800;color:var(--primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis} /* O 1줄 */
   .m-o .mtag{color:var(--primary)}
   .m-kr .mbub{border-color:var(--bc,var(--primary));padding:10px 13px;width:220px}
   .m-kr .mtag{color:var(--bc,var(--primary))}
-  .m-kr .mlbl{font-size:12.5px}
+  .m-kr .mlbl{font-size:12.5px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden} /* KR 최대 2줄 */
   .m-meter{height:5px;border-radius:99px;background:color-mix(in srgb,var(--bc,var(--primary)) 16%,transparent);margin-top:8px;overflow:hidden}
   .m-meter i{display:block;height:100%;background:var(--bc,var(--primary));border-radius:99px}
   .m-ini .mbub{border-color:var(--bc,#0E8A8F);padding:9px 12px;width:206px}
   .m-ini .mtag{color:var(--bc,#0E8A8F)}
-  .m-ini .mlbl{font-size:12.5px}
+  .m-ini .mlbl{font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis} /* 이니셔티브 1줄 */
   .m-task .mbub{border-color:var(--bc,var(--line));padding:7px 10px;width:auto;max-width:340px;display:flex;align-items:center;gap:7px}
   .m-task .mlbl{font-size:12px;font-weight:600;flex:1;min-width:40px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .m-task.done .mlbl{text-decoration:line-through;color:var(--text-soft)}
@@ -6833,7 +6833,7 @@ function mmCard(n){
   const st=`left:${n.x}px;top:${n.y}px`+(bc?`;--bc:${bc}`:'');
   const kids=mmKids(n.id);const kc=kids.length;
   const fold=kc?`<button class="mfold" data-mm="fold" data-id="${n.id}">${MM.collapsed[n.id]?('▸ '+kc):'▾'}</button>`:'';
-  const acts=`<div class="macts"><button class="mmini add" data-mm="add" data-id="${n.id}" title="하위 추가">＋</button>${n.kind!=='o'?`<button class="mmini del" data-mm="del" data-id="${n.id}" title="삭제">✕</button>`:''}</div>`;
+  const acts=`<div class="macts"><button class="mmini add" data-mm="add" data-id="${n.id}" title="하위 추가">＋</button><button class="mmini del" data-mm="del" data-id="${n.id}" title="삭제">✕</button></div>`;
   let inner='',cls='mnode m-'+n.kind;
   if(n.kind==='o'){const o=n.ref,r=mmObjRoll(o);
     inner=`<span class="mm-water" style="width:${r.pct}%"></span><div class="mtag">🎯 OBJECTIVE</div><div class="mlbl" data-mm="edit" data-id="${n.id}">${esc(o.title)||'<span style=opacity:.5>목표 입력…</span>'}</div>
