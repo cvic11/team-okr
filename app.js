@@ -5260,7 +5260,10 @@ init();
                 const dd=isoToLocalDay(t.created_at)||isoToLocalDay(t.updated_at);
                 // v165 — '시작~마감 구간' 기준. 구간이 그 날(d)을 덮으면 최근에도 표시.
                 //   날짜가 오늘과 과거에 걸친 항목은 '오늘 할 일'과 '최근 한 일' 양쪽에 모두 노출(사용자 방침).
-                const spansD=!!t.due_date&&(!t.start_date||t.start_date<=d)&&t.due_date>=d; // 마감 있는 항목만 구간 판정
+                // v171 — 시작일이 없으면 '작성일'을 시작으로 간주. (기존엔 시작일 미입력 시 무조건
+                //   과거를 덮는 것으로 판정되어, 오늘 작성한 항목이 '최근 한 일'에 노출되는 버그)
+                const effStart=t.start_date||dd;
+                const spansD=!!t.due_date&&(!effStart||effStart<=d)&&t.due_date>=d;
                 if(((dd===d)||spansD)&&(t.title||'').trim())dbDay.push({id:t.id,t:t.title||'',i:iid,k:(initMap[iid]&&initMap[iid].krId)||'',d:t.status==='done',_isInitTask:true});
               }
             });});
