@@ -126,3 +126,38 @@ begin
   end if;
 exception when undefined_object then null;
 end$$;
+
+-- v179: 할일 참여 기록 — 여러 명이 여러 날에 걸쳐 같은 작업에 참여(체크≠완료)
+--   initiative_daily_logs 와 동일 패턴. task_id·member_id·date 별 1행.
+create table if not exists public.task_daily_logs (
+  id         text primary key,                 -- `${task_id}-${member_id}-${date}`
+  task_id    text not null,
+  member_id  text not null,
+  date       date not null,
+  done       boolean not null default false,    -- 그 사람이 그날 '작업 완료' 처리했는지(참여 자체와 구분)
+  note       text default '',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique(task_id, member_id, date)
+);
+create index if not exists task_daily_logs_task_idx on public.task_daily_logs (task_id);
+create index if not exists task_daily_logs_date_idx on public.task_daily_logs (date);
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname='task_daily_logs_task_id_fkey') then
+    alter table public.task_daily_logs
+      add constraint task_daily_logs_task_id_fkey
+      foreign key (task_id) references public.initiative_tasks(id) on delete cascade;
+  end if;
+exception when undefined_table then null;
+end$$;
+alter table public.task_daily_logs enable row level security;
+drop policy if exists "task_daily_logs_all" on public.task_daily_logs;
+create policy "task_daily_logs_all" on public.task_daily_logs for all using (true) with check (true);
+do $$
+begin
+  if not exists (select 1 from pg_publication_tables where pubname='supabase_realtime' and schemaname='public' and tablename='task_daily_logs') then
+    alter publication supabase_realtime add table public.task_daily_logs;
+  end if;
+exception when undefined_object then null;
+end$$;
