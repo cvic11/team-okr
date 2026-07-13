@@ -6651,6 +6651,10 @@ init();
      radial-gradient(circle at 1px 1px,var(--line) 1px,transparent 0);background-size:24px 24px;cursor:grab}
   #mm-stage.panning{cursor:grabbing}
   #mm-canvas{position:absolute;left:0;top:0;transform-origin:0 0} /* will-change 제거 → 확대해도 텍스트 재래스터라이즈되어 선명(벡터) */
+  #mm-cursors{position:absolute;left:0;top:0;pointer-events:none;z-index:8}
+  .mm-cur{position:absolute;transform:translate(-1px,-1px);transition:left .05s linear,top .05s linear;will-change:left,top}
+  .mm-cur svg{display:block;filter:drop-shadow(0 1px 1px rgba(0,0,0,.3))}
+  .mm-cur span{position:absolute;left:14px;top:11px;font-size:10.5px;font-weight:800;color:#fff;padding:1px 7px;border-radius:8px;white-space:nowrap;box-shadow:0 1px 3px rgba(0,0,0,.2)}
   #mm-edges{position:absolute;left:-4000px;top:-4000px;width:8000px;height:8000px;overflow:visible;pointer-events:none}
   #mm-edges path{stroke:var(--line);stroke-width:2;fill:none}
   #mm-nodes .mnode{position:absolute;transform:translate(-50%,0);user-select:none}
@@ -6715,7 +6719,7 @@ init();
   `;document.head.appendChild(s);
 })();
 
-const MM={view:{x:80,y:30,k:1},collapsed:{},sel:null,hlMember:null,showHidden:false,nodes:{},_krCols:{},_fitted:false,_stageBound:false};
+const MM={view:{x:80,y:30,k:1},collapsed:{},sel:null,hlMember:null,showHidden:false,nodes:{},cursors:{},_krCols:{},_fitted:false,_stageBound:false};
 const MM_BRANCH=["#6241F5","#0E8A8F","#E2683B","#2C7BE5","#D6409F","#16A34A","#B8860B","#9333EA"];
 
 function mmConfLabel(c){return c==='high'?'자신감 상':c==='low'?'자신감 하':'자신감 중';}
@@ -6910,12 +6914,30 @@ function mmRootObj(id){let c=MM.nodes[id];while(c&&c.parent){c=MM.nodes[c.parent
 function mmUpdateNode(id){const n=MM.nodes[id];if(!n)return;const el=document.querySelector('#mm-nodes .mnode[data-id="'+CSS.escape(id)+'"]');if(!el)return;const t=document.createElement('div');t.innerHTML=mmCard(n);const fresh=t.firstElementChild;if(fresh){el.replaceWith(fresh);mmDrawEdges();}}
 // 발표/필터 하이라이트를 클래스 토글로만 반영(재생성 없이)
 function mmApplyHighlight(){document.querySelectorAll('#mm-nodes .m-task').forEach(el=>{const id=el.dataset.id;const parts=state.taskDailyLogs[todayKey()]?.[id]||{};el.classList.remove('hl','dim');if(MM.hlMember){if(parts[MM.hlMember])el.classList.add('hl');else el.classList.add('dim');}});}
+// ── 실시간 커서(접속자 마우스) — 별도 오버레이, 맵 재렌더/앱 render 절대 안 건드림 ──
+function mmCursorSetup(){
+  if(MM._curCh||typeof sb==='undefined'||!sb||typeof sb.channel!=='function')return;
+  try{
+    const me=selfMember();
+    MM._curId=(me?me.id:'guest')+'-'+Math.random().toString(36).slice(2,6);
+    MM._curName=me?me.name:'게스트'; MM._curColor=(me&&me.color)||'#6241F5';
+    const team=state.currentTeamId||'team';
+    const ch=sb.channel('mm-cur-'+team,{config:{broadcast:{self:false}}});
+    ch.on('broadcast',{event:'c'},(msg)=>{const d=msg&&msg.payload;if(!d||d.id===MM._curId)return;MM.cursors[d.id]={name:d.name,color:d.color,x:d.x,y:d.y,ts:Date.now()};mmRenderCursors();});
+    ch.subscribe();
+    MM._curCh=ch;
+    if(!MM._curTimer)MM._curTimer=setInterval(()=>{const now=Date.now();let ch2=false;for(const k in MM.cursors){if(now-MM.cursors[k].ts>5000){delete MM.cursors[k];ch2=true;}}if(ch2)mmRenderCursors();},2500);
+  }catch(e){console.warn('[mm-cursor] setup',e);}
+}
+function mmCursorSend(cx,cy){if(!MM._curCh)return;const now=Date.now();if(now-(MM._curSent||0)<45)return;MM._curSent=now;try{MM._curCh.send({type:'broadcast',event:'c',payload:{id:MM._curId,name:MM._curName,color:MM._curColor,x:Math.round(cx),y:Math.round(cy)}});}catch(e){}}
+function mmCursorMove(e){const st=document.getElementById('mm-stage');if(!st)return;const r=st.getBoundingClientRect();mmCursorSend((e.clientX-r.left-MM.view.x)/MM.view.k,(e.clientY-r.top-MM.view.y)/MM.view.k);}
+function mmRenderCursors(){const el=document.getElementById('mm-cursors');if(!el)return;const now=Date.now();let h='';for(const k in MM.cursors){const c=MM.cursors[k];if(now-c.ts>5000)continue;h+=`<div class="mm-cur" style="left:${c.x}px;top:${c.y}px"><svg width="18" height="18" viewBox="0 0 18 18"><path d="M2 2 L2 15 L6 11 L8.6 16 L10.8 15 L8.2 10.2 L14 10.2 Z" fill="${c.color}"/></svg><span style="background:${c.color}">${esc(c.name)}</span></div>`;}el.innerHTML=h;}
 function renderMindMap(){
   requestAnimationFrame(()=>{try{mmMount();}catch(e){console.error('[mindmap mount]',e);}});
   return `<div id="mm-wrap">
     <div id="mm-bar">${mmBarHtml()}</div>
     <div id="mm-stage">
-      <div id="mm-canvas"><svg id="mm-edges"></svg><div id="mm-nodes"></div></div>
+      <div id="mm-canvas"><svg id="mm-edges"></svg><div id="mm-nodes"></div><div id="mm-cursors"></div></div>
       <div id="mm-zoom"><button data-mm="zin">＋</button><button data-mm="zout">−</button><button data-mm="zfit">⤢</button></div>
     </div>
     <div id="mm-hint">카드 <b>드래그</b>로 이동·소속 변경 · <b>＋</b> 하위 추가 · 더블클릭 이름편집 · 아바타 <b>+</b>로 오늘 참여 · <b>▾</b> 접기</div>
@@ -6928,6 +6950,7 @@ function mmMount(){
   const stage=document.getElementById('mm-stage');if(!stage)return;
   mmBuild();mmRenderCards();mmLayout();mmApplyPositions();mmDrawEdges();
   mmBindStage();
+  try{mmCursorSetup();mmRenderCursors();}catch(e){}
   if(!MM._fitted){ // 최초 진입에서만 fit + 폰트확정 재정렬(이후 리렌더에선 재정렬 스톰 방지 → 튐 제거)
     mmFit();MM._fitted=true;
     mmRelayoutSoon();
@@ -6941,7 +6964,7 @@ function mmRelayoutSoon(){
 function mmBindStage(){
   const wrap=document.getElementById('mm-wrap'),stage=document.getElementById('mm-stage');if(!wrap||!stage)return;
   if(!wrap._mmB){wrap._mmB=true;wrap.addEventListener('click',mmOnClick);wrap.addEventListener('dblclick',mmOnDbl);}
-  if(!stage._mmB){stage._mmB=true;stage.addEventListener('pointerdown',mmOnDown);stage.addEventListener('wheel',mmOnWheel,{passive:false});}
+  if(!stage._mmB){stage._mmB=true;stage.addEventListener('pointerdown',mmOnDown);stage.addEventListener('wheel',mmOnWheel,{passive:false});stage.addEventListener('pointermove',mmCursorMove);}
   if(!MM._winB){MM._winB=true;window.addEventListener('pointermove',mmOnMove);window.addEventListener('pointerup',mmOnUp);}
 }
 // 부모 탐색
