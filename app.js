@@ -674,8 +674,8 @@ let saveStatus={pending:0,error:false};
 const localChanges=new Map();
 function markLocal(table,id){if(!id)return;const k=`${table}:${id}`;localChanges.set(k,Date.now());setTimeout(()=>{const t=localChanges.get(k);if(t&&Date.now()-t>=1400)localChanges.delete(k);},1500);}
 function isLocal(table,id){if(!id)return false;return localChanges.has(`${table}:${id}`);}
-function markSaveStart(){saveStatus.pending++;saveStatus.error=false;updateSaveIndicator();}
-function markSaveEnd(err){saveStatus.pending=Math.max(0,saveStatus.pending-1);if(err)saveStatus.error=true;updateSaveIndicator();}
+function markSaveStart(){saveStatus.pending++;updateSaveIndicator();}/* v190 — 시작 시 error 리셋 제거: 직전 실패가 다음 키 입력에 가려지던 문제 */
+function markSaveEnd(err){saveStatus.pending=Math.max(0,saveStatus.pending-1);if(err)saveStatus.error=true;else if(saveStatus.pending===0)saveStatus.error=false;updateSaveIndicator();}
 function updateSaveIndicator(){let el=document.getElementById('save-indicator');if(!el){el=document.createElement('div');el.id='save-indicator';el.className='save-indicator';document.body.appendChild(el);}if(saveStatus.pending>0){el.className='save-indicator saving';el.textContent='저장 중…';}else if(saveStatus.error){el.className='save-indicator error';el.textContent='⚠ 저장 실패';}else{el.className='save-indicator';el.textContent='✓ 모두 저장됨';}}
 const SUPABASE_URL_HARDCODED='https://fmudqapruoppzlfhoxde.supabase.co';
 const SUPABASE_ANON_HARDCODED='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZtdWRxYXBydW9wcHpsZmhveGRlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgwNzk2NTEsImV4cCI6MjA5MzY1NTY1MX0.NLQdccHlwahIy69opYzUkPSXKGCOZIQAr5ehctCWbw0';
@@ -1089,7 +1089,9 @@ function progressColor(p){return p>=70?C.growth:p>=30?C.amber:C.warning;}
 function esc(s){if(s==null)return '';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
 function ensureStandup(date){if(!state.standups[date])state.standups[date]={headline:'',entries:{}};return state.standups[date];}
 function ensureRoutineLog(date){if(!state.routineLogs[date])state.routineLogs[date]={};return state.routineLogs[date];}
-function showToast(msg,isErr){const t=document.getElementById('sync-toast');t.textContent=msg;t.classList.toggle('error',!!isErr);t.classList.add('show');clearTimeout(t._tm);t._tm=setTimeout(()=>t.classList.remove('show'),1800);}
+function showToast(msg,isErr){const t=document.getElementById('sync-toast');t.textContent=msg;t.classList.toggle('error',!!isErr);t.classList.add('show');clearTimeout(t._tm);t._tm=setTimeout(()=>t.classList.remove('show'),isErr?3500:1800);
+  /* v190 — supabase-js는 오류를 throw하지 않고 반환하므로, 각 저장 콜백의 오류 토스트를 저장 표시기에도 반영 (표시기가 실패에도 '✓ 모두 저장됨'을 띄우던 문제) */
+  if(isErr){saveStatus.error=true;try{updateSaveIndicator();}catch(_){}}}
 function teamInitial(name){if(!name)return '팀';return String(name).trim().charAt(0)||'팀';}
 function currentTeam(){return state.teams.find(t=>t.id===state.currentTeamId)||state.teams[0];}
 function teamColor(team){if(!team)return C.primary;const idx=state.teams.findIndex(t=>t.id===team.id);return PALETTE[idx%PALETTE.length];}
@@ -1192,8 +1194,14 @@ async function saveTaskDailyLog(taskId,memberId,date,done,note){
   const id=`${taskId}-${memberId}-${date}`;
   debouncedSave(`tdl-${id}`,async()=>{
     markLocal('task_daily_logs',id);
-    const log=state.taskDailyLogs[date][taskId][memberId];
-    const{error}=await sb.from('task_daily_logs').upsert({id,task_id:taskId,member_id:memberId,date,done:!!log.done,note:log.note||'',updated_at:new Date().toISOString()},{onConflict:'task_id,member_id,date'});
+    const doUpsert=async()=>{const log=state.taskDailyLogs[date]?.[taskId]?.[memberId];if(!log)return{error:null};return sb.from('task_daily_logs').upsert({id,task_id:taskId,member_id:memberId,date,done:!!log.done,note:log.note||'',updated_at:new Date().toISOString()},{onConflict:'task_id,member_id,date'});};
+    let{error}=await doUpsert();
+    /* v190 — 새 할일 생성 직후엔 부모(initiative_tasks) upsert와 경합해 FK(23503) 위반이 나던 문제:
+       부모 저장이 완료될 시간을 두고 최대 2회 재시도 */
+    for(let i=0;i<2&&error&&(error.code==='23503'||String(error.message||'').includes('foreign key'));i++){
+      await new Promise(r=>setTimeout(r,1200));
+      ({error}=await doUpsert());
+    }
     if(error)showToast('참여 기록 실패',true);
   });
 }
@@ -1447,8 +1455,8 @@ function onMembersChange(p){const r=p.new||p.old;if(r.team_id&&r.team_id!==state
   // v111 — is_admin/is_observer → isAdmin/isObserver 매핑 보존 (안 하면 실시간 갱신 시 관리자 권한 소실)
   const mapped={...r,isAdmin:!!r.is_admin,isObserver:!!r.is_observer};
   const i=state.members.findIndex(m=>m.id===r.id);if(i>=0)state.members[i]=mapped;else state.members.push(mapped);state.members.sort((a,b)=>(a.sort_order||0)-(b.sort_order||0));}if(['today','manage','eval'].includes(currentView))scheduleRender();}
-function onObjectivesChange(p){const r=p.new||p.old;if(r.team_id&&r.team_id!==state.currentTeamId)return;if(isLocal('objectives',r.id))return;if(p.eventType==='DELETE'){state.objectives=state.objectives.filter(o=>o.id!==r.id);}else{const i=state.objectives.findIndex(o=>o.id===r.id);if(i>=0){Object.assign(state.objectives[i],{title:r.title,description:r.description,ownerId:r.owner_id,confidence:r.confidence||'mid',realityBlocker:r.reality_blocker||'',realityHelp:r.reality_help||''});}else{state.objectives.push({id:r.id,title:r.title,description:r.description||'',ownerId:r.owner_id,confidence:r.confidence||'mid',realityBlocker:r.reality_blocker||'',realityHelp:r.reality_help||'',keyResults:[]});expanded.add(r.id);}}scheduleRender();}
-function onKRChange(p){const r=p.new||p.old;if(isLocal('key_results',r.id))return;const o=state.objectives.find(x=>x.id===r.objective_id);if(!o&&p.eventType!=='DELETE')return;if(p.eventType==='DELETE'){if(o)o.keyResults=o.keyResults.filter(k=>k.id!==r.id);}else{if(!o)return;const idx=o.keyResults.findIndex(k=>k.id===r.id);const exist=idx>=0?o.keyResults[idx].initiatives:[];const oldCur=idx>=0?o.keyResults[idx].current:null;const kr={id:r.id,title:r.title,target:Number(r.target||0),current:Number(r.current||0),unit:r.unit||'',ownerId:r.owner_id,dueDate:r.due_date,confidence:r.confidence||'mid',realityBlocker:r.reality_blocker||'',realityHelp:r.reality_help||'',initiatives:exist};if(idx>=0)o.keyResults[idx]=kr;else o.keyResults.push(kr);
+function onObjectivesChange(p){const r=p.new||p.old;if(r.team_id&&r.team_id!==state.currentTeamId)return;if(isLocal('objectives',r.id))return;if(p.eventType==='DELETE'){state.objectives=state.objectives.filter(o=>o.id!==r.id);}else{const i=state.objectives.findIndex(o=>o.id===r.id);if(i>=0){Object.assign(state.objectives[i],{title:r.title,description:r.description,ownerId:r.owner_id,confidence:r.confidence||'mid',realityBlocker:r.reality_blocker||'',realityHelp:r.reality_help||'',startDate:r.start_date||null,dueDate:r.due_date||null});}else{state.objectives.push({id:r.id,title:r.title,description:r.description||'',ownerId:r.owner_id,confidence:r.confidence||'mid',realityBlocker:r.reality_blocker||'',realityHelp:r.reality_help||'',startDate:r.start_date||null,dueDate:r.due_date||null,keyResults:[]});expanded.add(r.id);}/* v190 — 원격 수신 시 start/due date 반영 누락 수정 */}scheduleRender();}
+function onKRChange(p){const r=p.new||p.old;if(isLocal('key_results',r.id))return;const o=state.objectives.find(x=>x.id===r.objective_id);if(!o&&p.eventType!=='DELETE')return;if(p.eventType==='DELETE'){if(o)o.keyResults=o.keyResults.filter(k=>k.id!==r.id);}else{if(!o)return;const idx=o.keyResults.findIndex(k=>k.id===r.id);const exist=idx>=0?o.keyResults[idx].initiatives:[];const oldCur=idx>=0?o.keyResults[idx].current:null;const kr={id:r.id,title:r.title,target:Number(r.target||0),current:Number(r.current||0),unit:r.unit||'',ownerId:r.owner_id,startDate:r.start_date||null,dueDate:r.due_date,confidence:r.confidence||'mid',realityBlocker:r.reality_blocker||'',realityHelp:r.reality_help||'',lastProgressBy:r.last_progress_by||null,lastProgressAt:r.last_progress_at||null,initiatives:exist};/* v190 — startDate 누락 복사로 원격 수신 후 저장 시 start_date가 null로 파괴되던 버그 수정 */if(idx>=0)o.keyResults[idx]=kr;else o.keyResults.push(kr);
   // 충돌 감지: 본인이 같은 KR을 입력 중이고 다른 사람이 current를 바꿨다면 경고
   const focusedKR=document.activeElement?.dataset?.krid;
   if(focusedKR===r.id && oldCur!==null && oldCur!==kr.current && r.last_progress_by){
@@ -1492,7 +1500,12 @@ async function flushPendingSaves(){
   if(!entries.length)return;
   entries.forEach(([k])=>clearTimeout(debouncers[k]));
   Object.keys(_pendingFns).forEach(k=>delete _pendingFns[k]);
-  try{await Promise.allSettled(entries.map(([,fn])=>fn()));}catch(e){}
+  /* v190 — 결과를 버리지 않고 실패를 표시기/토스트에 반영 (탭 전환·창 최소화 중 저장 실패가 무음 유실되던 문제) */
+  try{
+    const results=await Promise.allSettled(entries.map(([,fn])=>fn()));
+    const failed=results.filter(r=>r.status==='rejected');
+    if(failed.length){console.warn('[flush] 저장 실패',failed.map(f=>f.reason));saveStatus.error=true;try{updateSaveIndicator();}catch(_){}showToast(`⚠ ${failed.length}건 저장 실패 — 새로고침 후 확인하세요`,true);}
+  }catch(e){}
 }
 // v72 — visibilitychange만 사용 (beforeunload는 async 미지원으로 제거)
 document.addEventListener('visibilitychange',()=>{

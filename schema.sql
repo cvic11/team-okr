@@ -161,3 +161,11 @@ begin
   end if;
 exception when undefined_object then null;
 end$$;
+
+-- ============================================================
+-- v190 (2026-07-28) — member_sessions RLS 정책 추가 [적용 완료된 마이그레이션의 기록]
+-- 증상: 로그인 세션 기록 insert가 전부 401 거부 (RLS는 켜져 있는데 정책 0개).
+-- 다른 모든 테이블과 동일한 open all 정책을 부여한다.
+-- ============================================================
+drop policy if exists "open all" on public.member_sessions;
+create policy "open all" on public.member_sessions for all using (true) with check (true);
