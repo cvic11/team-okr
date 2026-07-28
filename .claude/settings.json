@@ -1,0 +1,14 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/claude-skills/hooks/session-start-install.sh\""
+          }
+        ]
+      }
+    ]
+  }
+}

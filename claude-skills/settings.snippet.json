@@ -1,0 +1,16 @@
+{
+  "//": "이 SessionStart 훅을 ~/.claude/settings.json(전역) 또는 프로젝트 .claude/settings.json 의 hooks 안에 넣으면, 새 세션마다 스킬 창고가 자동 설치됩니다.",
+  "//multi-machine": "다른 머신에서도 쓰려면 환경변수 SKILLS_REPO 에 창고 repo 주소를 지정하세요. 예) export SKILLS_REPO=https://github.com/cvic11/team-okr",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/claude-skills/hooks/session-start-install.sh\""
+          }
+        ]
+      }
+    ]
+  }
+}
