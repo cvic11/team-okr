@@ -161,3 +161,24 @@ begin
   end if;
 exception when undefined_object then null;
 end$$;
+
+-- ============================================================
+-- v190 (2026-07-28) — member_sessions RLS 정책 추가 [적용 완료된 마이그레이션의 기록]
+-- 증상: 로그인 세션 기록 insert가 전부 401 거부 (RLS는 켜져 있는데 정책 0개).
+-- 다른 모든 테이블과 동일한 open all 정책을 부여한다.
+-- ============================================================
+drop policy if exists "open all" on public.member_sessions;
+create policy "open all" on public.member_sessions for all using (true) with check (true);
+
+-- ============================================================
+-- v191 (2026-07-28) — row_history: 서버측 데이터 복구 계층 [적용 완료된 마이그레이션의 기록]
+-- 콘텐츠 테이블 전체의 UPDATE/DELETE 직전 행을 JSON으로 보존.
+-- 클라이언트는 조회만 가능(정책상 insert/update/delete 불가) → 이력 변조 불가.
+-- 복구: select old_row from row_history where table_name='...' and row_pk='...' order by changed_at desc;
+-- ============================================================
+-- (전체 DDL은 Supabase 마이그레이션 row_history_recovery_layer 참조)
+create table if not exists public.row_history (
+  id bigint generated always as identity primary key,
+  table_name text not null, op text not null, row_pk text not null,
+  old_row jsonb not null, changed_at timestamptz not null default now()
+);
