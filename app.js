@@ -676,7 +676,13 @@ function markLocal(table,id){if(!id)return;const k=`${table}:${id}`;localChanges
 function isLocal(table,id){if(!id)return false;return localChanges.has(`${table}:${id}`);}
 function markSaveStart(){saveStatus.pending++;updateSaveIndicator();}/* v190 — 시작 시 error 리셋 제거: 직전 실패가 다음 키 입력에 가려지던 문제 */
 function markSaveEnd(err){saveStatus.pending=Math.max(0,saveStatus.pending-1);if(err)saveStatus.error=true;else if(saveStatus.pending===0)saveStatus.error=false;updateSaveIndicator();}
-function updateSaveIndicator(){let el=document.getElementById('save-indicator');if(!el){el=document.createElement('div');el.id='save-indicator';el.className='save-indicator';document.body.appendChild(el);}if(saveStatus.pending>0){el.className='save-indicator saving';el.textContent='저장 중…';}else if(saveStatus.error){el.className='save-indicator error';el.textContent='⚠ 저장 실패';}else{el.className='save-indicator';el.textContent='✓ 모두 저장됨';}}
+function updateSaveIndicator(){let el=document.getElementById('save-indicator');if(!el){el=document.createElement('div');el.id='save-indicator';el.className='save-indicator';document.body.appendChild(el);}
+  /* v191 — 아웃박스(미전송 저장) 대기 건수를 표시기에 노출 */
+  let ob=0;try{ob=(typeof outboxCount==='function')?outboxCount():0;}catch(_){}
+  if(saveStatus.pending>0){el.className='save-indicator saving';el.textContent='저장 중…';}
+  else if(ob>0){el.className='save-indicator error';el.textContent=`⚠ 미전송 ${ob}건 — 자동 재시도 중`;}
+  else if(saveStatus.error){el.className='save-indicator error';el.textContent='⚠ 저장 실패';}
+  else{el.className='save-indicator';el.textContent='✓ 모두 저장됨';}}
 const SUPABASE_URL_HARDCODED='https://fmudqapruoppzlfhoxde.supabase.co';
 const SUPABASE_ANON_HARDCODED='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZtdWRxYXBydW9wcHpsZmhveGRlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgwNzk2NTEsImV4cCI6MjA5MzY1NTY1MX0.NLQdccHlwahIy69opYzUkPSXKGCOZIQAr5ehctCWbw0';
 const CONFIG_KEY='team-okr-supabase-config';
@@ -1194,15 +1200,9 @@ async function saveTaskDailyLog(taskId,memberId,date,done,note){
   const id=`${taskId}-${memberId}-${date}`;
   debouncedSave(`tdl-${id}`,async()=>{
     markLocal('task_daily_logs',id);
-    const doUpsert=async()=>{const log=state.taskDailyLogs[date]?.[taskId]?.[memberId];if(!log)return{error:null};return sb.from('task_daily_logs').upsert({id,task_id:taskId,member_id:memberId,date,done:!!log.done,note:log.note||'',updated_at:new Date().toISOString()},{onConflict:'task_id,member_id,date'});};
-    let{error}=await doUpsert();
-    /* v190 — 새 할일 생성 직후엔 부모(initiative_tasks) upsert와 경합해 FK(23503) 위반이 나던 문제:
-       부모 저장이 완료될 시간을 두고 최대 2회 재시도 */
-    for(let i=0;i<2&&error&&(error.code==='23503'||String(error.message||'').includes('foreign key'));i++){
-      await new Promise(r=>setTimeout(r,1200));
-      ({error}=await doUpsert());
-    }
-    if(error)showToast('참여 기록 실패',true);
+    const log=state.taskDailyLogs[date]?.[taskId]?.[memberId];if(!log)return;
+    /* v191 — dbWrite가 FK(23503) 경합 재시도 + 아웃박스를 처리 (v190 수동 재시도 대체) */
+    await dbWrite({t:'task_daily_logs',k:'upsert',p:{id,task_id:taskId,member_id:memberId,date,done:!!log.done,note:log.note||'',updated_at:new Date().toISOString()},o:{onConflict:'task_id,member_id,date'}},'참여 기록');
   });
 }
 async function removeTaskDailyLog(taskId,memberId,date){
@@ -1219,9 +1219,8 @@ async function saveInitiativeDailyLog(initiativeId,memberId,date,checked,note){
   debouncedSave(`idl-${initiativeId}-${memberId}-${date}`,async()=>{
     markLocal('initiative_daily_logs',`${initiativeId}-${memberId}-${date}`);
     const log=state.initiativeDailyLogs[date][memberId][initiativeId];
-    const{error}=await sb.from('initiative_daily_logs').upsert({initiative_id:initiativeId,member_id:memberId,date,checked:!!log.checked,note:log.note||'',done_at:new Date().toISOString()},{onConflict:'initiative_id,member_id,date'});
-    if(error)showToast('일일 체크 실패',true);
-    else{
+    const error=await dbWrite({t:'initiative_daily_logs',k:'upsert',p:{initiative_id:initiativeId,member_id:memberId,date,checked:!!log.checked,note:log.note||'',done_at:new Date().toISOString()},o:{onConflict:'initiative_id,member_id,date'}},'일일 체크');/* v191 — 안전 쓰기 전환 */
+    if(!error){
       const init=findInitiative(initiativeId);
       logChange('initiative',initiativeId,'update','daily_check', checked?'미체크':'체크', checked?'체크':'미체크', init?.title||'','check');
     }
@@ -1395,8 +1394,14 @@ function setupRealtime(){
     .on('postgres_changes',{event:'*',schema:'public',table:'initiative_tasks'},onInitTaskChange)
     .on('postgres_changes',{event:'*',schema:'public',table:'task_daily_logs'},onTDLChange)
     .subscribe(s=>{
-      if(s==='SUBSCRIBED'){connStatus='online';updateConnDot();_realtimeReconnectDelay=2000;}
+      if(s==='SUBSCRIBED'){
+        connStatus='online';updateConnDot();_realtimeReconnectDelay=2000;
+        /* v191 — 재연결 후 재동기화: 끊긴 동안 놓친 타인 변경이 영영 반영 안 되던 문제
+           (stale 상태에서 편집 → 남의 최신 입력을 덮어쓰는 민원의 근원) */
+        if(window._rtWasDisconnected){window._rtWasDisconnected=false;resyncAfterReconnect();}
+      }
       else if(['CHANNEL_ERROR','TIMED_OUT','CLOSED'].includes(s)){
+        window._rtWasDisconnected=true;
         connStatus='offline';updateConnDot();
         // 지수 백오프로 재연결 (최대 30초)
         if(_realtimeReconnectTimer)clearTimeout(_realtimeReconnectTimer);
@@ -1407,6 +1412,21 @@ function setupRealtime(){
         },_realtimeReconnectDelay);
       }
     });
+}
+/* v191 — 재연결 재동기화: 내 미전송분을 먼저 밀어낸 뒤 전체 데이터를 다시 불러온다 */
+let _resyncing=false;
+async function resyncAfterReconnect(){
+  if(_resyncing||!initialized)return;_resyncing=true;
+  try{
+    await flushPendingSaves();          // 내 로컬 변경 먼저 전송 (리로드가 덮어쓰지 않게)
+    await flushOutbox();
+    await loadTeamData(state.currentTeamId);
+    delete state.standups[viewingDate];delete state.initiativeDailyLogs[viewingDate];delete state.routineLogs[viewingDate];
+    await Promise.all([loadStandup(viewingDate),loadRoutineLogs(viewingDate)]);
+    scheduleRender();
+    console.info('[realtime] 재연결 후 재동기화 완료');
+  }catch(e){console.warn('[realtime] 재동기화 실패',e);}
+  finally{_resyncing=false;}
 }
 function onInitTaskChange(p){
   const r=p.new||p.old;if(!r)return;
@@ -1438,7 +1458,7 @@ function _scheduleTodayBlocksRerender(mid){
     if(currentView==='today'&&typeof window.__rerenderTodayTaskBlocks==='function')window.__rerenderTodayTaskBlocks(mids);
   },150);
 }
-async function saveInitiativeTask(it){debouncedSave(`init-task-${it.id}`,async()=>{markLocal('initiative_tasks',it.id);const{error}=await sb.from('initiative_tasks').upsert({id:it.id,initiative_id:it.initiative_id,title:it.title,status:it.status||'todo',owner_id:it.owner_id||null,start_date:it.start_date||null,due_date:it.due_date||null,sort_order:it.sort_order||0,updated_at:new Date().toISOString()});if(error){
+async function saveInitiativeTask(it){debouncedSave(`init-task-${it.id}`,async()=>{markLocal('initiative_tasks',it.id);const error=await dbWrite({t:'initiative_tasks',k:'upsert',p:{id:it.id,initiative_id:it.initiative_id,title:it.title,status:it.status||'todo',owner_id:it.owner_id||null,start_date:it.start_date||null,due_date:it.due_date||null,sort_order:it.sort_order||0,updated_at:new Date().toISOString()}});if(error){/* v191 — 안전 쓰기 전환 */
   // v46 — 테이블 누락 에러는 한 번만 명확하게 안내
   const m=String(error.message||error.code||'');
   if(!window._initTaskTableMissingWarned && (error.code==='42P01' || m.includes('does not exist') || m.includes('schema cache') || m.includes('relation'))){
@@ -1448,7 +1468,7 @@ async function saveInitiativeTask(it){debouncedSave(`init-task-${it.id}`,async()
     showToast('할일 저장 실패: '+m.slice(0,80),true);
   }
 }});}
-async function deleteInitiativeTask(id){const{error}=await sb.from('initiative_tasks').delete().eq('id',id);if(error)showToast('삭제 실패',true);}
+async function deleteInitiativeTask(id){const error=await dbWrite({t:'initiative_tasks',k:'delete',m:{id}},'삭제');return !error;}/* v191 — 안전 쓰기 전환 */
 function onIDLChange(p){const r=p.new||p.old;if(!r)return;if(isLocal('initiative_daily_logs',`${r.initiative_id}-${r.member_id}-${r.date}`))return;if(!state.initiativeDailyLogs[r.date])state.initiativeDailyLogs[r.date]={};if(!state.initiativeDailyLogs[r.date][r.member_id])state.initiativeDailyLogs[r.date][r.member_id]={};if(p.eventType==='DELETE'){delete state.initiativeDailyLogs[r.date][r.member_id][r.initiative_id];}else{state.initiativeDailyLogs[r.date][r.member_id][r.initiative_id]={checked:!!r.checked,note:r.note||''};}if(currentView==='today'&&r.date===viewingDate)scheduleRender();}
 function onTeamsChange(p){const r=p.new||p.old;if(!r)return;if(isLocal('teams',r.id))return;if(p.eventType==='DELETE'){state.teams=state.teams.filter(t=>t.id!==r.id);}else{const i=state.teams.findIndex(t=>t.id===r.id);if(i>=0)state.teams[i]={...r};else state.teams.push({...r});state.teams.sort((a,b)=>(a.sort_order||0)-(b.sort_order||0));}scheduleRender();}
 function onMembersChange(p){const r=p.new||p.old;if(r.team_id&&r.team_id!==state.currentTeamId)return;if(isLocal('members',r.id))return;if(p.eventType==='DELETE'){state.members=state.members.filter(m=>m.id!==r.id);}else{
@@ -1510,8 +1530,84 @@ async function flushPendingSaves(){
 // v72 — visibilitychange만 사용 (beforeunload는 async 미지원으로 제거)
 document.addEventListener('visibilitychange',()=>{
   if(document.visibilityState==='hidden'&&initialized)flushPendingSaves();
-  else if(document.visibilityState==='visible')checkDayRollover();
+  else if(document.visibilityState==='visible'){checkDayRollover();flushOutbox();}
 });
+
+// ═══════════════════════════════════════════════════════════════════
+// v191 — 중앙 안전 쓰기 계층: 재시도 + 아웃박스(localStorage)
+//   근본 원인: 저장이 fire-and-forget 이라 일시적 네트워크 오류/끊김이
+//   곧바로 데이터 유실이 됐다. 모든 쓰기를 선언형 op(JSON)로 실행해
+//   ① 일시 오류는 즉시 재시도(0.8s→2s)
+//   ② 그래도 실패하면 localStorage 아웃박스에 적재
+//   ③ 재접속(online)·탭 복귀·20초 주기로 자동 재전송
+//   ④ 새로고침해도 아웃박스는 남으므로 브라우저를 닫지 않는 한 유실 없음
+// ═══════════════════════════════════════════════════════════════════
+const OUTBOX_KEY='team-okr-outbox-v1';
+const OUTBOX_MAX_AGE=24*3600*1000, OUTBOX_MAX=300; // 24h 지난 항목은 폐기(타인 최신 데이터 역덮어쓰기 방지)
+function _outboxLoad(){try{return JSON.parse(localStorage.getItem(OUTBOX_KEY)||'[]');}catch(_){return[];}}
+function _outboxSave(q){try{localStorage.setItem(OUTBOX_KEY,JSON.stringify(q.slice(-OUTBOX_MAX)));}catch(_){}}
+function _outboxPush(op){op.ts=op.ts||Date.now();const q=_outboxLoad();
+  // 같은 대상의 이전 항목은 최신 op로 대체 (upsert/update 중복 누적 방지)
+  const key=o=>`${o.t}|${o.k}|${JSON.stringify(o.m||'')}|${(o.p&&(o.p.id||''))}`;
+  const filtered=(op.k==='upsert'||op.k==='update')?q.filter(x=>key(x)!==key(op)):q;
+  filtered.push(op);_outboxSave(filtered);updateSaveIndicator();}
+function outboxCount(){return _outboxLoad().length;}
+function _isTransientErr(e){
+  if(!e)return false;
+  const code=String(e.code||'');
+  if(code==='23503')return true; // FK 경합 — 부모 저장이 아직 안 끝난 경우, 잠시 후 성공
+  if(['40001','40P01','57014','08006','08003','PGRST301'].includes(code))return true;
+  if(/^5\d\d$/.test(code))return true;
+  const m=String(e.message||'').toLowerCase();
+  return m.includes('fetch')||m.includes('network')||m.includes('timeout')||m.includes('load failed')||m.includes('socket');
+}
+async function _execOp(op){
+  let q=sb.from(op.t);
+  if(op.k==='upsert')q=op.o?q.upsert(op.p,op.o):q.upsert(op.p);
+  else if(op.k==='insert')q=q.insert(op.p);
+  else if(op.k==='update'){q=q.update(op.p);Object.entries(op.m||{}).forEach(([c,v])=>{q=q.eq(c,v);});}
+  else if(op.k==='delete'){q=q.delete();Object.entries(op.m||{}).forEach(([c,v])=>{q=q.eq(c,v);});}
+  else return{message:'unknown op'};
+  const{error}=await q;return error||null;
+}
+// 반환: null(성공) 또는 error 객체. label을 주면 실패 토스트를 여기서 처리한다.
+async function dbWrite(op,label){
+  if(typeof isObserverMode==='function'&&isObserverMode())return null;
+  let err=null;
+  for(let i=0;i<3;i++){
+    try{err=await _execOp(op);}catch(e){err=e;}
+    if(!err){if(i>0)console.info('[dbWrite] 재시도 성공',op.t,op.k);return null;}
+    if(!_isTransientErr(err))break;
+    await new Promise(r=>setTimeout(r,i===0?800:2000));
+  }
+  console.warn('[dbWrite] 실패 — 아웃박스 적재',op.t,op.k,err&&(err.message||err.code));
+  if(op.k!=='delete'||_isTransientErr(err))_outboxPush(op); // 영구 오류 delete 는 재전송 무의미
+  saveStatus.error=true;try{updateSaveIndicator();}catch(_){}
+  if(label)showToast(label+' 실패 — 자동 재전송 대기 중',true);
+  return err;
+}
+// 정렬/재배치 전용 축약 헬퍼 (기존 fire-and-forget 정렬 저장이 실패를 전부 버리던 문제)
+const dbSort=(t,id,i)=>dbWrite({t,k:'update',p:{sort_order:i},m:{id}});
+let _outboxFlushing=false;
+async function flushOutbox(){
+  if(_outboxFlushing||!initialized)return;
+  if(typeof isObserverMode==='function'&&isObserverMode())return;
+  const q=_outboxLoad();if(!q.length)return;
+  _outboxFlushing=true;
+  try{
+    const keep=[];const now=Date.now();let sent=0;
+    for(const op of q){
+      if(op.ts&&now-op.ts>OUTBOX_MAX_AGE)continue;
+      let err=null;try{err=await _execOp(op);}catch(e){err=e;}
+      if(err)keep.push(op);else sent++;
+    }
+    _outboxSave(keep);
+    if(sent>0&&keep.length===0){showToast(`밀린 저장 ${sent}건 전송 완료`);saveStatus.error=false;}
+    try{updateSaveIndicator();}catch(_){}
+  }finally{_outboxFlushing=false;}
+}
+window.addEventListener('online',()=>{flushOutbox();});
+setInterval(()=>{flushOutbox();},20000);
 // v160 — 자정 넘김 자동 처리: 페이지를 열어둔 채 날이 바뀌면 기준 날짜(viewingDate)가
 //   '어제'에 머물러 오늘 작성분이 '미래'로 분류돼 안 보이던 문제(회의실 화면 등) 해결.
 let _lastKnownToday=todayKey();
@@ -1564,13 +1660,18 @@ function confirmCascadeDelete(kindLabel,label,initCount,taskCount){
   msg+='\n\n계속할까요?\n(삭제 직전 백업이 저장되어 복구 요청이 가능합니다)';
   return confirm(msg);
 }
+/* v191 — 백업 성공을 확인하고 true/false 반환. 백업이 실패하면 호출부가 삭제를 중단하거나
+   사용자에게 명시적으로 물어야 한다 (백업 없는 연쇄 삭제가 조용히 진행되던 문제). */
 async function snapshotDelete(entityType,entityId,label,sub){
-  try{
-    await sb.from('deleted_snapshots').insert({id:uid(),team_id:state.currentTeamId,entity_type:entityType,entity_id:entityId,label:label||'',init_count:sub.initCount||0,task_count:sub.taskCount||0,payload:sub.payload,deleted_by:(selfMember()?selfMember().id:null)});
-  }catch(e){console.warn('[snapshot] 백업 저장 실패',e);}
+  const error=await dbWrite({t:'deleted_snapshots',k:'insert',p:{id:uid(),team_id:state.currentTeamId,entity_type:entityType,entity_id:entityId,label:label||'',init_count:sub.initCount||0,task_count:sub.taskCount||0,payload:sub.payload,deleted_by:(selfMember()?selfMember().id:null)}});
+  if(error){
+    console.warn('[snapshot] 백업 저장 실패',error);
+    return confirm('⚠ 삭제 전 백업 저장에 실패했습니다.\n백업 없이 삭제하면 복구가 어렵습니다.\n\n그래도 삭제할까요?');
+  }
+  return true;
 }
-async function saveTeam(t){debouncedSave(`tm-${t.id}`,async()=>{markLocal('teams',t.id);const{error}=await sb.from('teams').upsert({id:t.id,name:t.name,quarter:t.quarter,sort_order:t.sort_order||0});if(error)showToast('팀 저장 실패',true);});}
-async function saveMember(m){debouncedSave(`mem-${m.id}`,async()=>{markLocal('members',m.id);const{error}=await sb.from('members').upsert({id:m.id,team_id:m.team_id||state.currentTeamId,name:m.name,role:m.role||'',color:m.color||'#6241F5',is_admin:!!m.isAdmin,is_observer:!!m.isObserver,sort_order:state.members.findIndex(x=>x.id===m.id)});if(error)showToast('팀원 저장 실패',true);});}
+async function saveTeam(t){debouncedSave(`tm-${t.id}`,async()=>{markLocal('teams',t.id);await dbWrite({t:'teams',k:'upsert',p:{id:t.id,name:t.name,quarter:t.quarter,sort_order:t.sort_order||0}},'팀 저장');});}/* v191 — 안전 쓰기 전환 */
+async function saveMember(m){debouncedSave(`mem-${m.id}`,async()=>{markLocal('members',m.id);await dbWrite({t:'members',k:'upsert',p:{id:m.id,team_id:m.team_id||state.currentTeamId,name:m.name,role:m.role||'',color:m.color||'#6241F5',is_admin:!!m.isAdmin,is_observer:!!m.isObserver,sort_order:state.members.findIndex(x=>x.id===m.id)}},'팀원 저장');});}/* v191 — 안전 쓰기 전환 */
 // v37 — 자식 일정이 부모 범위를 벗어나면 부모를 자동 확장 (절대 줄이지 않음)
 function propagateParentDates(level,parentId,child){
   if(!child)return;
@@ -1596,14 +1697,14 @@ function propagateParentDates(level,parentId,child){
     if(changed)saveObjective(parentO);
   }
 }
-async function saveObjective(o){debouncedSave(`obj-${o.id}`,async()=>{markLocal('objectives',o.id);const{error}=await sb.from('objectives').upsert({id:o.id,team_id:state.currentTeamId,title:o.title,description:o.description||'',owner_id:o.ownerId||null,confidence:o.confidence||'mid',reality_blocker:o.realityBlocker||'',reality_help:o.realityHelp||'',start_date:o.startDate||null,due_date:o.dueDate||null,sort_order:state.objectives.findIndex(x=>x.id===o.id)});if(error)showToast('Objective 저장 실패',true);});}
-async function saveKR(oid,kr){propagateParentDates('kr',oid,kr);debouncedSave(`kr-${kr.id}`,async()=>{markLocal('key_results',kr.id);const o=state.objectives.find(x=>x.id===oid);const si=o?o.keyResults.findIndex(x=>x.id===kr.id):0;const me=selfMember();const{error}=await sb.from('key_results').upsert({id:kr.id,objective_id:oid,title:kr.title,target:kr.target,current:kr.current,unit:kr.unit||'',owner_id:kr.ownerId||null,start_date:kr.startDate||null,due_date:kr.dueDate||null,confidence:kr.confidence||'mid',reality_blocker:kr.realityBlocker||'',reality_help:kr.realityHelp||'',last_progress_by:me?me.id:null,last_progress_at:new Date().toISOString(),sort_order:si});if(error)showToast('KR 저장 실패',true);});}
-async function saveInitiative(krId,init){propagateParentDates('init',krId,init);debouncedSave(`init-${init.id}`,async()=>{markLocal('initiatives',init.id);let kr=null;state.objectives.forEach(o=>o.keyResults.forEach(k=>{if(k.id===krId)kr=k;}));const si=kr?kr.initiatives.findIndex(i=>i.id===init.id):0;const{error}=await sb.from('initiatives').upsert({id:init.id,kr_id:krId,title:init.title,owner_id:init.ownerId||null,status:init.status||'todo',start_date:init.startDate||null,due_date:init.dueDate||null,confidence:init.confidence||'mid',reality_blocker:init.realityBlocker||'',reality_help:init.realityHelp||'',sort_order:si});if(error)showToast('이니셔티브 저장 실패',true);});}
-async function saveHeadline(date,h){ensureStandup(date);state.standups[date].headline=h;debouncedSave(`hl-${date}`,async()=>{markLocal('standups',`${state.currentTeamId}-${date}`);const{error}=await sb.from('standups').upsert({team_id:state.currentTeamId,date,headline:h,updated_at:new Date().toISOString()},{onConflict:'team_id,date'});if(error)showToast('헤드라인 저장 실패',true);});}
-async function saveEntry(date,mid,f,v){ensureStandup(date);if(!state.standups[date].entries[mid])state.standups[date].entries[mid]={yesterday:'',today:'',blockers:'',helper_member_id:'',helper_name:'',support_type:'',support_detail:''};state.standups[date].entries[mid][f]=v;debouncedSave(`en-${date}-${mid}`,async()=>{markLocal('standup_entries',`${state.currentTeamId}-${date}-${mid}`);const e=state.standups[date].entries[mid];const{error}=await sb.from('standup_entries').upsert({team_id:state.currentTeamId,date,member_id:mid,yesterday:e.yesterday||'',today:e.today||'',blockers:e.blockers||'',helper_member_id:e.helper_member_id||null,helper_name:e.helper_name||'',support_type:e.support_type||'',support_detail:e.support_detail||'',updated_at:new Date().toISOString()},{onConflict:'team_id,date,member_id'});if(error)showToast('스탠드업 저장 실패',true);});}
-async function saveRoutine(r){debouncedSave(`rt-${r.id}`,async()=>{markLocal('routines',r.id);const{error}=await sb.from('routines').upsert({id:r.id,team_id:state.currentTeamId,title:r.title,description:r.description||'',owner_id:r.owner_id||null,frequency:r.frequency||'weekdays',days_of_week:r.days_of_week||[1,2,3,4,5],day_of_month:r.day_of_month||null,active:r.active!==false,sort_order:state.routines.findIndex(x=>x.id===r.id)});if(error)showToast('루틴 저장 실패',true);});}
-async function saveRoutineLog(rid,date,c,n){ensureRoutineLog(date);state.routineLogs[date][rid]={completed:c,note:n!=null?n:(state.routineLogs[date][rid]?.note||'')};debouncedSave(`rtl-${rid}-${date}`,async()=>{markLocal('routine_logs',`${rid}-${date}`);const l=state.routineLogs[date][rid];const{error}=await sb.from('routine_logs').upsert({routine_id:rid,date,completed:!!l.completed,note:l.note||'',done_at:new Date().toISOString()},{onConflict:'routine_id,date'});if(error)showToast('루틴 기록 실패',true);});}
-async function saveReview(r){markLocal('reviews',r.id);const{error}=await sb.from('reviews').upsert({id:r.id,team_id:state.currentTeamId,member_id:r.member_id||null,period:r.period,quarter:r.quarter,entity_type:r.entity_type||'member',entity_id:r.entity_id||r.member_id,what_worked:r.what_worked||'',what_struggled:r.what_struggled||'',what_learned:r.what_learned||'',next_try:r.next_try||'',summary:r.summary||'',reviewer:r.reviewer||'',updated_at:new Date().toISOString()});if(error){showToast('리뷰 저장 실패',true);return false;}return true;}
+async function saveObjective(o){debouncedSave(`obj-${o.id}`,async()=>{markLocal('objectives',o.id);await dbWrite({t:'objectives',k:'upsert',p:{id:o.id,team_id:state.currentTeamId,title:o.title,description:o.description||'',owner_id:o.ownerId||null,confidence:o.confidence||'mid',reality_blocker:o.realityBlocker||'',reality_help:o.realityHelp||'',start_date:o.startDate||null,due_date:o.dueDate||null,sort_order:state.objectives.findIndex(x=>x.id===o.id)}},'Objective 저장');});}/* v191 — 안전 쓰기 전환 */
+async function saveKR(oid,kr){propagateParentDates('kr',oid,kr);debouncedSave(`kr-${kr.id}`,async()=>{markLocal('key_results',kr.id);const o=state.objectives.find(x=>x.id===oid);const si=o?o.keyResults.findIndex(x=>x.id===kr.id):0;const me=selfMember();await dbWrite({t:'key_results',k:'upsert',p:{id:kr.id,objective_id:oid,title:kr.title,target:kr.target,current:kr.current,unit:kr.unit||'',owner_id:kr.ownerId||null,start_date:kr.startDate||null,due_date:kr.dueDate||null,confidence:kr.confidence||'mid',reality_blocker:kr.realityBlocker||'',reality_help:kr.realityHelp||'',last_progress_by:me?me.id:null,last_progress_at:new Date().toISOString(),sort_order:si}},'KR 저장');});}/* v191 — 안전 쓰기 전환 */
+async function saveInitiative(krId,init){propagateParentDates('init',krId,init);debouncedSave(`init-${init.id}`,async()=>{markLocal('initiatives',init.id);let kr=null;state.objectives.forEach(o=>o.keyResults.forEach(k=>{if(k.id===krId)kr=k;}));const si=kr?kr.initiatives.findIndex(i=>i.id===init.id):0;await dbWrite({t:'initiatives',k:'upsert',p:{id:init.id,kr_id:krId,title:init.title,owner_id:init.ownerId||null,status:init.status||'todo',start_date:init.startDate||null,due_date:init.dueDate||null,confidence:init.confidence||'mid',reality_blocker:init.realityBlocker||'',reality_help:init.realityHelp||'',sort_order:si}},'이니셔티브 저장');});}/* v191 — 안전 쓰기 전환 */
+async function saveHeadline(date,h){ensureStandup(date);state.standups[date].headline=h;debouncedSave(`hl-${date}`,async()=>{markLocal('standups',`${state.currentTeamId}-${date}`);await dbWrite({t:'standups',k:'upsert',p:{team_id:state.currentTeamId,date,headline:h,updated_at:new Date().toISOString()},o:{onConflict:'team_id,date'}},'헤드라인 저장');});}/* v191 — 안전 쓰기 전환 */
+async function saveEntry(date,mid,f,v){ensureStandup(date);if(!state.standups[date].entries[mid])state.standups[date].entries[mid]={yesterday:'',today:'',blockers:'',helper_member_id:'',helper_name:'',support_type:'',support_detail:''};state.standups[date].entries[mid][f]=v;debouncedSave(`en-${date}-${mid}`,async()=>{markLocal('standup_entries',`${state.currentTeamId}-${date}-${mid}`);const e=state.standups[date].entries[mid];await dbWrite({t:'standup_entries',k:'upsert',p:{team_id:state.currentTeamId,date,member_id:mid,yesterday:e.yesterday||'',today:e.today||'',blockers:e.blockers||'',helper_member_id:e.helper_member_id||null,helper_name:e.helper_name||'',support_type:e.support_type||'',support_detail:e.support_detail||'',updated_at:new Date().toISOString()},o:{onConflict:'team_id,date,member_id'}},'스탠드업 저장');});}/* v191 — 안전 쓰기 전환 */
+async function saveRoutine(r){debouncedSave(`rt-${r.id}`,async()=>{markLocal('routines',r.id);await dbWrite({t:'routines',k:'upsert',p:{id:r.id,team_id:state.currentTeamId,title:r.title,description:r.description||'',owner_id:r.owner_id||null,frequency:r.frequency||'weekdays',days_of_week:r.days_of_week||[1,2,3,4,5],day_of_month:r.day_of_month||null,active:r.active!==false,sort_order:state.routines.findIndex(x=>x.id===r.id)}},'루틴 저장');});}/* v191 — 안전 쓰기 전환 */
+async function saveRoutineLog(rid,date,c,n){ensureRoutineLog(date);state.routineLogs[date][rid]={completed:c,note:n!=null?n:(state.routineLogs[date][rid]?.note||'')};debouncedSave(`rtl-${rid}-${date}`,async()=>{markLocal('routine_logs',`${rid}-${date}`);const l=state.routineLogs[date][rid];await dbWrite({t:'routine_logs',k:'upsert',p:{routine_id:rid,date,completed:!!l.completed,note:l.note||'',done_at:new Date().toISOString()},o:{onConflict:'routine_id,date'}},'루틴 기록');});}/* v191 — 안전 쓰기 전환 */
+async function saveReview(r){markLocal('reviews',r.id);const error=await dbWrite({t:'reviews',k:'upsert',p:{id:r.id,team_id:state.currentTeamId,member_id:r.member_id||null,period:r.period,quarter:r.quarter,entity_type:r.entity_type||'member',entity_id:r.entity_id||r.member_id,what_worked:r.what_worked||'',what_struggled:r.what_struggled||'',what_learned:r.what_learned||'',next_try:r.next_try||'',summary:r.summary||'',reviewer:r.reviewer||'',updated_at:new Date().toISOString()}},'리뷰 저장');if(error)return false;return true;}/* v191 — 안전 쓰기 전환 */
 function lastReflectionFor(entityType,entityId,period){return state.reviews.find(r=>(r.entity_type||'member')===entityType && (r.entity_id||r.member_id)===entityId && r.period===period);}
 
 function captureFocus(){
@@ -3319,6 +3420,7 @@ function renderAdminPanel(){
     <div class="section-head"><span class="section-title">⚙️ 빠른 작업</span></div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;padding:6px 0;">
       ${hasObserver?'<span style="font-size:12px;color:var(--text-soft);padding:8px 12px;background:var(--growth-soft);color:var(--growth);border-radius:6px;">✓ 옵저버 계정 등록됨</span>':'<button class="btn btn-primary" data-act="admin-add-observer">👁️ 옵저버 계정 추가 (PIN: 3962, 1시간 자동 로그아웃)</button>'}
+      <button class="btn btn-soft" data-act="admin-recovery">🛟 데이터 복구 (삭제·변경 이력)</button>
       <button class="btn btn-soft" data-act="admin-clear-sessions">🗑️ 30일 이상 된 세션 기록 정리</button>
       <button class="btn btn-soft" data-act="admin-refresh">🔄 세션 데이터 새로고침</button>
     </div>
@@ -3339,6 +3441,64 @@ function actionLabel(act,f){const fm={title:'제목',current:'진척',target:'�
 function formatTs(ts){if(!ts)return '';const d=new Date(ts);return `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;}
 function showModal(h){const b=document.getElementById('modal-back');document.getElementById('modal').innerHTML=h;b.classList.add('show');}
 function closeModal(){document.getElementById('modal-back').classList.remove('show');}
+
+/* ═══ v191 — 데이터 복구 (row_history 기반) ═══
+   DB 트리거가 모든 UPDATE/DELETE 직전 행을 row_history 에 보존한다.
+   - 삭제 복원: 연쇄 삭제도 행 단위로 전부 기록되므로, 시간(3초) 창으로 묶어
+     FK 안전 순서로 재삽입하면 통째로 복원된다.
+   - 변경 되돌리기: old_row 전체를 해당 테이블에 upsert 하면 그 시점으로 복귀. */
+const _RECOVER_TABLE_ORDER=['teams','members','objectives','key_results','initiatives','initiative_tasks','standups','standup_entries','routines','routine_logs','reviews','task_daily_logs','initiative_daily_logs','messages'];
+function _histRowLabel(h){
+  const r=h.old_row||{};
+  return r.title||r.name||r.headline||r.body&&('💬 '+String(r.body).slice(0,30))||
+    (r.today||r.yesterday)&&('📝 '+String(r.today||r.yesterday).replace(/[{}"\\]/g,'').slice(0,30))||h.row_pk;
+}
+const _RECOVER_TABLE_KO={teams:'팀',members:'팀원',objectives:'목표',key_results:'KR',initiatives:'이니셔티브',initiative_tasks:'할일',standups:'헤드라인',standup_entries:'스탠드업',routines:'루틴',routine_logs:'루틴기록',reviews:'리뷰',task_daily_logs:'참여기록',initiative_daily_logs:'일일체크',messages:'메시지'};
+async function recoverHistoryRows(ids){
+  const{data,error}=await sb.from('row_history').select('*').in('id',ids);
+  if(error||!data){console.warn('[recover] 이력 조회 실패',error);return false;}
+  const rows=data.slice().sort((a,b)=>_RECOVER_TABLE_ORDER.indexOf(a.table_name)-_RECOVER_TABLE_ORDER.indexOf(b.table_name));
+  let allOk=true;
+  for(const h of rows){
+    const err=await dbWrite({t:h.table_name,k:'upsert',p:h.old_row});
+    if(err){console.warn('[recover] 복원 실패',h.table_name,h.row_pk,err);allOk=false;}
+  }
+  return allOk;
+}
+async function openRecovery(){
+  showModal(`<div class="modal-head"><div class="modal-title">🛟 데이터 복구</div><button class="btn-icon" data-act="close-modal">${I.x}</button></div><div id="recovery-body" style="max-height:65vh;overflow-y:auto;">이력을 불러오는 중…</div>`);
+  const{data,error}=await sb.from('row_history').select('id,table_name,op,row_pk,old_row,changed_at').order('id',{ascending:false}).limit(400);
+  const body=document.getElementById('recovery-body');if(!body)return;
+  if(error){body.innerHTML=`<div class="history-empty">이력 조회 실패: ${esc(error.message||'')}</div>`;return;}
+  const dels=(data||[]).filter(h=>h.op==='DELETE');
+  const upds=(data||[]).filter(h=>h.op==='UPDATE').slice(0,80);
+  // 삭제를 3초 창으로 그룹화 (연쇄 삭제 = 한 묶음)
+  const groups=[];
+  dels.forEach(h=>{
+    const t=new Date(h.changed_at).getTime();
+    const g=groups[groups.length-1];
+    if(g&&Math.abs(g.t-t)<3000){g.rows.push(h);g.t=t;}
+    else groups.push({t,rows:[h]});
+  });
+  const delHtml=groups.length===0?'<div class="history-empty">삭제 이력이 없습니다.</div>':groups.slice(0,30).map(g=>{
+    const counts={};g.rows.forEach(h=>{counts[h.table_name]=(counts[h.table_name]||0)+1;});
+    const summary=Object.entries(counts).map(([t,c])=>`${_RECOVER_TABLE_KO[t]||t} ${c}`).join(' · ');
+    const main=g.rows.find(h=>['objectives','key_results','initiatives','routines','teams','members'].includes(h.table_name))||g.rows[0];
+    return `<div class="history-row" style="display:flex;align-items:center;gap:10px;">
+      <div style="flex:1;min-width:0;"><div class="history-act" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">🗑 ${esc(_histRowLabel(main))}</div>
+      <div class="history-time">${formatTs(g.rows[0].changed_at)} · ${summary}</div></div>
+      <button class="btn btn-soft" data-act="recover-del-group" data-hids="${g.rows.map(h=>h.id).join(',')}">복원</button></div>`;
+  }).join('');
+  const updHtml=upds.length===0?'<div class="history-empty">변경 이력이 없습니다.</div>':upds.map(h=>
+    `<div class="history-row" style="display:flex;align-items:center;gap:10px;">
+      <div style="flex:1;min-width:0;"><div class="history-act" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">✏️ [${_RECOVER_TABLE_KO[h.table_name]||h.table_name}] ${esc(_histRowLabel(h))}</div>
+      <div class="history-time">${formatTs(h.changed_at)} 시점의 내용으로 복귀 가능</div></div>
+      <button class="btn btn-soft" data-act="recover-upd-row" data-hid="${h.id}">이 시점으로</button></div>`).join('');
+  body.innerHTML=`
+    <div style="font-size:12px;color:var(--text-soft);margin-bottom:10px;line-height:1.5;">모든 삭제/변경의 직전 상태가 서버에 자동 보존됩니다.<br>삭제 복원은 하위 항목까지 통째로 되살립니다.</div>
+    <div class="section-head" style="margin-top:4px;"><span class="section-title">🗑 삭제 복원</span></div>${delHtml}
+    <div class="section-head" style="margin-top:14px;"><span class="section-title">✏️ 변경 되돌리기 (최근 80건)</span></div>${updHtml}`;
+}
 
 async function openReview(entityIdOrMid,period,opts){
   // 호환: 옛 호출(openReview(mid,period))은 entity_type='member'로 처리
@@ -3555,7 +3715,7 @@ document.addEventListener('click',async e=>{
   if(a==='toggle-team-menu'){e.stopPropagation();document.getElementById('team-menu').classList.toggle('show');return;}
   if(a==='switch-team'){const tid=btn.dataset.tid;if(!tid||tid===state.currentTeamId){document.getElementById('team-menu')?.classList.remove('show');return;}state.currentTeamId=tid;localStorage.setItem(TEAM_KEY,tid);document.getElementById('team-menu')?.classList.remove('show');initialized=false;render();await loadTeamData(tid);initialized=true;render();return;}
   if(a==='add-team'){const n=prompt('새 팀 이름','새 팀');if(!n)return;const id=uid();const t={id,name:n,quarter:currentTeam()?.quarter||'2026 Q2',sort_order:state.teams.length};state.teams.push(t);state.currentTeamId=id;localStorage.setItem(TEAM_KEY,id);initialized=false;render();await sb.from('teams').insert(t);await loadTeamData(id);initialized=true;render();return;}
-  if(a==='del-team'){if(state.teams.length<=1){showToast('마지막 팀은 삭제 불가',true);return;}const t=currentTeam();if(!t)return;if(!confirm(`팀 "${t.name}"과 모든 데이터를 삭제할까요?`))return;const oid=t.id;state.teams=state.teams.filter(x=>x.id!==oid);state.currentTeamId=state.teams[0].id;localStorage.setItem(TEAM_KEY,state.currentTeamId);initialized=false;render();await sb.from('teams').delete().eq('id',oid);await loadTeamData(state.currentTeamId);initialized=true;render();return;}
+  if(a==='del-team'){if(state.teams.length<=1){showToast('마지막 팀은 삭제 불가',true);return;}const t=currentTeam();if(!t)return;if(!confirm(`팀 "${t.name}"과 모든 데이터를 삭제할까요?`))return;const oid=t.id;state.teams=state.teams.filter(x=>x.id!==oid);state.currentTeamId=state.teams[0].id;localStorage.setItem(TEAM_KEY,state.currentTeamId);initialized=false;render();await dbWrite({t:'teams',k:'delete',m:{id:oid}},'팀 삭제');await loadTeamData(state.currentTeamId);initialized=true;render();return;}
   if(a==='view'){
     await flushPendingSaves(); // 뷰 이동 전 미저장 입력 확정(작성 내용 손실 방지)
     currentView=btn.dataset.view;
@@ -3720,6 +3880,29 @@ document.addEventListener('click',async e=>{
     _adminCachedSessions=null;_adminLastFetch=0;
     showToast('오래된 세션 기록 정리 완료');render();return;
   }
+  /* v191 — 데이터 복구 (row_history 기반) */
+  if(a==='admin-recovery'){if(!isAdmin()){showToast('관리자만 가능',true);return;}openRecovery();return;}
+  if(a==='recover-del-group'){
+    if(!isAdmin()){showToast('관리자만 가능',true);return;}
+    const ids=(btn.dataset.hids||'').split(',').filter(Boolean).map(Number);
+    if(!ids.length)return;
+    if(!confirm(`${ids.length}개 행을 복원할까요?`))return;
+    btn.disabled=true;btn.textContent='복원 중…';
+    const ok=await recoverHistoryRows(ids);
+    if(ok){showToast('복원 완료 — 데이터를 다시 불러옵니다');await resyncAfterReconnect();openRecovery();}
+    else{showToast('일부 행 복원 실패 — 콘솔 확인',true);btn.disabled=false;btn.textContent='복원';}
+    return;
+  }
+  if(a==='recover-upd-row'){
+    if(!isAdmin()){showToast('관리자만 가능',true);return;}
+    const hid=Number(btn.dataset.hid||0);if(!hid)return;
+    if(!confirm('이 시점의 내용으로 되돌릴까요? (현재 내용은 다시 이력에 남습니다)'))return;
+    btn.disabled=true;btn.textContent='되돌리는 중…';
+    const ok=await recoverHistoryRows([hid]);
+    if(ok){showToast('되돌리기 완료');await resyncAfterReconnect();openRecovery();}
+    else{showToast('되돌리기 실패',true);btn.disabled=false;btn.textContent='이 시점으로';}
+    return;
+  }
   // v15 — 관리자 권한 토글 (관리자만 가능)
   if(a==='toggle-admin'){
     if(!isAdmin()){showToast('관리자만 권한 변경 가능',true);return;}
@@ -3784,7 +3967,7 @@ document.addEventListener('click',async e=>{
     if(!t){showToast('작업을 찾을 수 없습니다',true);return;}
     t.status=t.status==='done'?'todo':'done';
     markLocal('initiative_tasks',tid);
-    sb.from('initiative_tasks').update({status:t.status}).eq('id',tid).then(({error})=>{if(error)showToast('저장 실패',true);});
+    dbWrite({t:'initiative_tasks',k:'update',p:{status:t.status},m:{id:tid}},'저장');
     const done=t.status==='done';
     btn.classList.toggle('checked',done);btn.textContent=done?'✓':'';
     const row=btn.closest('.recent-task-row');
@@ -3801,7 +3984,7 @@ document.addEventListener('click',async e=>{
     if(!confirm('"'+(t.title||'(제목 없음)')+'" 작업을 삭제할까요?'))return;
     state.initiativeTasks[iid]=arr.filter(x=>x.id!==tid);
     markLocal('initiative_tasks',tid);
-    sb.from('initiative_tasks').delete().eq('id',tid).then(({error})=>{if(error)showToast('삭제 실패',true);});
+    dbWrite({t:'initiative_tasks',k:'delete',m:{id:tid}},'삭제');
     const c=btn.closest('.recent-task-container');if(c)c.remove();
     return;
   }
@@ -3871,9 +4054,9 @@ document.addEventListener('click',async e=>{
   if(a==='show-history'){openHistory(btn.dataset.etype,btn.dataset.eid);return;}
   if(a==='close-modal'){closeModal();return;}
   if(a==='add-obj'){if(!canEditOKR()){showToast('관리자만 추가 가능',true);return;}const id=uid();const o={id,title:'',description:'',ownerId:state.members[0]?.id||null,confidence:'mid',realityBlocker:'',realityHelp:'',keyResults:[]};state.objectives.push(o);expanded.add(id);render();const{error}=await sb.from('objectives').insert({id,team_id:state.currentTeamId,title:'',description:'',owner_id:o.ownerId,confidence:'mid',sort_order:state.objectives.length-1});if(error)showToast('저장 실패',true);else logChange('objective',id,'create','','','(작성 중)','(작성 중)');setTimeout(()=>{const el=document.querySelector(`input[data-field="obj-title"][data-oid="${id}"]`);if(el){el.focus();el.scrollIntoView({block:"center",behavior:"smooth"});}},100);return;}
-  if(a==='del-obj'){if(!canEditOKR()){showToast('관리자만 삭제 가능',true);return;}const oid=btn.dataset.oid;const o=state.objectives.find(x=>x.id===oid);if(!o)return;const sub=buildDeleteSubtree('objective',{o});if(!confirmCascadeDelete('Objective',o.title,sub.initCount,sub.taskCount))return;await snapshotDelete('objective',oid,o.title,sub);state.objectives=state.objectives.filter(x=>x.id!==oid);render();await sb.from('objectives').delete().eq('id',oid);logChange('objective',oid,'delete','',o?.title||'','',o?.title||'');return;}
+  if(a==='del-obj'){if(!canEditOKR()){showToast('관리자만 삭제 가능',true);return;}const oid=btn.dataset.oid;const o=state.objectives.find(x=>x.id===oid);if(!o)return;const sub=buildDeleteSubtree('objective',{o});if(!confirmCascadeDelete('Objective',o.title,sub.initCount,sub.taskCount))return;if(!await snapshotDelete('objective',oid,o.title,sub))return;state.objectives=state.objectives.filter(x=>x.id!==oid);render();await dbWrite({t:'objectives',k:'delete',m:{id:oid}},'Objective 삭제');logChange('objective',oid,'delete','',o?.title||'','',o?.title||'');return;}
   if(a==='add-kr'){if(!canEditOKR()){showToast('관리자만 추가 가능',true);return;}const oid=btn.dataset.oid;const o=state.objectives.find(x=>x.id===oid);if(!o)return;const id=uid();const kr={id,title:'',target:100,current:0,unit:'%',ownerId:null,confidence:'mid',realityBlocker:'',realityHelp:'',initiatives:[]};o.keyResults.push(kr);render();const{error}=await sb.from('key_results').insert({id,objective_id:oid,title:'',target:kr.target,current:kr.current,unit:kr.unit,owner_id:null,confidence:'mid',sort_order:o.keyResults.length-1});if(error)showToast('저장 실패',true);else logChange('key_result',id,'create','','','(작성 중)','(작성 중)');setTimeout(()=>{const el=document.querySelector(`input[data-field="kr-title"][data-krid="${id}"]`);if(el){el.focus();el.scrollIntoView({block:"center",behavior:"smooth"});}},100);return;}
-  if(a==='del-kr'){if(!canEditOKR()){showToast('관리자만 삭제 가능',true);return;}const oid=btn.dataset.oid,krid=btn.dataset.krid;const o=state.objectives.find(x=>x.id===oid);const kr=o?.keyResults.find(k=>k.id===krid);if(!kr)return;const sub=buildDeleteSubtree('key_result',{o,kr});if(!confirmCascadeDelete('KR',kr.title,sub.initCount,sub.taskCount))return;await snapshotDelete('key_result',krid,kr.title,sub);if(o)o.keyResults=o.keyResults.filter(k=>k.id!==krid);render();await sb.from('key_results').delete().eq('id',krid);logChange('key_result',krid,'delete','',kr?.title||'','',kr?.title||'');return;}
+  if(a==='del-kr'){if(!canEditOKR()){showToast('관리자만 삭제 가능',true);return;}const oid=btn.dataset.oid,krid=btn.dataset.krid;const o=state.objectives.find(x=>x.id===oid);const kr=o?.keyResults.find(k=>k.id===krid);if(!kr)return;const sub=buildDeleteSubtree('key_result',{o,kr});if(!confirmCascadeDelete('KR',kr.title,sub.initCount,sub.taskCount))return;if(!await snapshotDelete('key_result',krid,kr.title,sub))return;if(o)o.keyResults=o.keyResults.filter(k=>k.id!==krid);render();await dbWrite({t:'key_results',k:'delete',m:{id:krid}},'KR 삭제');logChange('key_result',krid,'delete','',kr?.title||'','',kr?.title||'');return;}
   if(a==='add-init'){
     // v15 — 본인 담당 Initiative만 추가 (관리자는 누구든 추가)
     const me=selfMember();if(!me){showToast('본인 선택 필요',true);return;}
@@ -3889,10 +4072,10 @@ document.addEventListener('click',async e=>{
     const sub=buildDeleteSubtree('initiative',{kr,init});
     if(!confirmCascadeDelete('이니셔티브',init.title,sub.initCount,sub.taskCount))return;
     await snapshotDelete('initiative',iid,init.title,sub);
-    if(kr)kr.initiatives=kr.initiatives.filter(i=>i.id!==iid);render();await sb.from('initiatives').delete().eq('id',iid);logChange('initiative',iid,'delete','',init?.title||'','',init?.title||'');return;
+    if(kr)kr.initiatives=kr.initiatives.filter(i=>i.id!==iid);render();await dbWrite({t:'initiatives',k:'delete',m:{id:iid}},'이니셔티브 삭제');logChange('initiative',iid,'delete','',init?.title||'','',init?.title||'');return;
   }
   if(a==='add-member'){const i=state.members.length;const m={id:uid(),team_id:state.currentTeamId,name:`팀원 ${i+1}`,role:'팀원',color:PALETTE[i%PALETTE.length]};state.members.push(m);render();const{error}=await sb.from('members').insert({...m,sort_order:i});if(error)showToast('저장 실패',true);else logChange('member',m.id,'create','','',m.name,m.name);return;}
-  if(a==='del-member'){if(!confirm('팀원을 삭제할까요?'))return;const mid=btn.dataset.mid;const m=state.members.find(x=>x.id===mid);state.members=state.members.filter(x=>x.id!==mid);render();await sb.from('members').delete().eq('id',mid);logChange('member',mid,'delete','',m?.name||'','',m?.name||'');return;}
+  if(a==='del-member'){if(!confirm('팀원을 삭제할까요?'))return;const mid=btn.dataset.mid;const m=state.members.find(x=>x.id===mid);state.members=state.members.filter(x=>x.id!==mid);render();await dbWrite({t:'members',k:'delete',m:{id:mid}},'팀원 삭제');logChange('member',mid,'delete','',m?.name||'','',m?.name||'');return;}
   if(a==='add-routine'){window._routinesMngOpen=true;const id=uid();const i=state.routines.length;const r={id,team_id:state.currentTeamId,title:'새 루틴',description:'',owner_id:state.members[0]?.id||null,frequency:'weekdays',days_of_week:[1,2,3,4,5],active:true,sort_order:i};state.routines.push(r);render();setTimeout(()=>{const inp=document.querySelector('input[data-field="rt-title"][data-rid="'+id+'"]');if(inp){inp.focus();inp.select();inp.scrollIntoView({behavior:'smooth',block:'center'});}},0);const{error}=await sb.from('routines').insert(r);if(error)showToast('저장 실패',true);else logChange('routine',id,'create','','',r.title,r.title);return;}
   if(a==='toggle-routines-mng'){window._routinesMngOpen=!window._routinesMngOpen;render();return;}
   // v30 — Initiative 하위 sub-task 액션
@@ -3941,7 +4124,7 @@ document.addEventListener('click',async e=>{
     await deleteInitiativeTask(stid);
     render();return;
   }
-  if(a==='del-routine'){if(!confirm('이 루틴과 모든 수행 기록을 삭제할까요?'))return;const rid=btn.dataset.rid;const r=state.routines.find(x=>x.id===rid);state.routines=state.routines.filter(x=>x.id!==rid);render();await sb.from('routines').delete().eq('id',rid);logChange('routine',rid,'delete','',r?.title||'','',r?.title||'');return;}
+  if(a==='del-routine'){if(!confirm('이 루틴과 모든 수행 기록을 삭제할까요?'))return;const rid=btn.dataset.rid;const r=state.routines.find(x=>x.id===rid);state.routines=state.routines.filter(x=>x.id!==rid);render();await dbWrite({t:'routines',k:'delete',m:{id:rid}},'루틴 삭제');logChange('routine',rid,'delete','',r?.title||'','',r?.title||'');return;}
   if(a==='toggle-day'){const rid=btn.dataset.rid;const day=parseInt(btn.dataset.day);const r=state.routines.find(x=>x.id===rid);if(!r)return;const arr=r.days_of_week||[];const i=arr.indexOf(day);if(i>=0)arr.splice(i,1);else arr.push(day);r.days_of_week=arr.sort((a,b)=>a-b);saveRoutine(r);render();return;}
   if(a==='toggle-routine'){const rid=btn.dataset.rid;ensureRoutineLog(viewingDate);const cur=state.routineLogs[viewingDate][rid]?.completed||false;saveRoutineLog(rid,viewingDate,!cur);render();return;}
   if(a==='toggle-init-check'){const iid=btn.dataset.iid;const mid=btn.dataset.mid;const cur=getIDLForMemberDate(mid,viewingDate)[iid]?.checked||false;saveInitiativeDailyLog(iid,mid,viewingDate,!cur);
@@ -4333,12 +4516,11 @@ async function demoteInitToTask(srcInitId,targetParentIid,sourceKrId){
     if(typeof saveInitiativeTask==='function')saveInitiativeTask(newTask);
     for(const t of orphanTasks){
       markLocal('initiative_tasks',t.id);
-      await sb.from('initiative_tasks').update({initiative_id:targetParentIid}).eq('id',t.id);
+      await dbWrite({t:'initiative_tasks',k:'update',p:{initiative_id:targetParentIid},m:{id:t.id}},'할일 이동');
     }
     markLocal('initiatives',srcInitId);
-    const{error}=await sb.from('initiatives').delete().eq('id',srcInitId);
-    if(error)showToast('이니셔티브 삭제 실패 — 새로고침 권장',true);
-    else showToast('할일로 변환됨'+(orphanTasks.length?` (하위 ${orphanTasks.length}건 같이 이동)`:''));
+    const error=await dbWrite({t:'initiatives',k:'delete',m:{id:srcInitId}},'이니셔티브 삭제');
+    if(!error)showToast('할일로 변환됨'+(orphanTasks.length?` (하위 ${orphanTasks.length}건 같이 이동)`:''));
     logChange('initiative',srcInitId,'delete','demote-to-task',srcInit.title||'',`→ ${targetInit.title||''}의 할일`,srcInit.title||'');
   }catch(err){console.warn('[demote] failed',err);showToast('변환 실패',true);}
 }
@@ -4369,22 +4551,18 @@ async function promoteTaskToInit(srcInitId,taskId,targetInitId,after){
   // DB 작업
   try{
     markLocal('initiatives',newInit.id);
-    const{error:e1}=await sb.from('initiatives').insert({
-      id:newInit.id,kr_id:targetKR.id,title:newInit.title,status:newInit.status,
-      owner_id:newInit.ownerId,start_date:newInit.startDate,due_date:newInit.dueDate,
-      confidence:'mid',sort_order:insertIdx
-    });
-    if(e1){showToast('이니셔티브 생성 실패',true);console.warn(e1);return;}
+    const e1=await dbWrite({t:'initiatives',k:'insert',p:{id:newInit.id,kr_id:targetKR.id,title:newInit.title,status:newInit.status,owner_id:newInit.ownerId,start_date:newInit.startDate,due_date:newInit.dueDate,confidence:'mid',sort_order:insertIdx}},'이니셔티브 생성');
+    if(e1)return;/* v191 — 생성 실패 시 원본 삭제 중단 */
     // 같은 KR의 다른 init들 sort_order 재정렬
     for(let i=0;i<targetKR.initiatives.length;i++){
       if(targetKR.initiatives[i].id!==newInit.id){
         markLocal('initiatives',targetKR.initiatives[i].id);
-        await sb.from('initiatives').update({sort_order:i}).eq('id',targetKR.initiatives[i].id);
+        await dbSort('initiatives',targetKR.initiatives[i].id,i);
       }
     }
     // 원래 task 삭제
     markLocal('initiative_tasks',taskId);
-    await sb.from('initiative_tasks').delete().eq('id',taskId);
+    await dbWrite({t:'initiative_tasks',k:'delete',m:{id:taskId}},'할일 삭제');
     showToast('이니셔티브로 변환됨');
     logChange('initiative',newInit.id,'create','promote-from-task','',newInit.title,newInit.title);
   }catch(err){console.warn('[promote] failed',err);showToast('변환 실패',true);}
@@ -4403,7 +4581,7 @@ async function moveTaskToInit(srcInitId,taskId,targetInitId){
   scheduleRender();
   try{
     markLocal('initiative_tasks',taskId);
-    const{error}=await sb.from('initiative_tasks').update({initiative_id:targetInitId,sort_order:task.sort_order}).eq('id',taskId);
+    const error=await dbWrite({t:'initiative_tasks',k:'update',p:{initiative_id:targetInitId,sort_order:task.sort_order},m:{id:taskId}},'할일 이동');
     if(error){showToast('이동 실패',true);console.warn(error);}
     else showToast('다른 이니셔티브의 할일로 이동');
   }catch(err){console.warn('[moveTaskToInit] failed',err);}
@@ -4421,7 +4599,7 @@ async function reorderObjectives(srcId,tgtId,after){
   _reinsert(arr,sIdx,tIdx,after);
   render();
   // sort_order 업데이트
-  for(let i=0;i<arr.length;i++){markLocal('objectives',arr[i].id);await sb.from('objectives').update({sort_order:i}).eq('id',arr[i].id);}
+  for(let i=0;i<arr.length;i++){markLocal('objectives',arr[i].id);await dbSort('objectives',arr[i].id,i);}
   showToast('순서 저장됨');
 }
 async function reorderKRs(oid,srcId,tgtId,after){
@@ -4430,7 +4608,7 @@ async function reorderKRs(oid,srcId,tgtId,after){
   if(sIdx<0||tIdx<0)return;
   _reinsert(o.keyResults,sIdx,tIdx,after);
   render();
-  for(let i=0;i<o.keyResults.length;i++){markLocal('key_results',o.keyResults[i].id);await sb.from('key_results').update({sort_order:i}).eq('id',o.keyResults[i].id);}
+  for(let i=0;i<o.keyResults.length;i++){markLocal('key_results',o.keyResults[i].id);await dbSort('key_results',o.keyResults[i].id,i);}
   showToast('순서 저장됨');
 }
 async function reorderInits(krid,srcId,tgtId,after){
@@ -4439,7 +4617,7 @@ async function reorderInits(krid,srcId,tgtId,after){
   if(sIdx<0||tIdx<0)return;
   _reinsert(kr.initiatives,sIdx,tIdx,after);
   render();
-  for(let i=0;i<kr.initiatives.length;i++){markLocal('initiatives',kr.initiatives[i].id);await sb.from('initiatives').update({sort_order:i}).eq('id',kr.initiatives[i].id);}
+  for(let i=0;i<kr.initiatives.length;i++){markLocal('initiatives',kr.initiatives[i].id);await dbSort('initiatives',kr.initiatives[i].id,i);}
   showToast('순서 저장됨');
 }
 // v137 — 이니셔티브를 다른 KR로 이동 (이니셔티브 그대로 유지, kr_id 변경). tgtId=null이면 맨 끝.
@@ -4462,10 +4640,10 @@ async function moveInitToKR(srcKrId,initId,targetKrId,targetInitId,after){
   scheduleRender();
   try{
     markLocal('initiatives',init.id);
-    const{error}=await sb.from('initiatives').update({kr_id:targetKrId,sort_order:insertIdx}).eq('id',init.id);
+    const error=await dbWrite({t:'initiatives',k:'update',p:{kr_id:targetKrId,sort_order:insertIdx},m:{id:init.id}},'이동 저장');
     if(error){showToast('이동 저장 실패',true);console.warn('[moveInitToKR]',error);return;}
-    for(let i=0;i<targetKR.initiatives.length;i++){markLocal('initiatives',targetKR.initiatives[i].id);await sb.from('initiatives').update({sort_order:i}).eq('id',targetKR.initiatives[i].id);}
-    for(let i=0;i<srcKR.initiatives.length;i++){markLocal('initiatives',srcKR.initiatives[i].id);await sb.from('initiatives').update({sort_order:i}).eq('id',srcKR.initiatives[i].id);}
+    for(let i=0;i<targetKR.initiatives.length;i++){markLocal('initiatives',targetKR.initiatives[i].id);await dbSort('initiatives',targetKR.initiatives[i].id,i);}
+    for(let i=0;i<srcKR.initiatives.length;i++){markLocal('initiatives',srcKR.initiatives[i].id);await dbSort('initiatives',srcKR.initiatives[i].id,i);}
     showToast(`'${(targetKR.title||'KR').slice(0,16)}'(으)로 이동됨`);
     logChange('initiative',init.id,'update','kr_id',srcKR.title||'',targetKR.title||'',init.title||'');
   }catch(err){console.warn('[moveInitToKR] failed',err);showToast('이동 실패',true);}
@@ -4479,7 +4657,7 @@ async function reorderInitTasks(initId,srcId,tgtId,after){
   for(let i=0;i<arr.length;i++){
     arr[i].sort_order=i;
     markLocal('initiative_tasks',arr[i].id);
-    try{await sb.from('initiative_tasks').update({sort_order:i}).eq('id',arr[i].id);}catch(_){}
+    await dbSort('initiative_tasks',arr[i].id,i);
   }
   showToast('할일 순서 저장됨');
 }
@@ -4488,7 +4666,7 @@ async function reorderMembers(srcId,tgtId,after){
   if(sIdx<0||tIdx<0||srcId===tgtId)return;
   _reinsert(arr,sIdx,tIdx,after);
   render();
-  for(let i=0;i<arr.length;i++){markLocal('members',arr[i].id);await sb.from('members').update({sort_order:i}).eq('id',arr[i].id);}
+  for(let i=0;i<arr.length;i++){markLocal('members',arr[i].id);await dbSort('members',arr[i].id,i);}
   showToast('팀원 순서 저장됨');
 }
 
@@ -5623,7 +5801,7 @@ init();
       // 2. state에서 initiative 제거
       (state.objectives||[]).forEach(o=>(o.keyResults||[]).forEach(k=>{if(k.id===krid){k.initiatives=(k.initiatives||[]).filter(i=>i.id!==iid);}}));
       // 3. DB에서 initiative 삭제
-      if(typeof sb!=='undefined'){sb.from('initiatives').delete().eq('id',iid).then(()=>{});}
+      if(typeof sb!=='undefined'){dbWrite({t:'initiatives',k:'delete',m:{id:iid}},'이니셔티브 삭제');}
       render();
       return;
     }
@@ -6058,7 +6236,7 @@ init();
           (state.initiativeTasks[iid]||[]).forEach(t=>{if(typeof deleteInitiativeTask==='function')deleteInitiativeTask(t.id);});
           delete state.initiativeTasks[iid];
           (state.objectives||[]).forEach(o=>(o.keyResults||[]).forEach(k=>{if(k.id===krid){k.initiatives=(k.initiatives||[]).filter(i=>i.id!==iid);}}));
-          if(typeof sb!=='undefined')sb.from('initiatives').delete().eq('id',iid).then(()=>{});
+          if(typeof sb!=='undefined')dbWrite({t:'initiatives',k:'delete',m:{id:iid}},'이니셔티브 삭제');
           // v93 — JustCreated 셋에서도 제거
           if(window._krlJustCreatedInits)window._krlJustCreatedInits.delete(iid);
           render();
@@ -6115,7 +6293,7 @@ init();
     const key=roomId?kOf('room',roomId):kOf('dm',toId);
     if(wins.has(key))renderWin(key);
     if(mainOpen)renderMain();
-    try{const{error}=await sb.from('messages').insert(row);if(error){console.warn('[chat] send error',error.message);if(typeof showToast==='function')showToast('메시지 전송 실패',true);}}
+    try{await dbWrite({t:'messages',k:'insert',p:row},'메시지 전송');}/* v191 — 안전 쓰기 전환 (재시도+아웃박스) */
     catch(e){console.warn('[chat] send fail',e);}
   }
   async function markRead(peerId){
@@ -7035,9 +7213,9 @@ function mmAddChild(id){
 async function mmDelete(id){
   const n=MM.nodes[id];if(!n)return;if(!confirm('삭제할까요? (하위 항목도 함께 삭제됩니다)'))return;
   if(n.kind==='task'){const iid=n.ref.initiative_id;state.initiativeTasks[iid]=(state.initiativeTasks[iid]||[]).filter(x=>x.id!==id);await deleteInitiativeTask(id);}
-  else if(n.kind==='ini'){const k=mmKrOfIni(id);if(k)k.initiatives=k.initiatives.filter(i=>i.id!==id);delete state.initiativeTasks[id];markLocal('initiatives',id);await sb.from('initiatives').delete().eq('id',id);}
-  else if(n.kind==='kr'){if(typeof canEditOKR==='function'&&!canEditOKR()){showToast('관리자만 삭제 가능',true);return;}const o=mmObjOfKr(id);if(o)o.keyResults=o.keyResults.filter(k=>k.id!==id);markLocal('key_results',id);await sb.from('key_results').delete().eq('id',id);}
-  else{if(typeof canEditOKR==='function'&&!canEditOKR()){showToast('관리자만 삭제 가능',true);return;}state.objectives=state.objectives.filter(o=>o.id!==id);markLocal('objectives',id);await sb.from('objectives').delete().eq('id',id);}
+  else if(n.kind==='ini'){const sub=buildDeleteSubtree('initiative',{init:n.ref});if(!await snapshotDelete('initiative',id,n.ref.title||'',sub))return;const k=mmKrOfIni(id);if(k)k.initiatives=k.initiatives.filter(i=>i.id!==id);delete state.initiativeTasks[id];markLocal('initiatives',id);await dbWrite({t:'initiatives',k:'delete',m:{id}},'이니셔티브 삭제');}
+  else if(n.kind==='kr'){if(typeof canEditOKR==='function'&&!canEditOKR()){showToast('관리자만 삭제 가능',true);return;}const o=mmObjOfKr(id);const sub=buildDeleteSubtree('key_result',{o,kr:n.ref});if(!await snapshotDelete('key_result',id,n.ref.title||'',sub))return;if(o)o.keyResults=o.keyResults.filter(k=>k.id!==id);markLocal('key_results',id);await dbWrite({t:'key_results',k:'delete',m:{id}},'KR 삭제');}
+  else{if(typeof canEditOKR==='function'&&!canEditOKR()){showToast('관리자만 삭제 가능',true);return;}const sub=buildDeleteSubtree('objective',{o:n.ref});if(!await snapshotDelete('objective',id,n.ref.title||'',sub))return;state.objectives=state.objectives.filter(o=>o.id!==id);markLocal('objectives',id);await dbWrite({t:'objectives',k:'delete',m:{id}},'Objective 삭제');}
   MM.sel=null;mmRefresh();
 }
 
@@ -7091,7 +7269,13 @@ function mmReparent(dragId,targetId){
   try{
     if(d.kind==='task'){
       if(t.kind==='ini'){const old=d.ref.initiative_id;state.initiativeTasks[old]=(state.initiativeTasks[old]||[]).filter(x=>x.id!==d.ref.id);d.ref.initiative_id=t.ref.id;(state.initiativeTasks[t.ref.id]||(state.initiativeTasks[t.ref.id]=[])).push(d.ref);saveInitiativeTask(d.ref);showToast('할일을 다른 이니셔티브로 이동');}
-      else if(t.kind==='kr'){const me=selfMember();const init={id:uid(),title:d.ref.title,ownerId:d.ref.owner_id||me?.id||null,status:'todo',confidence:'mid',realityBlocker:'',realityHelp:''};t.ref.initiatives.push(init);saveInitiative(t.ref.id,init);const old=d.ref.initiative_id;state.initiativeTasks[old]=(state.initiativeTasks[old]||[]).filter(x=>x.id!==d.ref.id);deleteInitiativeTask(d.ref.id);showToast('할일을 이니셔티브로 승격');}
+      else if(t.kind==='kr'){const me=selfMember();const init={id:uid(),title:d.ref.title,ownerId:d.ref.owner_id||me?.id||null,status:'todo',confidence:'mid',realityBlocker:'',realityHelp:''};t.ref.initiatives.push(init);
+        (async()=>{/* v191 — 생성 '성공 확인' 후에만 원본 삭제 (생성 실패 시 할일이 통째로 사라지던 문제) */
+          const err=await dbWrite({t:'initiatives',k:'insert',p:{id:init.id,kr_id:t.ref.id,title:init.title,status:'todo',owner_id:init.ownerId,confidence:'mid',sort_order:Math.max(0,t.ref.initiatives.length-1)}},'이니셔티브 생성');
+          if(err){t.ref.initiatives=t.ref.initiatives.filter(i=>i.id!==init.id);mmRefresh();return;}
+          const old=d.ref.initiative_id;state.initiativeTasks[old]=(state.initiativeTasks[old]||[]).filter(x=>x.id!==d.ref.id);
+          await deleteInitiativeTask(d.ref.id);showToast('할일을 이니셔티브로 승격');mmRefresh();
+        })();}
       else return;
     }else if(d.kind==='ini'){
       if(t.kind==='kr'){const oldKr=mmKrOfIni(d.ref.id);if(oldKr)oldKr.initiatives=oldKr.initiatives.filter(i=>i.id!==d.ref.id);t.ref.initiatives.push(d.ref);saveInitiative(t.ref.id,d.ref);showToast('이니셔티브를 다른 KR로 이동');}
