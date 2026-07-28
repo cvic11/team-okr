@@ -968,6 +968,7 @@ function openPinSetup(memberId){
 }
 function openPinVerify(memberId){
   const m=state.members.find(x=>x.id===memberId);if(!m)return;
+  window._pinVerifyInFlight=true; // v192 — 이 경로에만 플래그가 없어 비동기 render 가 모달을 덮었다
   showModal(`
     <div class="modal-head"><div class="modal-title">🔐 PIN 입력 — ${esc(m.name)}</div></div>
     <div class="modal-body">
@@ -1377,9 +1378,16 @@ function rangeBack(days){const e=todayKey();const sd=new Date(e);sd.setDate(sd.g
 // v42 — realtime 재연결 백오프 (CHANNEL_ERROR/TIMED_OUT/CLOSED 후 자동 재시도)
 let _realtimeChannel=null,_realtimeReconnectTimer=null,_realtimeReconnectDelay=2000;
 function setupRealtime(){
-  if(_realtimeChannel){try{sb.removeChannel(_realtimeChannel);}catch(_){}_realtimeChannel=null;}
+  /* v192 — 재구독 무한 루프 차단 (3초 주기 깜빡임의 원인)
+     removeChannel() 은 '내가 의도적으로 정리한' 낡은 채널에서도 CLOSED 콜백을 발사한다.
+     그 콜백이 다시 재연결을 예약하면서 SETUP→REMOVE→CLOSED→SETUP 이 영원히 반복됐다.
+     → 채널 객체 자신을 신원으로 삼아, 현재 채널이 아닌 콜백은 전부 무시한다. */
+  if(_realtimeReconnectTimer){clearTimeout(_realtimeReconnectTimer);_realtimeReconnectTimer=null;}
+  const prev=_realtimeChannel;
+  _realtimeChannel=null; // 정리 전에 '현재 아님'으로 표시 → prev 의 CLOSED 는 아래 가드에서 걸러짐
+  if(prev){try{sb.removeChannel(prev);}catch(_){}}
   connStatus='connecting';updateConnDot();
-  _realtimeChannel=sb.channel('okr-app-v2')
+  const ch=sb.channel('okr-app-v2')
     .on('postgres_changes',{event:'*',schema:'public',table:'teams'},onTeamsChange)
     .on('postgres_changes',{event:'*',schema:'public',table:'members'},onMembersChange)
     .on('postgres_changes',{event:'*',schema:'public',table:'objectives'},onObjectivesChange)
@@ -1393,30 +1401,35 @@ function setupRealtime(){
     .on('postgres_changes',{event:'*',schema:'public',table:'initiative_daily_logs'},onIDLChange)
     .on('postgres_changes',{event:'*',schema:'public',table:'initiative_tasks'},onInitTaskChange)
     .on('postgres_changes',{event:'*',schema:'public',table:'task_daily_logs'},onTDLChange)
-    .subscribe(s=>{
-      if(s==='SUBSCRIBED'){
-        connStatus='online';updateConnDot();_realtimeReconnectDelay=2000;
-        /* v191 — 재연결 후 재동기화: 끊긴 동안 놓친 타인 변경이 영영 반영 안 되던 문제
-           (stale 상태에서 편집 → 남의 최신 입력을 덮어쓰는 민원의 근원) */
-        if(window._rtWasDisconnected){window._rtWasDisconnected=false;resyncAfterReconnect();}
-      }
-      else if(['CHANNEL_ERROR','TIMED_OUT','CLOSED'].includes(s)){
-        window._rtWasDisconnected=true;
-        connStatus='offline';updateConnDot();
-        // 지수 백오프로 재연결 (최대 30초)
-        if(_realtimeReconnectTimer)clearTimeout(_realtimeReconnectTimer);
-        _realtimeReconnectTimer=setTimeout(()=>{
-          _realtimeReconnectTimer=null;
-          _realtimeReconnectDelay=Math.min(_realtimeReconnectDelay*1.5,30000);
-          setupRealtime();
-        },_realtimeReconnectDelay);
-      }
-    });
+    ;
+  _realtimeChannel=ch; // 구독 '전에' 현재 채널로 등록 (콜백이 동기적으로 올 수 있음)
+  ch.subscribe(s=>{
+    if(_realtimeChannel!==ch)return; // v192 — 낡은 채널의 상태 콜백 무시 (루프 차단)
+    if(s==='SUBSCRIBED'){
+      connStatus='online';updateConnDot();_realtimeReconnectDelay=2000;
+      /* v191 — 재연결 후 재동기화: 끊긴 동안 놓친 타인 변경이 영영 반영 안 되던 문제
+         (stale 상태에서 편집 → 남의 최신 입력을 덮어쓰는 민원의 근원) */
+      if(window._rtWasDisconnected){window._rtWasDisconnected=false;resyncAfterReconnect();}
+    }
+    else if(['CHANNEL_ERROR','TIMED_OUT','CLOSED'].includes(s)){
+      window._rtWasDisconnected=true;
+      connStatus='offline';updateConnDot();
+      // 지수 백오프로 재연결 (최대 30초)
+      if(_realtimeReconnectTimer)clearTimeout(_realtimeReconnectTimer);
+      _realtimeReconnectTimer=setTimeout(()=>{
+        _realtimeReconnectTimer=null;
+        _realtimeReconnectDelay=Math.min(_realtimeReconnectDelay*1.5,30000);
+        setupRealtime();
+      },_realtimeReconnectDelay);
+    }
+  });
 }
 /* v191 — 재연결 재동기화: 내 미전송분을 먼저 밀어낸 뒤 전체 데이터를 다시 불러온다 */
 let _resyncing=false;
 async function resyncAfterReconnect(){
-  if(_resyncing||!initialized)return;_resyncing=true;
+  if(_resyncing||!initialized)return;
+  if(!state.selfId||isPinScreenActive())return; // v192 — 로그인/PIN 화면에서는 재동기화·재렌더 금지
+  _resyncing=true;
   try{
     await flushPendingSaves();          // 내 로컬 변경 먼저 전송 (리로드가 덮어쓰지 않게)
     await flushOutbox();
@@ -1799,10 +1812,19 @@ function _throttledRender(){
     render();
   },RENDER_MIN_GAP_MS-gap);
 }
+/* v192 — PIN 입력 화면이 화면에 떠 있는지 DOM 으로 직접 확인.
+   플래그(_pinVerifyInFlight)는 경로마다 세팅이 누락될 수 있어(openPinVerify 모달이 그랬다)
+   실제 입력란 존재 여부를 신뢰한다. 이게 "입력하던 PIN 화면이 초기화된다"는
+   반복 민원의 구조적 차단선. */
+function isPinScreenActive(){
+  return !!(document.getElementById('pin-enter')||document.getElementById('inline-pin-enter')||document.getElementById('inline-pin-new'));
+}
 function render(){
   if(!initialized)return;
   // v16 — 로그인 가드: 본인 미선택 또는 PIN 만료 시 콘텐츠 차단
   if(!state.selfId||(state.selfId!=='__observer__'&&!isPinAuthValid(state.selfId))){
+    // v192 — PIN 입력 중이면 로그인 월을 다시 그리지 않는다 (입력 화면 보존)
+    if(window._pinVerifyInFlight||isPinScreenActive())return;
     renderLoginWall();return;
   }
   const focusSig=captureFocus();
@@ -3440,7 +3462,9 @@ async function openHistory(et,eid){
 function actionLabel(act,f){const fm={title:'제목',current:'진척',target:'목표값',unit:'단위',description:'설명',confidence:'자신감',reality_blocker:'어려움',reality_help:'지원요청',due_date:'마감일',status:'상태',owner_id:'담당자',name:'이름',quarter:'분기'};if(act==='create')return '생성';if(act==='delete')return '삭제';return `${fm[f]||f||'필드'} 변경`;}
 function formatTs(ts){if(!ts)return '';const d=new Date(ts);return `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;}
 function showModal(h){const b=document.getElementById('modal-back');document.getElementById('modal').innerHTML=h;b.classList.add('show');}
-function closeModal(){document.getElementById('modal-back').classList.remove('show');}
+/* v192 — 모달이 어떤 경로로 닫히든 PIN 플래그를 반드시 해제.
+   플래그가 켜진 채 남으면 이후 모든 render 가 막혀 화면이 멈춘다. */
+function closeModal(){window._pinVerifyInFlight=false;document.getElementById('modal-back').classList.remove('show');}
 
 /* ═══ v191 — 데이터 복구 (row_history 기반) ═══
    DB 트리거가 모든 UPDATE/DELETE 직전 행을 row_history 에 보존한다.
@@ -4177,7 +4201,7 @@ document.addEventListener('click',async e=>{
   if(a==='print-report'){printReport();return;}
   if(a==='open-self-picker'){openSelfPicker();return;}
   if(a==='set-self'){attemptSelfChange(btn.dataset.mid);return;}
-  if(a==='cancel-self'){closeModal();return;}
+  if(a==='cancel-self'){window._pinVerifyInFlight=false;closeModal();return;}/* v192 */
   if(a==='save-pin'){
     const mid=btn.dataset.mid;const p1=document.getElementById('pin-new')?.value||'';const p2=document.getElementById('pin-confirm')?.value||'';const msg=document.getElementById('pin-msg');
     if(!/^[0-9]{4}$/.test(p1)){msg.textContent='4자리 숫자만 입력 가능';return;}
@@ -4196,7 +4220,7 @@ document.addEventListener('click',async e=>{
     const lockUntil=parseInt(localStorage.getItem(lockKey)||'0');
     if(lockUntil>Date.now()){const remain=Math.ceil((lockUntil-Date.now())/60000);msg.textContent=`잠금 상태 — ${remain}분 후 재시도 가능`;return;}
     const ok=await verifyPin(mid,p);
-    if(ok){localStorage.removeItem(failKey);localStorage.removeItem(lockKey);setSelfId(mid);setPinAuth(mid);startMemberSession();startObserverLogoutWatcher();closeModal();showToast('인증 완료');render();refreshHelpBadge();}
+    if(ok){localStorage.removeItem(failKey);localStorage.removeItem(lockKey);setSelfId(mid);setPinAuth(mid);startMemberSession();startObserverLogoutWatcher();window._pinVerifyInFlight=false;/* v192 */closeModal();showToast('인증 완료');render();refreshHelpBadge();}
     else{
       const fails=parseInt(localStorage.getItem(failKey)||'0')+1;
       localStorage.setItem(failKey,String(fails));
@@ -4212,7 +4236,7 @@ document.addEventListener('click',async e=>{
     markLocal('members',mid);
     const{error}=await sb.from('members').update({pin_hash:null}).eq('id',mid);
     if(error){showToast('초기화 실패',true);return;}
-    if(m)m.pin_hash=null;clearPinAuth(mid);closeModal();showToast('PIN 초기화됨. 다시 선택해 주세요');setTimeout(()=>openSelfPicker(),300);
+    if(m)m.pin_hash=null;clearPinAuth(mid);window._pinVerifyInFlight=false;/* v192 */closeModal();showToast('PIN 초기화됨. 다시 선택해 주세요');setTimeout(()=>openSelfPicker(),300);
     return;
   }
   if(a==='open-help-requests'){openHelpRequests();return;}
